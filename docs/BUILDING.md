@@ -265,9 +265,10 @@ CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
 ./build/scene/mscharged --experimental-scene --config ./mscharged.ini
 ```
 
-This loads the ball's actual static mesh and diffuse texture from your USA
+This loads the ball's actual static mesh, textures and selected original material
+program from your USA
 `R4QE01` revision 1 ISO/RVZ. It is an asset preview; original scene initialization,
-materials/effects, animation, menus, and gameplay remain pending. Escape or close
+stadium lighting/shadows, animation, menus, and gameplay remain pending. Escape or close
 the window to exit. `--frames 180` makes the check bounded. Without the
 experimental flag, the same executable opens the normal launcher.
 Personal settings and disc contents are read without modification; generated
@@ -275,10 +276,12 @@ GPU caches and the diagnostic log stay under `build/scene/scene-data/`.
 The preview currently uses its own camera, window, and validated Vulkan settings.
 It now runs the original `PreInitFS` memory callback and renders pool-owned
 native records through the original static model/texture inventory. Full
-`glStartup` and the original loaders/material/task graph remain pending.
+`glStartup` and the complete original loaders/material/task graph remain pending.
+Four material programs run their original unlit TEV recipes, including scrolling
+and masked specular/Fresnel effects. Required lookup textures come from the disc.
 
-The workflow runs nine portable suites. To include three real GPU suites,
-including synthetic-disc rendering and failure/cleanup checks:
+The workflow runs ten portable suites. To include four real GPU suites,
+including synthetic material pixel checks and disc rendering/failure/cleanup checks:
 
 ```sh
 cmake --preset scene -DMSCHARGED_TEST_VULKAN=ON
@@ -301,7 +304,7 @@ cmake --workflow --preset startup
 
 Run `./build/startup/mscharged` without the flag to open the launcher and use
 **Try startup** after checking a USA `R4QE01` revision 1 image. This preset adds
-seven suites to the Aurora preset, for fourteen total, and writes startup diagnostics
+eight suites to the Aurora preset, for fifteen total, and writes startup diagnostics
 under `build/startup/startup-data/`. Original MEM1/MEM2 allocator and reserved
 SDK heap initialization complete, and original NL APIs read disc files both
 synchronously and asynchronously. Native animation key decoders are linked and
@@ -402,6 +405,12 @@ nested static inventories, original AVL trees, texture indices, and repeated
 shutdown. `static_inventory` (scene) checks pool-owned native model/texture
 records, original lookup, unchanged tiled/palette bytes, GPU drain callbacks,
 and failed-conversion rollback. Both use synthetic data without a GPU or disc.
+
+`graphics_state` (startup/scene) checks pointer-sized matrix handles across model
+packets and saved/global state, active frame/resource bounds, invalid handles,
+allocation failure, packed Wii texture word ordering, raster defaults/fields,
+original camera/projection/matrix math, and repeated arena recovery. These are
+native graphics checks; Wii floating-point and gameplay parity remain pending.
 
 `source_preparation` uses disposable local Git fixtures. It checks ordered
 patches, cache reuse, pin/base validation, tracked changes, excluded local data,

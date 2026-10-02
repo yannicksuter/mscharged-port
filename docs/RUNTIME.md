@@ -141,11 +141,16 @@ original game allocator. It runs the original `PreInitFS` memory callback and
 installs checked geometry/textures into pool-owned native `glModel` and
 `PlatTexture` records. Original `GLInventory` lookup and the static texture
 manager supply the renderer. It draws those records through GX and
-Aurora's real Vulkan backend. Nothing is extracted or written back to the disc.
+Aurora's real Vulkan backend. Original GL state and matrix initialization,
+frame matrix allocation, model packet propagation, NL camera math, and NL-to-GX
+matrix conversion now participate in that path. Nothing is extracted or written
+back to the disc.
 
-**This is a static asset preview.** It has a host camera and slow rotation,
-with one diffuse-only TEV stage. Original material effects, lighting, animation,
-the full `glStartup`, and scene/task code are not executed. Display,
+**This is a static asset preview.** It has a diagnostic camera and slow rotation,
+with four selected original material programs and their TEV shader recipes.
+The preview explicitly selects their unlit branches: vertex colours, texture
+scrolling, specular masks and Fresnel lookup stages run, while stadium lighting,
+shadows, animation, full `glStartup`, and scene/task code remain pending. Display,
 audio, and control preferences do not configure this preview. The first model
 is selected by default; alternate RLG models are not drawn over it.
 
@@ -173,27 +178,31 @@ never saved by direct preview startup.
   8-byte stream records, 16-bit indices, and big endian 4x4 affine matrices.
   Matrices follow the original NL-to-GX transpose convention and are baked once.
   Position streams use float triples. Supported material profiles use float
-  UVs or signed 16-bit UVs with ten fractional bits. Normals/colors/additional
-  UVs have checked ranges but are unused by the diffuse preview.
+  UVs or signed 16-bit UVs with ten fractional bits. Signed fixed-point normals,
+  RGBA vertex colours and up to three UV streams are decoded. Normals use the
+  inverse transpose of the baked asset transform. Stream order/format must
+  match the selected material; zero normals and singular transforms fail.
 - MaskedSpecularFresnel, ScrollingDiffuse, UnlitTexture, and VertexColourTexture
-  parameter layouts are recognized only to find their first diffuse binding.
-  Their original shaders, raster-state behavior, scroll parameters, specular
-  masks, and vertex lighting/color modulation remain unimplemented here.
+  parameters are decoded as separate texture bindings, floats and 32-bit
+  switches. Nonfinite/excessive scalars, invalid switches and unsupported
+  binding flags fail before creating native records. Serialized texture
+  indices are discarded; the original texture manager resolves native indices.
 - Static RLT dictionaries use offsets relative to the data block. Their metadata
   is decoded; GX-tiled pixels and RGB5A3 palette words retain Wii byte order for
   Aurora to upload. The reader covers RGB565, RGB5A3, CMPR, RGBA8, I8/I4/A8,
   IA8, and CI8 physical tile sizes, mip levels, and palette bounds. This is
   reader coverage; GPU output for every format is not established.
 - Skinning, vertex animation, animated textures, unknown chunks/programs,
-  missing diffuse bindings, malformed indices/offsets, nonfinite coordinates,
+  missing material textures, malformed indices/offsets, nonfinite coordinates,
   and unsupported matrices fail rather than producing placeholder resources.
   Each input is limited to 16 MiB. Decoded geometry and aliased texture copies
   have separate cumulative budgets to bound memory use.
 
 The host decoder arrays are discarded after installation. Native headers and
 indices use the original MEM1 resource pool; vertex/tiled texture/palette bytes
-use its MEM2 pool. The diffuse profile creates position and float UV streams
-and a texture binding, without inventing a material program or display list.
+use its MEM2 pool. Native streams use float positions, normals and UVs plus
+RGBA8 colours. Typed parameter records point to registered original material
+instances. This profile uses indexed draws; display lists remain unselected.
 Aurora GX objects are constructed separately, preserving their actual host
 size; the Wii-sized object arrays in `PlatTexture` are not reinterpreted.
 
@@ -216,7 +225,7 @@ their container pointers are null, with no successful replacement functions.
 Existing texture bindings resolve again after a resource rollback or shadowing.
 Resource markers are lifetime-bound handles and must not be reused after release.
 
-The preview advances original frame memory and uses it for its camera matrices.
+The preview advances original frame memory and uses it for model matrix handles.
 Frame advancement requires an installed cache invalidator; the preview supplies
 real `GXInvalidateVtxCache` / `GXInvalidateTexAll` calls. Without that provider
 it stops explicitly. CPU-only tests inject an observed invalidation callback;
@@ -225,15 +234,94 @@ rewind, destroys inventories before pool backing memory, then destroys the
 texture manager and frame buffers. Pending reads are cancelled/drained before
 disc/arena teardown. There is no persistent native asset cache.
 
+### Original matrix and render-state subset
+
+The selected sources add `glMatrix`, `glState`, `glxMatrix`, original NL
+math/vector/quaternion helpers, and the original SDK's portable projection and
+inverse routines. Extracted model/platform matrix entry units allow these
+functions to link before the full model finalizer and material dispatcher.
+Native scalar implementations replace the selected PowerPC assembly routines.
+The SDK matrix C source uses C99 explicitly; Aurora supplies quaternion functions
+with its native type declarations.
+
+`glMatrixHandle` is pointer-sized in native builds. It is used throughout
+allocation, model packets, saved/global state, and matrix callers/caches.
+Serialized matrix indices and texture/raster fields retain their fixed widths.
+Before matrix access, the native adapter checks alignment and a complete 64-byte
+extent within used MEM1 storage in the active frame or a live GLX resource pool.
+It rejects storage from an expired frame, rewound resource, or destroyed pool
+while that address is unreused. This checks storage bounds, not allocation type
+or permanent handle identity; raw addresses can be reused.
+
+Original packed raster and texture defaults remain in use. The texture-state
+adapter preserves Wii word order, including fields spanning the two 32-bit
+words. The preview dispatches only its supported depth/culling/alpha/colour
+profile and texture wrapping through GX. Packet raster state is preserved;
+original material `Prepare` applies texture alpha and culling/depth overrides.
+The blend-factor mapping follows original `glx_SwitchRaster`. Other packed
+raster effects fail explicitly. Full original `glxSend` view/sort dispatch
+remains unselected.
+
+The original fixed-angle trigonometry and Newton refinements are retained.
+Native angle conversion explicitly truncates and wraps 16-bit turns. The host
+reciprocal-square-root seed uses `std::sqrt`; it does not emulate Wii `frsqrte`
+bit patterns. Numerical fixtures establish camera/matrix behavior within stated
+tolerances, without establishing gameplay floating-point parity. Singular
+native matrix inversion fails without changing the destination.
+
+### Original material and shader subset
+
+`charged_materials` compiles the original registry and these program/render TUs:
+
+| Original program | Executed in the preview |
+| --- | --- |
+| `UnlitTexture` | One-stage diffuse texture and texture alpha |
+| `VertexColourTexture` | Diffuse texture multiplied by vertex RGBA |
+| `ScrollingDiffuse` | Original quantized UV scroll, vertex RGBA and texture alpha |
+| `MaskedSpecularFresnel` | Four-stage specular mask × amount × Fresnel × specular texture, added to vertex-coloured diffuse |
+
+Native patches supply Aurora's typed GX headers, bounded host vertex arrays,
+indexed FIFO writes and `GXEnd()`. The material programs still issue their
+original TEV operations; Aurora generates and caches the GPU shaders/pipelines.
+The port's typed GX forwarding and baseline setup prevent state leaking between
+selected programs. This is a selected registry, not the full 43-program game
+registry or the complete game lighting system.
+
+A scoped preview context supplies the camera and elapsed diagnostic time,
+explicitly selecting the original unlit branches. It rejects an unsupported
+lighting mode or calls without that context. The game's lighting/shadow services
+have no replacement success definitions. Scrolling uses that preview clock;
+the real stadium clock and simulation remain pending. Native normal matrices
+use the already selected original NL inverse, avoiding duplicate SDK matrix
+providers. No Wii floating-point or presentation parity is claimed.
+
+The selected model's required Fresnel lookup texture is read from the player's
+`/Art/global.rlt` using original async file services. The selective RLT reader
+validates the dictionary and entry extents, then decodes only requested IDs;
+unrelated animated entries are not interpreted. Missing lookup IDs fail.
+No game texture is generated as a fallback or added to the repository.
+
+Parameter descriptors retain 32-bit fields. Actual parameter structures use
+checked native values and preserve their selected 8/36/48-byte layouts. Only
+the original alpha-preparation function is extracted from the generic parameter
+TU; the remaining setters and pointer-bearing parameter kinds are not enabled.
+Registry nodes and class instances are released before the game allocator,
+after draining GPU commands and releasing resource inventories. Reinitialization
+must begin with an empty registry.
+
 ### Verification and next original scene work
 
 Linux verification with the owned RVZ loaded the 40,256-byte mesh and
 60,256-byte texture bundle. Model `0x8ba9ca19` has one packet, 450 vertices,
-819 indices; the bundle has four textures. Its visible CMPR diffuse texture
-and geometry were inspected in a 600-frame run. The bounded check requires
-actual GX draw calls, no logged backend errors, and a geometry depth sample
-within the perspective camera's range. Aurora's depth readback is asynchronous;
-its initial zero is never counted as geometry.
+819 indices; the ball bundle has four textures, with a required lookup texture
+loaded separately from the global bundle. Its original masked specular/Fresnel
+material and geometry were inspected on Linux Vulkan. The bounded check requires
+actual GX draw calls, no logged backend errors, and either a geometry depth
+sample within the perspective camera's range or a colour sample that differs
+from the clear colour. The latter uses a bounded GPU readback so materials
+that disable depth writes can pass. Aurora's depth readback is asynchronous;
+its initial zero is never counted as geometry. The diagnostic colour snapshot
+uses a 3×3 sample grid before the overlay, with a five-second map deadline.
 
 The portable `static_resources` suite checks synthetic format/byte-order,
 alignment, malformed/truncated-input, and allocation-budget cases. With
@@ -241,20 +329,35 @@ alignment, malformed/truncated-input, and allocation-budget cases. With
 assets from a generated Wii ISO and checks missing assets/bindings/model IDs,
 wrong revisions, CLI mode conflicts, and unchanged personal INI. It uses the
 installed validation layer, like the two independent GX suites. The scene
-preset has nine portable suites and three opt-in GPU suites. `graphics_memory`
+preset has ten portable suites and four opt-in GPU suites. `material_pipeline`
+checks twelve GPU pixel results using generated assets: diffuse, vertex colour,
+two scrolling times, masked specular/Fresnel, two normal-directed texture lookups,
+zero specular amount, alpha discard,
+alpha blend, CI8 palette and switching back to a simpler program. It uses
+Aurora's public encoder-task API for colour readback; `GXPeekARGB` is declared
+but unimplemented at this Aurora pin. `graphics_memory`
 also runs in the startup preset, covering native addresses, double-buffer
 alignment, MEM1/MEM2 and partial-construction failures, nested/shadowed inventory
 entries, original AVL lookup/release, texture exhaustion/recycling, and repeat
 initialization/shutdown. `static_inventory` checks native resource ownership,
-palette-byte preservation, drain-before-release and conversion/OOM rollback.
+palette-byte preservation, material parameters/alpha preparation, registry
+restart, drain-before-release and conversion/OOM rollback.
+`graphics_state` (startup/scene) covers addresses above 4 GiB, model/global state
+propagation, allocation failure, frame/resource lifetime, an independent Wii
+word-order oracle, raster fields/defaults, matrix composition/inversion, camera
+and projection fixtures, native angle/root behavior, and repeated shutdown.
 Targeted ASan/UBSan/leak checks cover the selected original memory/inventory/
-texture/AVL units, native adapters and checked readers. Aurora/Dawn/nod and
-remaining dependencies retain ordinary builds. This does not establish
+texture/AVL/matrix/state/NL math/SDK matrix units, selected material records/
+registry/alpha preparation, native adapters and checked
+readers. The matrix checks also enable float-to-integer overflow diagnostics.
+Aurora/Dawn/nod and
+remaining dependencies retain ordinary builds. GPU shader execution and colour
+readback are checked in ordinary Vulkan builds. This does not establish
 full game resource ownership, Wii presentation parity, or other platforms.
 
-For an original game scene, next reconstruct the required material programs
-and their native parameters, adapt original loaders to the checked native
-records, then enable platform/state/matrix/view/target/font setup and the
+For an original game scene, extend this subset with the required game lighting,
+shadows and additional materials, adapt original loaders to the checked native
+records, then enable remaining platform/view/target/font setup and the
 original frame/task loop. The independent preview keeps those missing services
 visible while providing a real asset to check conversions and GX behavior.
 
@@ -451,10 +554,10 @@ and shutdown before using that complete entry as a playable runtime.
 The scene preset independently executes `PreInitFS` with patched native pools
 and the selected static inventory/texture manager. The null-backend startup
 prototype still stops before `glStartup`. Its remaining graphics graph needs
-material registries, platform GX/VI, and state/matrix/target/view/font setup,
+the complete material registry, platform GX/VI and target/view/font setup,
 followed by native loaders and the original frame/task integration.
 
-CTest adds seven suites to the Aurora preset, for fourteen total:
+CTest adds eight suites to the Aurora preset, for fifteen total:
 
 - `sanim_decode`: exhaustive packed rotation components, unsigned scales and
   weights, with independent bit-stream encoding and exact float comparisons.

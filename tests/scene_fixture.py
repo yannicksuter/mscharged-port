@@ -15,6 +15,7 @@ def make_assets():
     packet = bytearray(48)
     struct.pack_into(">IIHBB", packet, 0, 0, 3, 3, 0, 2)
     struct.pack_into(">I", packet, 16, 0x21DB4385)
+    struct.pack_into(">I", packet, 28, 0xC0007)  # depth test/write, LEQUAL, RGBA
     chunk(0x1B004, packet)
     chunk(0x1B002, struct.pack(">16f", 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1))
     chunk(0x1B003, struct.pack(">III", 0x87654321, 1, 0))

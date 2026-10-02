@@ -29,6 +29,14 @@ with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
     run(assets, 0, "Static preview rendered: 30 frames")
     run(assets + ["--model-id", "deadbeef"], 1, "Requested model ID is absent")
     run(["--model", "/missing.rlg", "--textures", "/scene.rlt"], 1, "Cannot open static asset")
+    # Original alpha preparation disables depth writes for multibit textures.
+    # The visibility gate must use actual colour samples for this valid case.
+    blended = bytearray(texture)
+    blended[43] = 8  # RLT header alpha bits
+    for i in range(16):
+        blended[64 + i * 2] = 128  # Tiled AR plane
+    write_disc(disc, files={"scene.rlg": model, "scene.rlt": blended})
+    run(assets, 0, "0 geometry depth samples")
     bad_texture = bytearray(texture)
     bad_texture[16:20] = bytes.fromhex("badc0ffe")
     write_disc(disc, files={"scene.rlg": model, "scene.rlt": bad_texture})
