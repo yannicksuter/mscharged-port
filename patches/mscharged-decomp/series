@@ -29,3 +29,5 @@
 0028-adapt-native-graphics-math.patch
 0029-select-native-material-registry-and-alpha.patch
 0030-connect-static-material-programs-to-aurora.patch
+0031-select-native-object-lighting-and-shadow-lookup.patch
+0032-enable-original-material-lighting-and-shadows.patch

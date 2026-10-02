@@ -1,14 +1,18 @@
 #include "runtime/materials.h"
 #include "runtime/material_environment.h"
+#include "runtime/lighting_state.h"
 #include "NL/gl/glMaterialProgram.h"
 #include "NL/gl/glState.h"
 #include "NL/platvmath.h"
+#include "NL/gl/glMatrix.h"
+#include "NL/glx/glxMatrix.h"
 #include "NL/glx/glxTexture.h"
 #include "NL/glx/GXUnlitTextureMaterialProgram.h"
 #include "NL/glx/GXVertexColourTextureMaterialProgram.h"
 #include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
 #include <dolphin/gx.h>
+#include <dolphin/mtx.h>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -195,30 +199,38 @@ std::vector<std::uint32_t> MaterialLookupTextures(const resources::StaticModel &
     return result;
 }
 MaterialPreviewScope::MaterialPreviewScope(const nlMatrix4 &view, float time)
+    : MaterialPreviewScope(view, time, GameLighting{})
+{
+}
+MaterialPreviewScope::MaterialPreviewScope(const nlMatrix4 &view, float time, const GameLighting& lighting)
 {
     if (preview_live || !std::isfinite(time) || time < 0 || time > 1e8f)
         throw std::invalid_argument("Invalid or nested material preview context");
+    for (unsigned i = 0; i < 16; ++i)
+        if (!std::isfinite(view.e[i])) throw std::invalid_argument("Non-finite material view matrix");
+    BeginGameLighting(lighting);
     preview_view = view;
     preview_time = time;
     preview_live = true;
 }
 MaterialPreviewScope::~MaterialPreviewScope()
 {
+    EndGameLighting();
     preview_live = false;
 }
-void RequireUnlitMaterialPreview(bool supported)
+void RequireMaterialPreview()
 {
-    if (!preview_live || !supported)
-        throw std::logic_error("Only an explicit unlit material preview is currently supported");
+    if (!preview_live)
+        throw std::logic_error("Material drawing requires an explicit view and lighting context");
 }
 const nlMatrix4 &MaterialPreviewView()
 {
-    RequireUnlitMaterialPreview(true);
+    RequireMaterialPreview();
     return preview_view;
 }
 float MaterialPreviewTime()
 {
-    RequireUnlitMaterialPreview(true);
+    RequireMaterialPreview();
     return preview_time;
 }
 void MaterialNormalMatrix(const nlMatrix4 &modelview, float output[3][4])
@@ -234,15 +246,26 @@ void MaterialNormalMatrix(const nlMatrix4 &modelview, float output[3][4])
 }
 void DrawMaterial(glModelPacket &packet)
 {
-    RequireUnlitMaterialPreview(true);
+    RequireMaterialPreview();
     auto *program = static_cast<GLMaterialProgram *>(packet.materialProgram);
     if (!program || !packet.materialParameters || !packet.indexBuffer || packet.displayList)
         throw std::runtime_error("Incomplete or unsupported native material packet");
     Baseline();
     Raster(packet.rasterState);
-    program->Activate(nullptr);
+    nlMatrix4 world, modelview;
+    glGetMatrix(packet.matrix, world);
+    nlMultMatrices(modelview, world, preview_view);
+    Mtx transform, normal;
+    glxCopyMatrix(transform, modelview);
+    GXLoadPosMtxImm(transform, GX_PNMTX0);
+    if (program->programHash == scrolling || program->programHash == masked)
+    {
+        MaterialNormalMatrix(modelview, normal);
+        GXLoadNrmMtxImm(normal, GX_PNMTX0);
+    }
     try
     {
+        program->Activate(nullptr);
         program->Draw(&packet);
     }
     catch (...)
@@ -251,5 +274,20 @@ void DrawMaterial(glModelPacket &packet)
         throw;
     }
     program->Deactivate();
+}
+void MaterialConcatMatrices(const float left[3][4], const float right[3][4], float output[3][4])
+{
+    nlMatrix4 a, b, result;
+    a.SetIdentity(); b.SetIdentity();
+    for (unsigned row = 0; row < 3; ++row)
+        for (unsigned column = 0; column < 4; ++column)
+        {
+            a.e2[column][row] = left[row][column];
+            b.e2[column][row] = right[row][column];
+        }
+    nlMultMatrices(result, b, a);
+    for (unsigned row = 0; row < 3; ++row)
+        for (unsigned column = 0; column < 4; ++column)
+            output[row][column] = result.e2[column][row];
 }
 } // namespace mscharged

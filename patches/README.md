@@ -20,7 +20,7 @@ previous tree intact, but the build's validation rejects that stale tree.
 ## Charged series
 
 The current base is `45f25bd6519586837e61251208d34d8dcf94e170`, adopted from
-published `main` on 2026-10-02. The current series contains twenty-eight patches.
+published `main` on 2026-10-02. The current series contains thirty-two patches.
 The dependency update retained the first eighteen. Patch 0006 was refreshed
 for the upstream entry's
 declaration/scope changes; its extracted startup behavior is unchanged.
@@ -66,6 +66,8 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0028-adapt-native-graphics-math.patch` | Compile original NL math and portable SDK projection/inverse routines with scalar native assembly replacements, defined angle wrapping and real Aurora quaternion calls. | Independent transform/alias/inverse/camera/projection fixtures and actual scene rendering. Host root seeds retain Newton refinements; Wii `frsqrte` and gameplay parity remain pending. |
 | `0029-select-native-material-registry-and-alpha.patch` | Keep descriptor widths fixed, validate native registration, add teardown and extract original texture alpha preparation with checked inventory lookup. | Registry/restart, native parameter layouts, original alpha/depth/culling choices and resource rollback. Generic parameter setters remain unselected. |
 | `0030-connect-static-material-programs-to-aurora.patch` | Adapt four original material/render TUs to bounded native vertex arrays, Aurora FIFO calls and an explicit unlit preview context; retain original TEV recipes and safe quantized scrolling. | Twelve Vulkan pixel cases, owned static ball material and scrolling profile. Stadium lighting/shadows, other material programs and full scene dispatch remain pending. |
+| `0031-select-native-object-lighting-and-shadow-lookup.patch` | Select original object-light and static shadow calculations with verified missing constants, native matrix cache, bounded CI8/RGB5A3 lookup ownership and explicit palette byte order. | CPU input/tile/palette/filter/rollback checks and real Vulkan diffuse/specular/shadow results. Stadium/character/effect selection, skinned paths and dynamic shadow casters remain pending. |
+| `0032-enable-original-material-lighting-and-shadows.patch` | Enable the selected original materials' vertex/doubled/ramp lighting and projected-shadow branches, retaining per-material flags and scoped native view inputs. | Pixel comparisons for lighting/ramp/shadow modes, changed matrices and state restoration; synthetic disc shadow loading. Full original view/task dispatch remains pending. |
 
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain

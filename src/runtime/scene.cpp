@@ -17,6 +17,7 @@
 #include "Game/Startup.h"
 #include "Game/GraphicsMemoryStartup.h"
 #include "Game/main.h"
+#include "Game/Render/LightingLookup.h"
 #include "NL/nlFile.h"
 #include "NL/nlFileGC.h"
 #include "NL/nlMemory.h"
@@ -138,7 +139,7 @@ Bounds Normalize(resources::StaticModel& model)
 }
 void InvalidateCaches() { GXInvalidateVtxCache(); GXInvalidateTexAll(); }
 void DrainGX() { AuroraGXSync(); }
-void Draw(glModel& model, float time)
+void Draw(glModel& model, float time, const GameLighting& lighting)
 {
     GXSetCopyClear({24, 28, 34, 255}, GX_MAX_Z24);
     GXSetViewport(0, 0, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, 0, 1);
@@ -148,7 +149,7 @@ void Draw(glModel& model, float time)
         float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, 0.1f, 20);
     glMatrixLookAt(view, {0, 0.3f, 4.2f}, {0, 0, 0}, {0, 1, 0});
     nlMakeRotationMatrixY(world, time * 0.35f);
-    MaterialPreviewScope environment(view, time);
+    MaterialPreviewScope environment(view, time, lighting);
     glModelSetMatrix(&model, world); // Original frame allocation and packet propagation.
     Mtx44 gx_projection;
     glxCopyMatrix(gx_projection, projection);
@@ -158,13 +159,6 @@ void Draw(glModel& model, float time)
         auto& packet = model.packets[p];
         glSetCurrentMatrix(packet.matrix);
         glSetCurrentRasterState(packet.rasterState);
-        nlMatrix4 transform;
-        glGetMatrix(glGetCurrentMatrix(), world);
-        // NL stores columns first: nlMultMatrices(world, view) yields view * world.
-        nlMultMatrices(transform, world, view);
-        Mtx gx_transform;
-        glxCopyMatrix(gx_transform, transform);
-        GXLoadPosMtxImm(gx_transform, GX_PNMTX0);
         DrawMaterial(packet);
     }
     GXDrawDone();
@@ -195,7 +189,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::filesystem::create_directories(directory); logfile.open(directory / "scene.log", std::ios::trunc);
         if (!logfile) throw std::runtime_error("Cannot create scene diagnostic log");
         log(std::string("mscharged ") + build::version + "; decomp " + MSCHARGED_DECOMP_REVISION);
-        log("Static material preview: four original TEV programs; unlit diagnostic environment. Stadium lighting/shadows, animation and game scenes are pending.");
+        if (options.shadow_id.has_value() != options.shadow_textures.has_value())
+            throw std::invalid_argument("Shadow preview requires both a texture bundle and an ID");
+        log("Static material preview: original object lighting and material programs. Stadium loading, dynamic shadows, animation and game scenes are pending.");
         const auto data_path = PathUtf8(directory);
         AuroraConfig config{};
         config.appName = "Mario Strikers Charged | Static asset preview";
@@ -268,6 +264,28 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     textures.push_back(std::move(texture));
             log("Loaded " + std::to_string(lookups.size()) + " original material lookup textures from /Art/global.rlt.");
         }
+        if (options.shadow_id)
+        {
+            PendingAsset shadow_data;
+            shadow_data.Start(*options.shadow_textures);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (!shadow_data.done)
+            {
+                if (Update()) throw std::runtime_error("Static preview cancelled while loading shadow lookup");
+                nlServiceFileSystem();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Shadow texture load timed out");
+                SDL_Delay(1);
+            }
+            auto shadow = resources::ReadTextureBundle(shadow_data.Bytes(), {*options.shadow_id});
+            if (shadow.size() != 1 || shadow[0].game_format != GXTex_CI8)
+                throw std::runtime_error("Projected shadow lookup requires a CI8/RGB5A3 texture");
+            auto existing = std::find_if(textures.begin(), textures.end(), [&](const auto& t) { return t.id == *options.shadow_id; });
+            if (existing == textures.end()) textures.push_back(std::move(shadow[0]));
+            else if (existing->width != shadow[0].width || existing->height != shadow[0].height ||
+                     existing->game_format != shadow[0].game_format || existing->pixels != shadow[0].pixels ||
+                     existing->palette != shadow[0].palette)
+                throw std::runtime_error("Shadow texture ID conflicts with an existing material texture");
+        }
         // Install only the selected model and its material dependencies.
         auto chosen = std::move(*selected); models.clear(); models.push_back(std::move(chosen));
         VIInit(); VIConfigure(&GXNtsc480IntDf);
@@ -277,6 +295,18 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         MaterialPrograms materials;
         StaticInventory inventory(*glGetCurrentResourcePool(), models, textures, DrainGX);
+        GameLighting lighting = DefaultGameLighting();
+        lighting.enabled = !options.unlit;
+        LightingLookup shadow_lookup;
+        bool shadows_enabled = options.shadow_id.has_value();
+        if (options.shadow_id)
+        {
+            shadow_lookup.LoadTexture(*options.shadow_id);
+            lighting.shadow.texture = *options.shadow_id;
+            lighting.shadow.lookup = &shadow_lookup;
+            log("Loaded original projected-shadow lookup: " + std::to_string(shadow_lookup.mWidth) + "x" + std::to_string(shadow_lookup.mHeight) + ".");
+        }
+        log(options.unlit ? "Unlit comparison selected." : "Original key/fill object-light defaults and ambient colour enabled; material lighting flags are preserved.");
         auto* native_model = inventory.Model(selected_id);
         if (!native_model) throw std::runtime_error("Selected model is missing from original GLInventory");
         log("Checked RLG/RLT data installed as pool-owned native glModel/PlatTexture records; drawing original material Activate/Draw/Deactivate and TEV shader recipes through Aurora.");
@@ -292,7 +322,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (!aurora_begin_frame()) { SDL_Delay(1); continue; }
             glplatFrameAllocNextFrame();
             const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
-            Draw(*native_model, elapsed);
+            auto frame_lighting = lighting;
+            if (!shadows_enabled) frame_lighting.shadow = {};
+            Draw(*native_model, elapsed, frame_lighting);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
             // before one is available. Require perspective depth near our camera
@@ -311,7 +343,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::Begin("Static asset preview", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
             ImGui::TextUnformatted("Original GL matrices, state, memory and static inventory.");
-            ImGui::TextUnformatted("Unlit preview: stadium lights, shadows and game scenes pending.");
+            ImGui::Checkbox("Object lighting", &lighting.enabled);
+            if (options.shadow_id)
+            {
+                ImGui::Checkbox("Projected shadow lookup", &shadows_enabled);
+                ImGui::SliderFloat2("Shadow scale", lighting.shadow.scale.data(), 0.001f, 2.0f);
+                ImGui::SliderFloat2("Shadow offset", lighting.shadow.translation.data(), -1, 1);
+            }
+            ImGui::TextUnformatted("Stadium scenes, dynamic shadows and animation are pending.");
             ImGui::TextUnformatted("Escape or close the window to exit."); ImGui::End();
             if ((!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames))
             {

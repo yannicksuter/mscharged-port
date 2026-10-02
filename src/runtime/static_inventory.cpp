@@ -36,6 +36,8 @@ void Texture(GLResourcePool& pool, const resources::Texture& input)
     texture->m_nPaletteEntries = input.palette_entries;
     std::copy(input.bits.begin(), input.bits.end(), texture->m_Bits);
     texture->m_SwizzledData = Array<unsigned char>(pool, input.pixels.size(), GLM_TextureData);
+    texture->m_NativeDataBytes = input.pixels.size();
+    texture->m_NativePaletteBytes = input.palette.size();
     std::memcpy(texture->m_SwizzledData, input.pixels.data(), input.pixels.size());
     if (input.palette_entries)
     {

@@ -1,12 +1,15 @@
 // Typed native forwarding for the GX state calls selected material TUs use.
 // Aurora owns the actual state cache and generates/caches shaders from TEV state.
 #include "NL/glx/glxGX.h"
+#include "NL/nlColour.h"
 #include <dolphin/gx.h>
 #include <utility>
+#include <stdexcept>
 
 namespace
 {
 unsigned channels, stages, generators;
+nlColour ambient_colours[2]{}, material_colours[2]{};
 }
 unsigned gxSetNumChans(unsigned n)
 {
@@ -58,4 +61,18 @@ void gxSetTexCoordGen(int dst, int func, int src, unsigned mtx, bool normalize, 
 void gxSetTexCoordGen(int dst, int func, int src, unsigned mtx)
 {
     gxSetTexCoordGen(dst, func, src, mtx, false, GX_PTIDENTITY);
+}
+nlColour gxSetChanAmbColour(int channel, const nlColour& colour)
+{
+    if (channel < 0 || channel > 1) throw std::out_of_range("Invalid ambient colour channel");
+    GXSetChanAmbColor(GXChannelID(GX_COLOR0A0 + channel),
+        {colour.c[0], colour.c[1], colour.c[2], colour.c[3]});
+    return std::exchange(ambient_colours[channel], colour);
+}
+nlColour gxSetChanMatColour(int channel, const nlColour& colour)
+{
+    if (channel < 0 || channel > 1) throw std::out_of_range("Invalid material colour channel");
+    GXSetChanMatColor(GXChannelID(GX_COLOR0A0 + channel),
+        {colour.c[0], colour.c[1], colour.c[2], colour.c[3]});
+    return std::exchange(material_colours[channel], colour);
 }

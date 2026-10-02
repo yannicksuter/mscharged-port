@@ -12,6 +12,8 @@
 #include "NL/gl/glMatrix.h"
 #include "NL/gl/glState.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
+#include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
+#include "Game/Render/LightingLookup.h"
 #include "NL/nlMemory.h"
 #include "NL/MemAlloc.h"
 #include <aurora/aurora.h>
@@ -108,7 +110,8 @@ resources::StaticModel Model(unsigned id, unsigned program, unsigned texture)
     p.indices = {0, 1, 2};
     return {id, {p}};
 }
-void PixelCase(const char *name, glModel &model, float time, std::array<unsigned char, 3> expected)
+void PixelCase(const char *name, glModel &model, float time, std::array<unsigned char, 3> expected,
+               const GameLighting& lighting = {}, const nlMatrix4* world = nullptr, const nlMatrix4* view = nullptr)
 {
     unsigned draws = 0;
     std::array<unsigned char, 3> pixel{};
@@ -126,7 +129,7 @@ void PixelCase(const char *name, glModel &model, float time, std::array<unsigned
             continue;
         }
         glplatFrameAllocNextFrame();
-        glModelSetMatrix(&model, identity);
+        glModelSetMatrix(&model, world ? *world : identity);
         Mtx44 projection;
         C_MTXOrtho(projection, 1, -1, -1, 1, 0, 1);
         Mtx matrix = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}};
@@ -137,7 +140,7 @@ void PixelCase(const char *name, glModel &model, float time, std::array<unsigned
         GXLoadPosMtxImm(matrix, GX_PNMTX0);
         GXSetCurrentMtx(GX_PNMTX0);
         {
-            MaterialPreviewScope environment(identity, time);
+            MaterialPreviewScope environment(view ? *view : identity, time, lighting);
             for (unsigned i = 0; i < model.numPackets; ++i)
                 DrawMaterial(model.packets[i]);
         }
@@ -225,6 +228,12 @@ int main(int argc, char **argv)
         palette.palette_entries = 2;
         palette.palette = {0xfc, 0, 0x80, 0x1f};
         palette.pixels.assign(32, 0);
+        auto shadow_texture = palette;
+        shadow_texture.id = 17; shadow_texture.width = 8;
+        shadow_texture.palette = {0xc2,0x10,0xff,0xff};
+        auto split_shadow = shadow_texture;
+        split_shadow.id = 18; split_shadow.palette = {0x80,0,0xff,0xff};
+        for (unsigned i = 0; i < 32; ++i) split_shadow.pixels[i] = i % 8 < 4 ? 0 : 1;
         auto ci8 = Model(7, 0x21db4385, 16);
         std::vector<resources::Texture> textures = {Texture(10, {80, 100, 120, 255}),
                                                     Texture(11, {200, 40, 20, 255}, 0, true),
@@ -233,7 +242,8 @@ int main(int argc, char **argv)
                                                     Texture(glGetTexture("global/fresnel1"), {128, 128, 128, 255}),
                                                     Texture(14, {200, 100, 40, 0}, 1),
                                                     Texture(15, {80, 100, 120, 128}, 8),
-                                                    palette};
+                                                    palette, shadow_texture, split_shadow,
+                                                    Texture(19, {64, 128, 192, 255})};
         StaticInventory inventory(*glGetCurrentResourcePool(),
                                   {unlit, vertex, scroll, masked, discard, blend, ci8, normal_left, normal_right},
                                   textures, Drain);
@@ -250,6 +260,89 @@ int main(int argc, char **argv)
         PixelCase("Alpha discard", *inventory.Model(5), 0, {20, 24, 30});
         PixelCase("Alpha blend", *inventory.Model(6), 0, {50, 62, 75});
         PixelCase("Big-endian CI8 palette", *inventory.Model(7), 0, {255, 0, 0});
+        auto* masked_parameters = static_cast<GXMaskedSpecularFresnelParameters*>(inventory.Model(4)->packets[0].materialParameters);
+        auto* scrolling_parameters = static_cast<GXScrollingDiffuseParameters*>(inventory.Model(3)->packets[0].materialParameters);
+        masked_parameters->lightingEnabled = 1;
+        scrolling_parameters->lightingEnabled = 1;
+        GameLighting lighting;
+        lighting.enabled = true;
+        lighting.ambient = {{64,128,192,0}};
+        PixelCase("Ambient only, zero direct lights", *inventory.Model(4), 0, {20,50,90}, lighting);
+        PixelCase("Scrolling ambient", *inventory.Model(3), 0, {50,20,15}, lighting);
+        lighting.ambient = {{0,0,0,0}};
+        lighting.light_count = 1;
+        lighting.lights[0].enabled = true;
+        lighting.lights[0].worldPosition = {0,0,1};
+        lighting.lights[0].intensity = .5f;
+        PixelCase("Directional front", *inventory.Model(4), 0, {40,50,60}, lighting);
+        masked_parameters->specularAmount = .5f;
+        PixelCase("Directional plus original specular", *inventory.Model(4), 0, {65,63,65}, lighting);
+        masked_parameters->specularAmount = 0;
+        lighting.lights[0].worldPosition.z = -1;
+        PixelCase("Directional back", *inventory.Model(4), 0, {0,0,0}, lighting);
+        lighting.lights[0].worldPosition.z = 1;
+        lighting.lights[0].intensity = 1;
+        lighting.lights[0].unknown01 = 1;
+        lighting.lights[0].colour = {{255,128,0,255}};
+        PixelCase("Coloured directional light", *inventory.Model(4), 0, {80,50,0}, lighting);
+        lighting.lights[0].unknown01 = 0;
+        nlMatrix4 rotated, camera;
+        nlMakeRotationMatrixY(rotated, 3.1415927f / 3);
+        rotated.SetTranslation({.2598076f,0,-.15f}); // Keep the tilted triangle centred at z=-.3.
+        PixelCase("Directional light follows transformed normals", *inventory.Model(4), 0, {40,50,60}, lighting, &rotated);
+        nlMakeRotationMatrixY(rotated, 3.1415927f / 3);
+        nlMakeRotationMatrixY(camera, -3.1415927f / 3);
+        PixelCase("Directional light follows changed view", *inventory.Model(4), 0, {40,50,60}, lighting, &rotated, &camera);
+        lighting.lights[0].unknown02 = 1;
+        lighting.lights[0].worldPosition.z = .7f;
+        lighting.lights[0].unknown20 = 3;
+        // Independent vertex diffuse/steep-attenuation values, interpolated at
+        // the centre (weights 1/4, 1/4, 1/2): approximately .488 and .131.
+        PixelCase("Point light near", *inventory.Model(4), 0, {39,49,59}, lighting);
+        lighting.lights[0].worldPosition.z = 4.7f;
+        PixelCase("Point light distance attenuation", *inventory.Model(4), 0, {10,13,16}, lighting);
+        lighting.lights[0].unknown02 = 0;
+        lighting.lights[0].worldPosition.z = 1;
+        lighting.lights[0].intensity = 16.0f/255.0f;
+        lighting.light_count = 6;
+        for (unsigned i = 1; i < 6; ++i) lighting.lights[i] = lighting.lights[0];
+        PixelCase("All six diffuse light slots", *inventory.Model(4), 0, {30,38,45}, lighting);
+        lighting.light_count = 0;
+        lighting.ambient = {{64,128,192,0}};
+        lighting.double_intensity = true;
+        masked_parameters->specularAmount = .5f;
+        PixelCase("Double diffuse preserves specular", *inventory.Model(4), 0, {65,113,185}, lighting);
+        lighting.double_intensity = false;
+        lighting.ramp_texture = 19;
+        PixelCase("Texture light ramp", *inventory.Model(4), 0, {45,63,95}, lighting);
+        PixelCase("Scrolling texture light ramp", *inventory.Model(3), 0, {50,20,15}, lighting);
+        lighting.double_intensity = true;
+        PixelCase("Double texture light ramp", *inventory.Model(4), 0, {65,113,185}, lighting);
+        lighting = {};
+        {
+            LightingLookup shadow;
+            shadow.LoadTexture(17);
+            lighting.shadow.lookup = &shadow; lighting.shadow.texture = 17;
+            masked_parameters->shadowEnabled = 1;
+            PixelCase("Projected CI8 shadow", *inventory.Model(4), 0, {54,58,65}, lighting);
+            scrolling_parameters->shadowEnabled = 1;
+            PixelCase("Scrolling projected shadow", *inventory.Model(3), 0, {104,21,10}, lighting);
+            shadow.LoadTexture(18);
+            lighting.shadow.texture = 18;
+            lighting.shadow.scale = {1,1};
+            lighting.shadow.translation = {-.75f,0};
+            PixelCase("Shadow projection dark side", *inventory.Model(4), 0, {0,0,0}, lighting);
+            lighting.shadow.translation[0] = .75f;
+            PixelCase("Shadow projection light side", *inventory.Model(4), 0, {105,113,125}, lighting);
+            lighting.shadow.translation = {0,0};
+            nlMatrix4 world, view;
+            world.SetIdentity(); view.SetIdentity();
+            world.SetTranslation({.5f,0,0}); view.SetTranslation({-.5f,0,0});
+            PixelCase("Shadow uses world model matrix", *inventory.Model(4), 0, {105,113,125}, lighting, &world, &view);
+            world.SetTranslation({-.5f,0,0}); view.SetTranslation({.5f,0,0});
+            PixelCase("Shadow matrix refresh at reused frame address", *inventory.Model(4), 0, {0,0,0}, lighting, &world, &view);
+        }
+        PixelCase("Material restored after shadow and ramp", *inventory.Model(4), 0, {105,113,125});
         // Switch back to verify TEV/channel/texture state does not leak between programs.
         PixelCase("Unlit after multi-stage materials", *inventory.Model(1), 0, {80, 100, 120});
         inventory.Release();
