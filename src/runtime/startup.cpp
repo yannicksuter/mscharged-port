@@ -1,4 +1,5 @@
 #include "runtime/startup.h"
+#include "runtime/cameras.h"
 #include "runtime/startup_animation.h"
 #include "runtime/startup_files.h"
 #include "runtime/events.h"
@@ -104,6 +105,7 @@ int RunGameStartup(int argc, char** argv, const std::filesystem::path& config_pa
         log(VerifyStartupEvents());
         log(VerifyStartupQueuedEvents());
         log(VerifyStartupTaskScheduler());
+        log(VerifyStartupCameraCore());
         VerifyStartupFileReads();
         log(VerifyStartupAnimationDecoders());
         log(VerifyStartupWholeFileLoads());

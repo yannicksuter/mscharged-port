@@ -3,6 +3,8 @@
 #include "runtime/views.h"
 #include "runtime/frames.h"
 #include "runtime/frame_timing.h"
+#include "runtime/cameras.h"
+#include "Game/Camera/CameraMan.h"
 #include "runtime/shadows.h"
 #include "Game/Render/ShadowVolume.h"
 #include "resources/compressed_asset.h"
@@ -148,7 +150,8 @@ Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 }
 void InvalidateCaches() { GXInvalidateVtxCache(); GXInvalidateTexAll(); }
 void DrainGX() { AuroraGXSync(); }
-nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices, float time,
+nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices,
+                      OriginalCameras& cameras, CameraPoseInput& input, float time,
                       const Bounds* authored_bounds)
 {
     GXSetCopyClear({24, 28, 34, 255}, GX_MAX_Z24);
@@ -167,10 +170,13 @@ nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices,
         world.SetIdentity();
     }
     else nlMakeRotationMatrixY(world, time * 0.35f);
-    glMatrixLookAt(matrices.view, camera, center, {0, 1, 0});
+    input.position = camera; input.target = center;
+    glMatrixLookAt(input.view, camera, center, {0, 1, 0});
+    cameras.Advance(0,0); // Caller supplies the diagnostic pose; no gameplay clock.
+    matrices.view = cCameraManager::m_matView;
     glModelSetMatrix(&model, world);
     submitted.AttachModel(&model, 0);
-    return camera;
+    return cCameraManager::m_cameraPosition;
 }
 }
 
@@ -375,6 +381,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         AuroraFrames backend;
         OriginalFrames lifecycle(backend);
         FrameCounter timing("frame", "send");
+        OriginalCameras cameras;
+        CameraPoseInput camera_input;
+        cCameraManager::PushCamera(&camera_input);
         GLView* submitted = nullptr;
         RLViewCamera shadow_camera;
         std::unique_ptr<ShadowLayers> shadow_layers;
@@ -395,6 +404,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
+        log("Original camera core evaluates supplied preview poses; authored camera loading and gameplay selection remain pending.");
         bool volume_enabled = true;
         float receiver_height = 0;
         // Render only game-pool records from here; discard host decoder storage.
@@ -422,7 +432,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 nlMatrix4 view, projection, identity, receiver; identity.SetIdentity(); receiver.SetIdentity();
                 glMatrixPerspective(projection, 40 * 3.1415927f / 180, 4.0f/3.0f, .1f, 20);
                 glMatrixLookAt(view, {0,0,4.2f}, {0,0,0}, {0,1,0});
-                shadow_camera.Set(view, projection);
+                camera_input.view = view; camera_input.position = {0,0,4.2f};
+                cameras.Advance(0,0);
+                shadow_camera.Set(cCameraManager::m_matView, projection);
                 shadow_layers->ResetPartitions();
                 receiver.m43=receiver_height;
                 auto* ground=inventory.Model(receiver_id); glModelSetMatrix(ground, receiver);
@@ -430,7 +442,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 if (volume_enabled) shadow_drawable->Draw(identity);
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
             }
-            else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, elapsed,
+            else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
                                                        camera_overlay ? &bounds : nullptr);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
@@ -486,6 +498,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         // Explicitly stop services while CPU texture storage and frame FIFO still exist.
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
+        cameras.Release();
         lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); inventory.Release(); materials.Release(); glShutdownMemory();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
             throw std::runtime_error("Graphics shutdown did not recover both original game arenas");

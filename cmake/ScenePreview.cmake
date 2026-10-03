@@ -1,5 +1,6 @@
 include(cmake/NativeRuntime.cmake)
 include(cmake/FrameTiming.cmake)
+include(cmake/Cameras.cmake)
 add_library(charged_compressed_assets STATIC src/resources/compressed_asset.cpp)
 target_include_directories(charged_compressed_assets PUBLIC src)
 target_compile_features(charged_compressed_assets PUBLIC cxx_std_20)
@@ -94,7 +95,7 @@ endif()
 add_library(charged_scene_preview STATIC src/runtime/scene.cpp)
 target_compile_features(charged_scene_preview PRIVATE cxx_std_20)
 target_include_directories(charged_scene_preview PUBLIC src)
-target_link_libraries(charged_scene_preview PRIVATE charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
+target_link_libraries(charged_scene_preview PRIVATE charged_cameras charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
     charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)

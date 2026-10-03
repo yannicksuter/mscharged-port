@@ -50,3 +50,5 @@
 0049-enable-native-masked-detail-blend.patch
 0050-enable-native-scrolling-masked-detail-blend.patch
 0051-enable-native-scrolling-camera-overlay.patch
+0052-select-native-camera-core.patch
+0053-preserve-native-camera-filter-arithmetic.patch
