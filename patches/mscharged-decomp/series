@@ -31,3 +31,8 @@
 0030-connect-static-material-programs-to-aurora.patch
 0031-select-native-object-lighting-and-shadow-lookup.patch
 0032-enable-original-material-lighting-and-shadows.patch
+0033-adapt-native-view-graph-and-packet-sorting.patch
+0034-check-native-render-target-ownership.patch
+0035-enable-native-shadow-material-and-mesh-writer.patch
+0036-select-original-shadow-layers-and-volume-pass.patch
+0037-select-native-model-copies-and-stadium-shadows.patch

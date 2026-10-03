@@ -48,3 +48,25 @@ def make_shadow():
     struct.pack_into(">I", header, 20, 2)
     entry = header + bytes(32) + bytes.fromhex("c210ffff")
     return struct.pack(">8I", 0x50544C47, 1, 0, 0, 0x5A5A5A5A, 0, len(entry), 0) + entry
+
+
+def make_world():
+    import zlib
+    def chunk(kind, payload):
+        return struct.pack(">II", kind, len(payload)) + payload + b"\0" * (-len(payload) % 4)
+    points = [(-.5,-.5,.5),(.5,-.5,.5),(.5,.5,.5),(-.5,.5,.5),
+              (-.5,-.5,-.5),(.5,-.5,-.5),(.5,.5,-.5),(-.5,.5,-.5)]
+    indices = [0,1,2,0,2,3,4,6,5,4,7,6,0,5,1,0,4,5,3,6,7,3,2,6,0,7,4,0,3,7,1,6,2,1,5,6]
+    packet = bytearray(48)
+    struct.pack_into(">IIHBB", packet, 0, 0, len(indices), 8, 0, 3)
+    struct.pack_into(">I", packet, 16, 0x386ECBDD)
+    vertices = b"".join(struct.pack(">3f", *p) for p in points) + bytes([255])*32 + bytes(64)
+    streams = b"".join(struct.pack(">IBBBB", *s) for s in [(0,0,12,1,0),(96,0,4,3,0),(128,0,8,4,0)])
+    parts = [(0x1B016,struct.pack(">IHBBI",0x12345678,0xffff,3,0,1)),
+             (0x1B007,struct.pack(">36H",*indices)),(0x1B006,vertices),(0x1B005,streams),
+             (0x1B004,packet),(0x1B002,struct.pack(">16f",1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1)),
+             (0x1B003,struct.pack(">III",0x87654321,1,0))]
+    model = chunk(0x8001B000,b"".join(chunk(k,v) for k,v in parts))
+    _, texture = make_assets()
+    raw = chunk(0x80000001,chunk(0x24100,texture)+chunk(0x8001B100,model))
+    return struct.pack(">I",len(raw))+zlib.compress(raw)

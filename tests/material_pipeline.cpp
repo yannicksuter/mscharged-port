@@ -1,5 +1,6 @@
 // Independent synthetic pixel expectations for the original material TEV recipes.
 #include "runtime/materials.h"
+#include "runtime/views.h"
 #include "runtime/gpu_readback.h"
 #include "runtime/material_environment.h"
 #include "runtime/static_inventory.h"
@@ -11,6 +12,7 @@
 #include "NL/gl/glMemoryInit.h"
 #include "NL/gl/glMatrix.h"
 #include "NL/gl/glState.h"
+#include "NL/glx/glxTarget.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
 #include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
 #include "Game/Render/LightingLookup.h"
@@ -32,6 +34,7 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 using namespace mscharged;
 namespace
@@ -111,12 +114,32 @@ resources::StaticModel Model(unsigned id, unsigned program, unsigned texture)
     return {id, {p}};
 }
 void PixelCase(const char *name, glModel &model, float time, std::array<unsigned char, 3> expected,
-               const GameLighting& lighting = {}, const nlMatrix4* world = nullptr, const nlMatrix4* view = nullptr)
+               const GameLighting& lighting = {}, const nlMatrix4* world = nullptr, const nlMatrix4* view = nullptr,
+               glModel* copy_source = nullptr, GLRenderPair copy_target = {}, unsigned copy_mode = 8, GLRenderPair after_clear = {})
 {
     unsigned draws = 0;
     std::array<unsigned char, 3> pixel{};
     nlMatrix4 identity;
     identity.SetIdentity();
+    ViewMatrices matrices;
+    matrices.view = view ? *view : identity;
+    glMatrixOrthographicCentered(matrices.projection, 2, 2, 0, 1);
+    auto submitted = std::make_unique<GLView>(&matrices, GLRenderPair{}, GLViewSort_None);
+    std::unique_ptr<GLView> producer, clear_probe;
+    if (copy_source)
+    {
+        producer = std::make_unique<GLView>(&matrices, copy_target, GLViewSort_None);
+        producer->m_Target = copy_mode;
+        gRootView.AddChild(producer.get());
+        if (after_clear)
+        {
+            clear_probe = std::make_unique<GLView>(&matrices, after_clear, GLViewSort_None);
+            clear_probe->m_Target = GLViewTarget_Mode8;
+            gRootView.AddChild(clear_probe.get());
+        }
+        submitted->m_ClearColour = submitted->m_ClearDepth = true;
+    }
+    gRootView.AddChild(submitted.get());
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     for (unsigned frame = 0; frame < 40;)
     {
@@ -130,20 +153,16 @@ void PixelCase(const char *name, glModel &model, float time, std::array<unsigned
         }
         glplatFrameAllocNextFrame();
         glModelSetMatrix(&model, world ? *world : identity);
-        Mtx44 projection;
-        C_MTXOrtho(projection, 1, -1, -1, 1, 0, 1);
-        Mtx matrix = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}};
-        GXSetCopyClear({20, 24, 30, 255}, GX_MAX_Z24);
-        GXSetViewport(0, 0, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, 0, 1);
-        GXSetScissor(0, 0, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
-        GXSetProjection(projection, GX_ORTHOGRAPHIC);
-        GXLoadPosMtxImm(matrix, GX_PNMTX0);
-        GXSetCurrentMtx(GX_PNMTX0);
+        GXSetPixelFmt(copy_target && copy_target.target->mFormat == GLTargetFormat_A8 ? GX_PF_RGBA6_Z24 : GX_PF_RGB8_Z24,
+                      GX_ZC_LINEAR);
+        GXSetCopyClear({20, 24, 30, static_cast<u8>(after_clear ? 0 : 255)}, GX_MAX_Z24);
+        if (producer)
         {
-            MaterialPreviewScope environment(view ? *view : identity, time, lighting);
-            for (unsigned i = 0; i < model.numPackets; ++i)
-                DrawMaterial(model.packets[i]);
+            glModelSetMatrix(copy_source, identity);
+            producer->AttachModel(copy_source, 0);
         }
+        submitted->AttachModel(&model, 0);
+        RenderOriginalViews(time, lighting);
         GXDrawDone();
         if (frame == 39)
         {
@@ -244,9 +263,13 @@ int main(int argc, char **argv)
                                                     Texture(15, {80, 100, 120, 128}, 8),
                                                     palette, shadow_texture, split_shadow,
                                                     Texture(19, {64, 128, 192, 255})};
+        OriginalViews views(GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, Drain);
         StaticInventory inventory(*glGetCurrentResourcePool(),
                                   {unlit, vertex, scroll, masked, discard, blend, ci8, normal_left, normal_right},
                                   textures, Drain);
+        const bool targets_only = argc == 2 && std::string_view(argv[1]) == "--targets-only";
+        if (!targets_only)
+        {
         PixelCase("Unlit diffuse", *inventory.Model(1), 0, {80, 100, 120});
         PixelCase("Vertex colour modulation", *inventory.Model(2), 0, {40, 100, 60});
         PixelCase("Scrolling t=0", *inventory.Model(3), 0, {200, 40, 20});
@@ -345,6 +368,57 @@ int main(int argc, char **argv)
         PixelCase("Material restored after shadow and ramp", *inventory.Model(4), 0, {105,113,125});
         // Switch back to verify TEV/channel/texture state does not leak between programs.
         PixelCase("Unlit after multi-stage materials", *inventory.Model(1), 0, {80, 100, 120});
+        }
+        for (auto format : {GLTargetFormat_RGBA8, GLTargetFormat_RGB565, GLTargetFormat_RGB5A3, GLTargetFormat_A8, GLTargetFormat_IA8})
+        {
+            GLTargetInfo info;
+            info.width = GXNtsc480IntDf.fbWidth; info.height = GXNtsc480IntDf.efbHeight;
+            info.format = format; info.clearFlags = 7;
+            // Reuse the same name/address with different formats: stale copy-cache state must be evicted.
+            auto target = glCreateTarget("pixel/copy", &info);
+            auto producer = Model(901, 0x21db4385, 850);
+            auto consumer = Model(902, 0x21db4385, glGetTargetTexture(target));
+            for (auto& vertex : consumer.packets[0].vertices) vertex.uv = {.5f,.5f};
+            const bool alpha = format == GLTargetFormat_A8, intensity = format == GLTargetFormat_IA8;
+            const std::array<unsigned char,4> colour = alpha ? std::array<unsigned char,4>{255,255,255,64}
+                : intensity ? std::array<unsigned char,4>{255,255,255,255}
+                : format == GLTargetFormat_RGB565 ? std::array<unsigned char,4>{0,255,0,255}
+                : format == GLTargetFormat_RGB5A3 ? std::array<unsigned char,4>{0,0,255,255}
+                : std::array<unsigned char,4>{255,0,0,255};
+            StaticInventory copied(*glGetCurrentResourcePool(), {producer, consumer},
+                {Texture(850, colour)}, Drain);
+            // Observe copied channels directly, independently of material alpha compositing/discard.
+            glSetRasterState(copied.Model(902)->packets[0].rasterState, GLS_AlphaBlend, 0);
+            glSetRasterState(copied.Model(902)->packets[0].rasterState, GLS_AlphaTest, 0);
+            PixelCase(("New target contains no previous GPU copy " + std::to_string(format)).c_str(),
+                *copied.Model(902), 0, {0,0,0});
+            PixelCase(("Target copy/sample format " + std::to_string(format)).c_str(), *copied.Model(902),
+                0, alpha ? std::array<unsigned char,3>{64,64,64}
+                         : intensity ? std::array<unsigned char,3>{235,235,235}
+                                     : std::array<unsigned char,3>{colour[0],colour[1],colour[2]},
+                {}, nullptr, nullptr, copied.Model(901), target);
+            copied.Release();
+            glDestroyTarget(&target);
+        }
+        {
+            GLTargetInfo info;
+            info.width = GXNtsc480IntDf.fbWidth; info.height = GXNtsc480IntDf.efbHeight;
+            info.format = GLTargetFormat_A8; info.clearFlags = 7;
+            auto first = glCreateTarget("pixel/first-alpha", &info);
+            auto second = glCreateTarget("pixel/cleared-alpha", &info);
+            auto producer = Model(903, 0x21db4385, 851);
+            auto consumer = Model(904, 0x21db4385, glGetTargetTexture(second));
+            for (auto& vertex : consumer.packets[0].vertices) vertex.uv = {.5f,.5f};
+            StaticInventory copied(*glGetCurrentResourcePool(), {producer, consumer}, {Texture(851,{255,0,0,255})}, Drain);
+            glSetRasterState(copied.Model(904)->packets[0].rasterState, GLS_AlphaBlend, 0);
+            glSetRasterState(copied.Model(904)->packets[0].rasterState, GLS_AlphaTest, 0);
+            // The second view copies the EFB without drawing: distinguish retain, full clear and alpha-only clear.
+            PixelCase("Copy mode 8 retains EFB alpha", *copied.Model(904), 0, {255,255,255}, {}, nullptr, nullptr, copied.Model(903), first, 8, second);
+            PixelCase("Copy mode 9 clears EFB alpha", *copied.Model(904), 0, {0,0,0}, {}, nullptr, nullptr, copied.Model(903), first, 9, second);
+            PixelCase("Copy mode 10 clears EFB alpha", *copied.Model(904), 0, {0,0,0}, {}, nullptr, nullptr, copied.Model(903), first, 10, second);
+            copied.Release(); glDestroyTarget(&second); glDestroyTarget(&first);
+        }
+        views.Release();
         inventory.Release();
         programs.Release();
         glShutdownMemory();

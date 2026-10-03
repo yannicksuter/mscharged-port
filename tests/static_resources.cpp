@@ -24,22 +24,24 @@ void Reject(const std::function<void()>& call, const char* reason)
 struct ModelFixture
 {
     Buffer data = Buffer(8);
+    std::size_t absolute_base = 0;
     std::map<std::uint32_t, std::size_t> offsets;
     void Chunk(std::uint32_t id, const Buffer& payload, unsigned alignment = 0)
     {
         const auto header = data.size(); data.resize(header + 8);
-        while (data.size() % (1u << alignment)) data.push_back(0);
+        while ((absolute_base + data.size()) % (1u << alignment)) data.push_back(0);
         offsets[id] = data.size(); data.insert(data.end(), payload.begin(), payload.end());
         Put32(data, header, id | (alignment << 24)); Put32(data, header + 4, data.size() - header - 8);
         while (data.size() % 4) data.push_back(0);
     }
-    explicit ModelFixture(bool fixed_uv = false, unsigned alignment = 5, unsigned copies = 1, unsigned index_count = 3)
+    explicit ModelFixture(bool fixed_uv = false, unsigned alignment = 5, unsigned copies = 1, unsigned index_count = 3, std::size_t base = 0, bool shadow = false)
+        : absolute_base(base)
     {
-        Buffer parameters(8); Put32(parameters, 0, 0x12345678); parameters[6] = 3;
+        Buffer parameters(shadow ? 12 : 8); if (shadow) Put32(parameters,8,1); Put32(parameters, 0, 0x12345678); parameters[6] = 3;
         Chunk(0x1b016, parameters);
         Buffer indices(index_count * 2); Put16(indices, 2, 1); Put16(indices, 4, 2);
         Chunk(0x1b007, indices); // BE indices with a legitimate zero offset.
-        Buffer vertices(36 + (fixed_uv ? 12 + 12 : 24));
+        Buffer vertices(shadow ? 72 : 36 + (fixed_uv ? 12 + 12 : 24));
         const float xyz[] = {-1, 0, 0, 1, 0, 0, 0, 1, 0};
         for (unsigned i = 0; i < 9; ++i) PutFloat(vertices, i * 4, xyz[i]);
         if (fixed_uv)
@@ -51,15 +53,16 @@ struct ModelFixture
         else
         {
             const float uv[] = {0, 1, 1, 1, 0.5f, 0};
-            for (unsigned i = 0; i < 6; ++i) PutFloat(vertices, 36 + i * 4, uv[i]);
+            for (unsigned i = 0; i < 6; ++i) PutFloat(vertices, (shadow ? 48 : 36) + i * 4, uv[i]);
         }
         Chunk(0x1b006, vertices, alignment); // Payload alignment pad is included in chunk size.
-        Buffer streams(fixed_uv ? 24 : 16); streams[5] = 12; streams[6] = 1;
+        Buffer streams(fixed_uv || shadow ? 24 : 16); streams[5] = 12; streams[6] = 1;
         Put32(streams, 8, 36); streams[13] = fixed_uv ? 4 : 8; streams[14] = 4;
         if (fixed_uv) { Put32(streams, 16, 48); streams[21] = 4; streams[22] = 3; }
+        if (shadow) { streams[13]=4; streams[14]=3; Put32(streams,16,48); streams[21]=8; streams[22]=4; }
         Chunk(0x1b005, streams);
-        Buffer packet(48); Put32(packet, 4, index_count); Put16(packet, 8, 3); packet[11] = fixed_uv ? 3 : 2;
-        Put32(packet, 16, fixed_uv ? 0xd3e572da : 0x21db4385);
+        Buffer packet(48); Put32(packet, 4, index_count); Put16(packet, 8, 3); packet[11] = fixed_uv || shadow ? 3 : 2;
+        Put32(packet, 16, shadow ? 0x386ecbdd : fixed_uv ? 0xd3e572da : 0x21db4385);
         Buffer packets;
         for (unsigned i = 0; i < copies; ++i) packets.insert(packets.end(), packet.begin(), packet.end());
         Chunk(0x1b004, packets);
@@ -167,6 +170,53 @@ void Materials()
     bad=fixture.data; bad[fixture.offsets.at(0x1b005)+21]=8; Reject([&]{ReadStaticModels(bad);},"Wrong material stream format");
     bad=fixture.data; bad[fixture.offsets.at(0x1b004)+11]=2; Reject([&]{ReadStaticModels(bad);},"Missing material vertex streams");
 }
+void WorldModels()
+{
+    const auto texture = TextureFixture();
+    const std::size_t group_start = 8 + 8 + texture.size() + 8;
+    const ModelFixture shadow(false, 5, 1, 3, group_start, true);
+    auto selected = ReadStaticModels(ModelFixture(false,5,1,3,0,true).data);
+    Check(selected[0].packets[0].material.switches[0] == 1 && selected[0].packets[0].vertices[2].uv[0] == .5f,
+          "Big-endian shadow parameter and floating UV conversion");
+    auto invalid = ModelFixture(false,0,1,3,0,true);
+    Put32(invalid.data,invalid.offsets.at(0x1b016)+8,2);
+    Reject([&]{ReadStaticModels(invalid.data);},"Invalid shadow boolean");
+    invalid = ModelFixture(false,0,1,3,0,true);
+    invalid.data[invalid.offsets.at(0x1b005)+13]=8;
+    Reject([&]{ReadStaticModels(invalid.data);},"Shadow colour/UV stream order");
+    ModelFixture unsupported(false,5,1,3,group_start+shadow.data.size());
+    Put32(unsupported.data,unsupported.offsets.at(0x1b003),0x87654322);
+    Put32(unsupported.data,unsupported.offsets.at(0x1b004)+16,0xdeadbeef);
+    Buffer world(16);
+    Put32(world,8,0x24100); Put32(world,12,texture.size());
+    world.insert(world.end(),texture.begin(),texture.end());
+    const auto collection = world.size(); world.resize(collection+8);
+    world.insert(world.end(),shadow.data.begin(),shadow.data.end());
+    world.insert(world.end(),unsupported.data.begin(),unsupported.data.end());
+    Put32(world,collection,0x8001b100); Put32(world,collection+4,world.size()-collection-8);
+    Put32(world,0,0x80000001); Put32(world,4,world.size()-8);
+    auto decoded=ReadStaticWorldModel(world,0x87654321);
+    Check(decoded.model.id==0x87654321 && decoded.model.packets[0].vertices[0].position==std::array<float,3>{1,3,4},
+          "World-relative 32-byte alignment and explicit model selection");
+    Check(ReadTextureBundle(decoded.textures,{0x12345678})[0].width==4,"Embedded texture container boundaries");
+    Reject([&]{ReadStaticWorldModel(world,0x87654322);},"Unimplemented selected world material");
+    Reject([&]{ReadStaticWorldModel(world,0);},"Missing selected world model");
+    for(std::size_t n=0;n<world.size();++n)
+        Reject([&]{ReadStaticWorldModel(Bytes(world).first(n),0x87654321);},"Truncated world");
+    // A structurally bounded unrelated animated group must not block a selected
+    // static model. Selecting that group's model still fails explicitly.
+    auto animated=world;
+    const auto animated_group=group_start+shadow.data.size();
+    animated.insert(animated.end(),{0x80,0x01,0xb2,0x00,0,0,0,0});
+    Put32(animated,animated_group+4,unsupported.data.size());
+    Put32(animated,collection+4,animated.size()-collection-8);Put32(animated,4,animated.size()-8);
+    Check(ReadStaticWorldModel(animated,0x87654321).model.id==0x87654321,"Unselected animated world group");
+    Reject([&]{ReadStaticWorldModel(animated,0x87654322);},"Selected animated world group");
+    auto bad=world;Put32(bad,group_start+shadow.data.size()+unsupported.offsets.at(0x1b003),0x87654321);
+    Reject([&]{ReadStaticWorldModel(bad,0x87654321);},"Duplicate world model ID");
+    bad=world;Put32(bad,8,0x24101);Reject([&]{ReadStaticWorldModel(bad,0x87654321);},"Unknown world container");
+    bad=world;Put32(bad,12,0xffffffff);Reject([&]{ReadStaticWorldModel(bad,0x87654321);},"World child overflow");
+}
 void Textures()
 {
     const auto file = TextureFixture(); const auto textures = ReadTextureBundle(file);
@@ -211,6 +261,6 @@ void Textures()
 }
 int main()
 {
-    try { Models(); Materials(); Textures(); std::cout << "Static Wii resource conversion and rejection checks passed\n"; return 0; }
+    try { Models(); Materials(); WorldModels(); Textures(); std::cout << "Static Wii resource conversion and rejection checks passed\n"; return 0; }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

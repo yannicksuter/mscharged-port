@@ -7,10 +7,13 @@
 #include "NL/gl/glMatrix.h"
 #include "NL/glx/glxMatrix.h"
 #include "NL/glx/glxTexture.h"
+#include "NL/glx/glxGX.h"
+#include "NL/gl/glView.h"
 #include "NL/glx/GXUnlitTextureMaterialProgram.h"
 #include "NL/glx/GXVertexColourTextureMaterialProgram.h"
 #include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
+#include "NL/glx/GXShadowVolumeMaterialProgram.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <algorithm>
@@ -25,6 +28,7 @@ bool programs_live = false, preview_live = false;
 nlMatrix4 preview_view;
 float preview_time = 0;
 constexpr std::uint32_t unlit = 0x21db4385, vertex = 0xd3e572da, scrolling = 0x2169db5c, masked = 0x32475c7d;
+constexpr std::uint32_t shadow_volume = 0x386ecbdd;
 glTextureBinding Binding(const resources::MaterialBinding &input)
 {
     if (input.flags & ~3u)
@@ -59,7 +63,7 @@ void Raster(u32 state)
     const GXCompare depths[] = {GX_ALWAYS, GX_LEQUAL, GX_EQUAL, GX_LESS};
     const GXCullMode culling[] = {GX_CULL_NONE, GX_CULL_FRONT, GX_CULL_BACK, GX_CULL_ALL};
     const auto alpha = glGetRasterState(state, GLS_AlphaTest), colour = glGetRasterState(state, GLS_ColourWrite);
-    GXSetZMode(glGetRasterState(state, GLS_DepthTest), depths[glGetRasterState(state, GLS_DepthFunc)],
+    gxSetZMode(glGetRasterState(state, GLS_DepthTest), depths[glGetRasterState(state, GLS_DepthFunc)],
                glGetRasterState(state, GLS_DepthWrite));
     GXSetCullMode(culling[glGetRasterState(state, GLS_Culling)]);
     GXSetAlphaCompare(alpha ? GX_GREATER : GX_ALWAYS, glGetRasterState(state, GLS_AlphaTestRef), GX_AOP_AND, GX_ALWAYS,
@@ -74,8 +78,8 @@ void Raster(u32 state)
                    : blend == 7 ? GX_BM_SUBTRACT
                                 : GX_BM_BLEND,
                    source[blend], dest[blend], GX_LO_CLEAR);
-    GXSetColorUpdate(colour & 1);
-    GXSetAlphaUpdate((colour >> 1) & 1);
+    gxSetColourUpdate(colour & 1);
+    gxSetAlphaUpdate((colour >> 1) & 1);
 }
 } // namespace
 struct MaterialPrograms::Impl
@@ -84,18 +88,20 @@ struct MaterialPrograms::Impl
     GXVertexColourTextureMaterialProgram vertex;
     GXScrollingDiffuseMaterialProgram scrolling;
     GXMaskedSpecularFresnelMaterialProgram masked;
+    GXShadowVolumeMaterialProgram shadow;
     Impl()
     {
         unlit.Initialize();
         vertex.Initialize();
         scrolling.Initialize();
         masked.Initialize();
+        shadow.Initialize();
     }
 };
 MaterialPrograms::MaterialPrograms()
 {
     if (programs_live || glGetMaterialProgram(unlit) || glGetMaterialProgram(vertex) ||
-        glGetMaterialProgram(scrolling) || glGetMaterialProgram(masked))
+        glGetMaterialProgram(scrolling) || glGetMaterialProgram(masked) || glGetMaterialProgram(shadow_volume))
         throw std::logic_error("Material registry already initialized");
     try
     {
@@ -145,6 +151,9 @@ void InstallMaterial(glModelPacket &packet, const resources::Material &material,
     {
     case unlit:
         new (storage) GXUnlitTextureParameters{binding};
+        break;
+    case shadow_volume:
+        new (storage) GXShadowVolumeParameters{binding, int(material.switches[0])};
         break;
     case vertex:
         new (storage) GXVertexColourTextureParameters{binding};
@@ -244,14 +253,36 @@ void MaterialNormalMatrix(const nlMatrix4 &modelview, float output[3][4])
         output[row][3] = 0;
     }
 }
-void DrawMaterial(glModelPacket &packet)
+void DrawMaterial(const glModelPacket &packet, GLView* view)
 {
     RequireMaterialPreview();
     auto *program = static_cast<GLMaterialProgram *>(packet.materialProgram);
-    if (!program || !packet.materialParameters || !packet.indexBuffer || packet.displayList)
+    if (!program || !packet.materialParameters || packet.displayList
+        || (!packet.indexBuffer && program->programHash != shadow_volume))
         throw std::runtime_error("Incomplete or unsupported native material packet");
+    if (program->programHash == shadow_volume)
+    {
+        const auto& params = *static_cast<const GXShadowVolumeParameters*>(packet.materialParameters);
+        if (packet.numStreams != 3 || !packet.streams || !packet.numUniqueVertices
+            || (params.useFixedColour != 0 && params.useFixedColour != 1))
+            throw std::invalid_argument("Invalid shadow volume packet");
+        const unsigned strides[] = {12, 4, 8};
+        for (unsigned i = 0; i < 3; ++i)
+            if (!packet.streams[i].address || packet.streams[i].stride != strides[i])
+                throw std::invalid_argument("Invalid shadow volume stream");
+        if (packet.numVertices > 65535)
+            throw std::invalid_argument("Shadow index count exceeds GX limits");
+        if (packet.indexBuffer)
+            for (unsigned i = 0; i < packet.numVertices; ++i)
+                if (packet.indexBuffer[i] >= packet.numUniqueVertices)
+                    throw std::out_of_range("Shadow index exceeds its vertex arrays");
+    }
     Baseline();
     Raster(packet.rasterState);
+    // Original glx_SwitchRaster always permits alpha-only writes. The view's
+    // allow-alpha flag gates only combined colour/alpha writes (mode 3).
+    if (view && !view->m_Enabled && glGetRasterState(packet.rasterState, GLS_ColourWrite) == 3)
+        gxSetAlphaUpdate(false);
     nlMatrix4 world, modelview;
     glGetMatrix(packet.matrix, world);
     nlMultMatrices(modelview, world, preview_view);
@@ -265,7 +296,7 @@ void DrawMaterial(glModelPacket &packet)
     }
     try
     {
-        program->Activate(nullptr);
+        program->Activate(view);
         program->Draw(&packet);
     }
     catch (...)

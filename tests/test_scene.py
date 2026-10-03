@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 from disc_fixture import write_disc
-from scene_fixture import make_assets, make_shadow
+from scene_fixture import make_assets, make_shadow, make_world
 
 executable = pathlib.Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
@@ -37,6 +37,15 @@ with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
     write_disc(disc, files={"scene.rlg": model, "scene.rlt": texture})
     run(assets + ["--model-id", "deadbeef"], 1, "Requested model ID is absent")
     run(["--model", "/missing.rlg", "--textures", "/scene.rlt"], 1, "Cannot open static asset")
+    world = make_world()
+    write_disc(disc, files={"world.tmp.zlib": world})
+    run(["--world", "/world.tmp.zlib"], 2, "requires an explicit --model-id")
+    run(["--world", "/world.tmp.zlib", "--model-id", "87654321", "--model", "/scene.rlg"], 2, "Select --world or separate")
+    world_args = ["--world", "/world.tmp.zlib", "--model-id", "87654321"]
+    run(world_args, 0, "Original stadium shadow blend samples: 2.")
+    corrupted = bytearray(world); corrupted[-1] ^= 1
+    write_disc(disc, files={"world.tmp.zlib": corrupted})
+    run(world_args, 1, "Invalid compressed asset")
     # Original alpha preparation disables depth writes for multibit textures.
     # The visibility gate must use actual colour samples for this valid case.
     blended = bytearray(texture)

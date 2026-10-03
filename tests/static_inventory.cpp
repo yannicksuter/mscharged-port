@@ -7,6 +7,7 @@
 #include "NL/gl/glMaterialProgram.h"
 #include "NL/gl/glState.h"
 #include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
+#include "NL/glx/GXShadowVolumeMaterialProgram.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
 #include "runtime/startup.h"
 #include "NL/MemAlloc.h"
@@ -131,6 +132,19 @@ int main()
         recovered();
         bad = model; bad.packets[0].vertices.resize(2000);
         Reject<std::bad_alloc>([&] { mscharged::StaticInventory inventory(pool, {bad}, {texture}); });
+        recovered();
+        {
+            auto volume=model;volume.packets[0].material.program=0x386ecbdd;
+            volume.packets[0].material.switches[0]=1;
+            mscharged::StaticInventory inventory(pool,{volume},{texture});
+            const auto* packet=inventory.Model(1)->packets;
+            const auto* parameters=static_cast<const GXShadowVolumeParameters*>(packet->materialParameters);
+            Require(parameters->useFixedColour==1 && parameters->diffuseTexture.texture==20,
+                    "Native volume material parameter layout");
+            Require(packet->numStreams==3 && packet->streams[0].id==1 && packet->streams[1].id==3
+                    && packet->streams[2].id==4 && packet->streams[2].stride==8,
+                    "Native volume position/colour/floating UV stream order");
+        }
         recovered();
         texture.id = 21; texture.game_format = 8; texture.gx_format = 9;
         texture.palette_entries = 4; texture.palette = {0x80,0x12,0x90,0x34,0xa0,0x56,0xb0,0x78};

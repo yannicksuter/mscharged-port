@@ -1,6 +1,7 @@
 #pragma once
 #include "resources/binary_reader.h"
 #include <array>
+#include <optional>
 #include <vector>
 
 namespace mscharged::resources
@@ -35,5 +36,13 @@ struct StaticModel
     std::vector<Packet> packets;
 };
 // Bounded static RLG profile. Skinning, animation and unknown materials fail explicitly.
-std::vector<StaticModel> ReadStaticModels(Bytes data);
+std::vector<StaticModel> ReadStaticModels(Bytes data, std::optional<std::uint32_t> selected = {});
+struct StaticWorldModel
+{
+    StaticModel model;
+    Bytes textures; // Borrows the decompressed world buffer, until textures are decoded.
+};
+// Decode one explicit static model; other materials are not interpreted. The
+// world object graph, animation and original world loading remain separate.
+StaticWorldModel ReadStaticWorldModel(Bytes data, std::uint32_t selected);
 }
