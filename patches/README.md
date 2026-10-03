@@ -19,9 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `01c9a4d61904afc927d6752c3cd29fca489ff5cc`, adopted from
+The current base is `2c71062ca827c5d2115ab76f4da80aaa8c515ff8`, adopted from
 published upstream main. It remains an incomplete development snapshot, not a
-complete decompilation release.
+complete decompilation release. This adoption includes source-linked NisPlayer,
+NetworkStats, and AvoidController. Those units are not automatically selected
+for native linking. Patches 0003 and 0044 adapt the new OS forward declaration
+and preserve native logging; 0031 refreshes the extracted lighting lookup.
 
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend

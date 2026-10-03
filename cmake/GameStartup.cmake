@@ -51,6 +51,7 @@ if(BUILD_TESTING)
     add_test(NAME native_allocator COMMAND native_allocator_tests)
 
     add_executable(runtime_memory_tests tests/runtime_memory.cpp)
+    target_include_directories(runtime_memory_tests PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
     target_compile_features(runtime_memory_tests PRIVATE cxx_std_20)
     target_compile_definitions(runtime_memory_tests PRIVATE MSCHARGED_NATIVE=1)
     target_link_libraries(runtime_memory_tests PRIVATE charged_game_startup charged_decomp_startup
