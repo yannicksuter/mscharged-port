@@ -37,3 +37,5 @@
 0036-select-original-shadow-layers-and-volume-pass.patch
 0037-select-native-model-copies-and-stadium-shadows.patch
 0038-adapt-native-event-ownership-and-lifetimes.patch
+0039-adapt-native-queued-event-lifetimes.patch
+0040-select-original-event-dispatch-task.patch

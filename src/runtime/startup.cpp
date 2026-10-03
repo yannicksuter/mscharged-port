@@ -99,6 +99,7 @@ int RunGameStartup(int argc, char** argv, const std::filesystem::path& config_pa
         InitializeCore();
         log("Original InitializeCore() and nlInit() completed.");
         log(VerifyStartupEvents());
+        log(VerifyStartupQueuedEvents());
         VerifyStartupFileReads();
         log(VerifyStartupAnimationDecoders());
         log(VerifyStartupWholeFileLoads());

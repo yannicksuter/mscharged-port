@@ -20,7 +20,7 @@ previous tree intact, but the build's validation rejects that stale tree.
 ## Charged series
 
 The current base is `4a9ab8151d9a74e321e52b36c95d1e157d41af60`, adopted from
-published `main` on 2026-10-03. The series contains thirty-eight patches.
+published `main` on 2026-10-03. The series contains forty patches.
 This update refreshes 0005, 0006, 0011, 0012, 0017, 0025 and 0031 for upstream
 declaration changes, named allocator fields and allocator helper extraction.
 The allocator uses the new shared helpers with native address widths, alignment
@@ -30,7 +30,8 @@ unchanged, with all bases updated to the selected commit.
 
 Upstream now marks both `nlEvent.cpp` and `MemAlloc.cpp` matching. Patch 0038
 connects the original immediate event registry and listeners to native startup
-checks. Queued dispatch and game task integration remain pending. Matching Wii code and a
+checks. Patches 0039–0040 add queued payload cleanup and the original dispatch
+task; the complete game task loop remains pending. Matching Wii code and a
 strictly applicable patch series do not establish a complete native game;
 see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-startup).
 
@@ -73,7 +74,9 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0035-enable-native-shadow-material-and-mesh-writer.patch` | Preserve the original shadow material through bounded Aurora arrays/FIFO calls and explicit colour input. Replace the mesh builder's Wii field offset with a typed member; check frame mesh counts, writes, allocation failure and lifetime. | CPU bounds/ownership and sanitizer checks; real Vulkan volume accumulation, cancellation, depth occlusion and original mask blending using generated geometry. |
 | `0036-select-original-shadow-layers-and-volume-pass.patch` | Select original cameras, eleven shadow partitions, update scheduling and light-camera setup; connect the original volume attachment and blend pass with checked native ownership. | Atlas layout, update intervals, failure rollback, target reuse, half-size copies and pixel coverage. Original character/stadium geometry, full scene selection and task startup remain pending. |
 | `0037-select-native-model-copies-and-stadium-shadows.patch` | Select original model duplication with typed material sizes and bounded native records, retaining shared streams and independent packet/parameter storage. Extract original stadium shadow initialization/submission with explicit inputs. | Clone isolation, failure cleanup, indexed Vulkan shadow pixels and owned Vice geometry read from a checked compressed world bundle. Full world object loading and posed characters remain pending. |
-| `0038-adapt-native-event-ownership-and-lifetimes.patch` | Preserve full owner addresses and explicit flag masks; retain original registry/listener algorithms with checked initialization, callback transfer, deferred removal and scoped connection lifetimes. Separate the three-argument event template from Wii controller headers. | Dynamic/static/no-data/three-argument delivery, callback mutation/exceptions, allocation failure, 4,096 grouped listeners, repeated arena recovery and targeted sanitizers. Queued dispatch and game tasks remain unselected. |
+| `0038-adapt-native-event-ownership-and-lifetimes.patch` | Preserve full owner addresses and explicit flag masks; retain original registry/listener algorithms with checked initialization, callback transfer, deferred removal and scoped connection lifetimes. Separate the three-argument event template from Wii controller headers. | Dynamic/static/no-data/three-argument delivery, callback mutation/exceptions, allocation failure, 4,096 grouped listeners, repeated arena recovery and targeted sanitizers. Queued dispatch follows in 0039–0040. |
+| `0039-adapt-native-queued-event-lifetimes.patch` | Retain queued callback order and batch modes with checked counters, insertion and pool teardown. Cancel payloads before event destruction and retain caller ownership on rejected queues. | Delivery/cancellation, both destruction orders, callback/disposer exceptions, OOM, reentrancy, capacity and complete arena recovery. Full gameplay event ordering remains unverified. |
+| `0040-select-original-event-dispatch-task.patch` | Extract the existing default task transition hook from Team.cpp; select original dispatch task delivery with checked allocation, reset and separate final teardown. | Original Run/reset, reuse after reset, typed task destruction and startup against synthetic and owned Wii data. Complete task manager/frame/movie integration remains unselected. |
 
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
