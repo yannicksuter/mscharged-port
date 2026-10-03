@@ -20,7 +20,8 @@ previous tree intact, but the build's validation rejects that stale tree.
 ## Charged series
 
 The current base is `4a9ab8151d9a74e321e52b36c95d1e157d41af60`, adopted from
-published `main` on 2026-10-03. The series contains forty-two patches.
+published `main` on 2026-10-03. The ordered patches are listed in
+[`mscharged-decomp/series`](mscharged-decomp/series).
 This update refreshes 0005, 0006, 0011, 0012, 0017, 0025 and 0031 for upstream
 declaration changes, named allocator fields and allocator helper extraction.
 The allocator uses the new shared helpers with native address widths, alignment
@@ -79,6 +80,8 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0040-select-original-event-dispatch-task.patch` | Extract the existing default task transition hook from Team.cpp; select original dispatch task delivery with checked allocation, reset and separate final teardown. | Original Run/reset, reuse after reset, typed task destruction and startup against synthetic and owned Wii data. Complete task manager/frame/movie integration remains unselected. |
 | `0041-enable-native-specular-detail-blend.patch` | Select the original static detail/specular material and specular-light routines using bounded native arrays and typed FIFO calls. | Four independent texture/UV bindings, blend and lighting pixels, projected shadows, failure cleanup and owned static world models. Other stadium materials and complete world loading remain pending. |
 | `0042-select-native-task-scheduling.patch` | Select original task scheduling with checked borrowed ownership, exception teardown and explicit movie service boundaries. Preserve original priority/state/ticker behavior. | Registration order, masks, transitions, per-task clocks, dilation, lifetime and allocation failures, real scheduled event dispatch, inactive movies and rejected active playback. Complete frame tasks and movie decoding/audio remain pending. |
+| `0045-enable-native-scrolling-specular.patch` | Select the original two-texture scrolling specular material with native arrays, explicit preview time/view inputs and refreshed specular lights. | Signed UV conversion, clamp/repeat scrolling, lighting modes, highlights, projected shadows, alpha and cleanup pixels, plus owned Vice/Crater Field models. Complete world loading and task/frame integration remain pending. |
+| `0046-enable-native-camera-scrolled-overlay.patch` | Select the original position-generated overlay, lighting and shadow recipe with bounded native arrays and an explicit active-camera input. Reject non-finite texture matrices and reset registry state. | Camera movement, scale, three bindings, alpha/mask pixels, original wrap mutation, failure recovery and owned stadium models. Preview keeps authored coordinate scale; the original camera manager and complete world loading remain unselected. |
 
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain

@@ -87,7 +87,7 @@ void ViewMatrices::GetInverseViewMatrix(nlMatrix4& out) const
 }
 void ViewMatrices::GetViewProjectionMatrix(nlMatrix4& out) const { nlMultMatrices(out, view, projection); }
 
-void RenderOriginalViews(float time, const GameLighting& lighting)
+void RenderOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position)
 {
     if (!views_live || rendering) throw std::logic_error("Invalid or nested GL view dispatch");
     rendering = true;
@@ -113,7 +113,7 @@ void RenderOriginalViews(float time, const GameLighting& lighting)
         if (view->m_ClearColour || view->m_ClearDepth || view->m_Unknown32)
             pair.target->ClearBuffers(view->m_ClearColour, view->m_ClearDepth, view->m_Unknown32);
         if (!view->m_Visible) continue;
-        MaterialPreviewScope environment(*view->m_Interface->GetViewMatrix(), time, lighting);
+        MaterialPreviewScope environment(*view->m_Interface->GetViewMatrix(), time, lighting, camera_position);
         view->Iterate(Packet);
         if (view->m_Target == 8 || view->m_Target == 9 || view->m_Target == 10)
             pair.target->CopyToTexture(view->m_Target != 8, view->m_Target == 10);

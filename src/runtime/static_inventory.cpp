@@ -64,7 +64,8 @@ void Model(GLResourcePool& pool, const resources::StaticModel& input)
         const auto id = input_packet.material.program;
         const std::vector<unsigned> layout = id == 0x386ecbdd ? std::vector<unsigned>{1,3,4}
             : id == 0x112ab470 ? std::vector<unsigned>{1,2,4,4,4,4,3}
-            : id == 0x32475c7d ? std::vector<unsigned>{1,2,4,4,4,3}
+            : (id == 0x32475c7d || id == 0x32bc21e8) ? std::vector<unsigned>{1,2,4,4,4,3}
+            : id == 0x3eccd955 ? std::vector<unsigned>{1,2,4,4,3}
             : id == 0x2169db5c ? std::vector<unsigned>{1,2,4,3}
             : id == 0xd3e572da ? std::vector<unsigned>{1,4,3} : std::vector<unsigned>{1,4};
         packet.numStreams = layout.size();

@@ -119,7 +119,7 @@ bool Update()
     return exit || SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_ESCAPE];
 }
 struct Bounds { std::array<float, 3> center{}; float radius = 0; };
-Bounds Normalize(resources::StaticModel& model)
+Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
     std::array<float, 3> low{1e7f, 1e7f, 1e7f}, high{-1e7f, -1e7f, -1e7f};
     for (const auto& packet : model.packets)
@@ -137,24 +137,37 @@ Bounds Normalize(resources::StaticModel& model)
         }
     if (!std::isfinite(bounds.radius) || bounds.radius < 1e-6f)
         throw std::runtime_error("Static model has degenerate bounds");
-    for (auto& packet : model.packets)
-        for (auto& vertex : packet.vertices)
-            for (unsigned i = 0; i < 3; ++i) vertex.position[i] = (vertex.position[i] - bounds.center[i]) / bounds.radius;
+    if (!preserve_positions)
+        for (auto& packet : model.packets)
+            for (auto& vertex : packet.vertices)
+                for (unsigned i = 0; i < 3; ++i) vertex.position[i] = (vertex.position[i] - bounds.center[i]) / bounds.radius;
     return bounds;
 }
 void InvalidateCaches() { GXInvalidateVtxCache(); GXInvalidateTexAll(); }
 void DrainGX() { AuroraGXSync(); }
-void Draw(glModel& model, GLView& submitted, ViewMatrices& matrices, float time, const GameLighting& lighting)
+void Draw(glModel& model, GLView& submitted, ViewMatrices& matrices, float time, const GameLighting& lighting,
+          const Bounds* authored_bounds)
 {
     GXSetCopyClear({24, 28, 34, 255}, GX_MAX_Z24);
+    const float radius = authored_bounds ? authored_bounds->radius : 1;
     glMatrixPerspective(matrices.projection, 40 * 3.1415927f / 180,
-        float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, 0.1f, 20);
-    glMatrixLookAt(matrices.view, {0, 0.3f, 4.2f}, {0, 0, 0}, {0, 1, 0});
+        float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, 0.1f * radius, 20 * radius);
+    nlVector3 camera{0, 0.3f, 4.2f}, center{0, 0, 0};
     nlMatrix4 world;
-    nlMakeRotationMatrixY(world, time * 0.35f);
+    if (authored_bounds)
+    {
+        // Position-generated UVs must retain the asset's coordinate scale.
+        // Orbit an explicit camera instead of rewriting vertex positions.
+        center = {authored_bounds->center[0], authored_bounds->center[1], authored_bounds->center[2]};
+        camera = {center.x + radius * 4.2f * std::sin(time * 0.35f),
+                  center.y + radius * 0.3f, center.z + radius * 4.2f * std::cos(time * 0.35f)};
+        world.SetIdentity();
+    }
+    else nlMakeRotationMatrixY(world, time * 0.35f);
+    glMatrixLookAt(matrices.view, camera, center, {0, 1, 0});
     glModelSetMatrix(&model, world);
     submitted.AttachModel(&model, 0);
-    RenderOriginalViews(time, lighting);
+    RenderOriginalViews(time, lighting, &camera);
     GXDrawDone();
 }
 }
@@ -229,7 +242,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             auto selected = resources::ReadStaticWorldModel(decoded, *options.model_id);
             std::vector<std::uint32_t> required;
             for (const auto& packet : selected.model.packets)
-                for (unsigned i = 0; i < (packet.material.program == 0x112ab470 ? 4u : packet.material.program == 0x32475c7d ? 3u : 1u); ++i)
+                for (unsigned i = 0; i < (packet.material.program == 0x112ab470 ? 4u
+                    : (packet.material.program == 0x32475c7d || packet.material.program == 0x32bc21e8) ? 3u
+                    : packet.material.program == 0x3eccd955 ? 2u : 1u); ++i)
                     if (std::find(required.begin(), required.end(), packet.material.textures[i].texture) == required.end())
                         required.push_back(packet.material.textures[i].texture);
             textures = resources::ReadTextureBundle(selected.textures, required);
@@ -254,7 +269,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::invalid_argument("Mixed shadow-volume and ordinary packets need original world selection");
         if (volume_preview && (options.unlit || options.shadow_id))
             throw std::invalid_argument("Object lighting and projected lookup options do not apply to shadow volumes");
-        const auto bounds = Normalize(*selected);
+        const bool camera_overlay = std::any_of(selected->packets.begin(), selected->packets.end(),
+            [](const auto& p) { return p.material.program == 0x32bc21e8; });
+        const auto bounds = Normalize(*selected, camera_overlay);
         const auto selected_id = selected->id;
         std::size_t vertices = 0, indices = 0;
         for (const auto& packet : selected->packets)
@@ -402,7 +419,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
                 RenderOriginalViews(elapsed, {}); GXDrawDone();
             }
-            else Draw(*native_model, *submitted, view_matrices, elapsed, frame_lighting);
+            else Draw(*native_model, *submitted, view_matrices, elapsed, frame_lighting, camera_overlay ? &bounds : nullptr);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
             // before one is available. Require perspective depth near our camera

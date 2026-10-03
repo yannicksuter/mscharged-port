@@ -73,6 +73,10 @@ void gxSetTevOrder(int stage, int coord, int map, int colour)
 {
     GXSetTevOrder(GXTevStageID(stage), GXTexCoordID(coord), GXTexMapID(map), GXChannelID(colour));
 }
+void gxSetTevKColourSel(int stage, int selection)
+{
+    GXSetTevKColorSel(GXTevStageID(stage), GXTevKColorSel(selection));
+}
 void gxSetTevColourIn(int stage, int a, int b, int c, int d)
 {
     GXSetTevColorIn(GXTevStageID(stage), GXTevColorArg(a), GXTevColorArg(b), GXTevColorArg(c), GXTevColorArg(d));

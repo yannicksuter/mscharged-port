@@ -15,7 +15,7 @@ add_library(charged_materials STATIC
     "${MSCHARGED_PREPARED}/src/Game/Render/LightingLookupNative.cpp"
     src/runtime/materials.cpp src/runtime/material_gx.cpp src/runtime/material_texture.cpp
     src/runtime/gpu_readback.cpp src/runtime/lighting.cpp)
-foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend)
+foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend ScrollingSpecular CameraScrolledOverlay)
     target_sources(charged_materials PRIVATE
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgram.cpp"
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgramRender.cpp")
@@ -107,8 +107,16 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
     set_tests_properties(specular_detail_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
+    add_test(NAME scrolling_specular_pipeline COMMAND material_pipeline_tests --scrolling-specular-only)
+    set_tests_properties(scrolling_specular_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME scene_synthetic
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_scene.py" "$<TARGET_FILE:mscharged>")
+    add_test(NAME camera_overlay_pipeline COMMAND material_pipeline_tests --camera-overlay-only)
+    set_tests_properties(camera_overlay_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     set_tests_properties(scene_synthetic PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check)
 endif()

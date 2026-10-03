@@ -13,6 +13,8 @@ std::size_t ParameterSize(std::uint32_t program)
 {
     switch (program)
     {
+    case 0x32bc21e8: return 48; // CameraScrolledOverlay
+    case 0x3eccd955: return 60; // ScrollingSpecular
     case 0x112ab470: return 68; // SpecularDetailBlend
     case 0x386ecbdd: return 12; // ShadowVolume
     case 0x32475c7d: return 48; // MaskedSpecularFresnel
@@ -77,7 +79,9 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             const bool masked = material.program == 0x32475c7d, scrolling = material.program == 0x2169db5c;
             const bool shadow = material.program == 0x386ecbdd;
             const bool detail = material.program == 0x112ab470;
-            for (unsigned i = 0; i < (detail ? 4u : masked ? 3u : 1u); ++i)
+            const bool overlay = material.program == 0x32bc21e8;
+            const bool scrolling_specular = material.program == 0x3eccd955;
+            for (unsigned i = 0; i < (detail ? 4u : (masked || overlay) ? 3u : scrolling_specular ? 2u : 1u); ++i)
             {
                 material.textures[i] = {U32(parameters, i * 8), parameters[i * 8 + 6]};
                 Require(!(material.textures[i].flags & ~3u) && !parameters[i * 8 + 7], "Unsupported RLG texture binding flags");
@@ -86,6 +90,40 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             {
                 material.switches[0] = U32(parameters, 8);
                 Require(material.switches[0] <= 1, "Invalid shadow material boolean");
+            }
+            if (overlay)
+            {
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.scalars[i] = F32(parameters, 24 + i * 4);
+                    Require(std::abs(material.scalars[i]) <= 1e4f, "Excessive camera overlay scalar");
+                    material.switches[i] = U32(parameters, 36 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
+                Require((material.scalars[0] == 0 || std::isfinite(1.f / material.scalars[0]))
+                    && material.scalars[2] >= 0 && material.scalars[2] <= 1, "Invalid camera overlay scale/amount");
+            }
+            if (scrolling_specular)
+            {
+                const unsigned offsets[] = {16,20,40,44};
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.scalars[i] = F32(parameters, offsets[i]);
+                    Require(std::abs(material.scalars[i]) <= 1e4f, "Excessive scrolling specular scalar");
+                }
+                Require(material.scalars[0] >= 0 && material.scalars[0] <= 1 && material.scalars[1] >= 0,
+                    "Invalid scrolling specular level/exponent");
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.specular_colour[i] = F32(parameters, 24 + i * 4);
+                    Require(material.specular_colour[i] >= 0 && material.specular_colour[i] <= 1,
+                        "Invalid scrolling specular colour");
+                }
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.switches[i] = U32(parameters, 48 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
             }
             if (detail)
             {
@@ -142,7 +180,8 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             // Material programs bind streams by ordinal; reject mismatched layouts.
             const std::vector<unsigned> layout = shadow ? std::vector<unsigned>{1,3,4}
                 : detail ? std::vector<unsigned>{1,2,4,4,4,4,3}
-                : masked ? std::vector<unsigned>{1,2,4,4,4,3}
+                : (masked || overlay) ? std::vector<unsigned>{1,2,4,4,4,3}
+                : scrolling_specular ? std::vector<unsigned>{1,2,4,4,3}
                 : scrolling ? std::vector<unsigned>{1,2,4,3}
                 : material.program == 0xd3e572da ? std::vector<unsigned>{1,4,3} : std::vector<unsigned>{1,4};
             Require(record[11] == layout.size(), "RLG stream count does not match the material");

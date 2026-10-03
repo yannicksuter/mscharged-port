@@ -31,7 +31,9 @@ public:
 };
 
 // Child views render before their parents, using the original packet callbacks.
-void RenderOriginalViews(float time, const GameLighting& lighting);
+// Supply the active game camera in authored world units for camera overlays;
+// it is independent of each child view's rendering camera.
+void RenderOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position = nullptr);
 void InitializeNativeTargets(unsigned width, unsigned height, void (*drain)());
 void ShutdownNativeTargets();
 // Selected game layer owners release their views before the containing graph.
