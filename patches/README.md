@@ -19,15 +19,13 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `483cb6020288a347419f7e4bfa88eaa3059f063e`, adopted from
+The current base is `5baf5467811c779eb396ac8d2b456ec3a991732b`, adopted from
 published `main` on 2026-10-03. The ordered patches are listed in
 [`mscharged-decomp/series`](mscharged-decomp/series).
-This update refreshes 0005, 0006, 0011, 0012, 0017, 0025 and 0031 for upstream
-declaration changes, named allocator fields and allocator helper extraction.
-The allocator uses the new shared helpers with native address widths, alignment
-and failure checks; startup
-and rendering extracts retain their behavior. The remaining patch hunks are
-unchanged, with all bases updated to the selected commit.
+This update adopts the matched animated-camera implementation and refreshes
+0055 for its named camera data fields. Patches 0001–0054 retain their bodies,
+with their bases updated to the selected commit. Patch 0056 selects original
+authored playback with explicit native service inputs and checked lifetimes.
 
 Upstream now marks both `nlEvent.cpp` and `MemAlloc.cpp` matching. Patch 0038
 connects the original immediate event registry and listeners to native startup
@@ -92,7 +90,8 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0052-select-native-camera-core.patch` | Select original camera stack, transition and pose routines with native allocation, borrowed ownership, checked callbacks and repeatable teardown. | Stack order, interpolation, callback failures, allocation recovery and supplied preview poses. Authored cameras, factory/impostor services and full frame tasks remain pending. |
 | `0053-preserve-native-camera-filter-arithmetic.patch` | Preserve Wii noise hashing through explicit 32-bit wrapping, initialize inactive displacement and validate native filter timing and inputs. | Independent noise values, real task-state rumble gating, clamped steps, reset/expiry and sanitizer checks. Wii presentation parity remains pending. |
 | `0054-select-native-texture-animation.patch` | Select original IFL playback and inventory traversal with bounded native records, owned animation indices and ordered release. Material binding and alpha preparation resolve the current frame. | Fixed-width decoding and dependency checks, loop/ping-pong/hold/pause timing, alias refresh, allocation failure, rollback, sanitizer/leak checks, Vulkan pixels and owned Palace/Bowser models. Frames must be static textures in the same decoded batch; full world/task integration remains pending. |
-| `0055-select-native-camera-data.patch` | Select original camera-data initialization separately from playback; initialize ownership and pair game-allocated arrays with game frees. | Bounded big-endian CAM decoding, full names, native handles, allocation rollback and sync/async NL file lifetimes. Startup loads a frontend camera; original animated-camera playback and factory selection remain pending. |
+| `0055-select-native-camera-data.patch` | Select original camera-data initialization separately from playback; initialize ownership and pair game-allocated arrays with game frees. | Bounded big-endian CAM decoding, full names, native handles, allocation rollback and sync/async NL file lifetimes. |
+| `0056-select-native-animated-camera-playback.patch` | Select original camera interpolation, cuts, transforms, timing and focal calculations; provide explicit display/simulation inputs and validate sampling. | Retained asset ownership, loop/end callbacks, mirroring, facing, FOV, original CameraMan updates and authored scene preview. Full camera factory and DOF rendering remain pending. |
 
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain

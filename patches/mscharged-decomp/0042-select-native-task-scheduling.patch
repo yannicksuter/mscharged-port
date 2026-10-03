@@ -1,6 +1,6 @@
 Subject: Select original task scheduling and explicit movie service boundary
 
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 Retain original intrusive insertion, state notification order, per-task ticker
 sampling, bounds/dilation and post-task MoviePlay calls. Native registration is

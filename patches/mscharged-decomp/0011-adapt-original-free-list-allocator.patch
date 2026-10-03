@@ -1,6 +1,6 @@
 Subject: Preserve original allocator with native pointer and block alignment
 
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 Keep the original start/end allocation, circular free-list, relative 32-bit trailer,
 coalescing, and free-memory statistics algorithms. Native addresses use uintptr_t;

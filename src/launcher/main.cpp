@@ -720,6 +720,7 @@ int main(int argc, char** argv)
             std::cout << "Static Wii asset preview: --experimental-scene [--config FILE] [--frames N]\n"
                          "                        [--model /DISC/PATH.rlg] [--textures /DISC/PATH.rlt] [--model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --model-id HEX]\n"
+                         "                        [--camera /DISC/camera.cam]\n"
                          "                        [--unlit] [--shadow-textures /DISC/PATH.rlt --shadow-id HEX]\n";
 #endif
             return 0;
@@ -729,12 +730,13 @@ int main(int argc, char** argv)
         else if (arg == "--experimental-scene") options.experimental_scene = true;
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
         else if ((arg == "--frames" || arg == "--model" || arg == "--textures" || arg == "--model-id"
-                  || arg == "--world" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
+                  || arg == "--world" || arg == "--camera" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
         {
             options.scene_arguments = true;
             const std::string value = argv[++i];
             if (arg == "--model" || arg == "--textures") options.standalone_assets = true;
             if (arg == "--world") options.scene.world = value;
+            else if (arg == "--camera") options.scene.camera = value;
             else if (arg == "--model") options.scene.model = value;
             else if (arg == "--textures") options.scene.textures = value;
             else if (arg == "--shadow-textures") options.scene.shadow_textures = value;

@@ -1,6 +1,6 @@
 Subject: Use the standard memory/string header in native source
 
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 The CodeWarrior MSL mem.h dependency is not supplied by the host toolchain.
 Use string.h for its standard memory/string declarations. No MSL compatibility

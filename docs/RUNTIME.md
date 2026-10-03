@@ -28,9 +28,8 @@ This requires a USA `R4QE01` revision 1 ISO/RVZ. It stops explicitly with exit c
 3 after the implemented initialization checks; later startup stages remain pending.
 The same build exposes **Try startup** in the launcher.
 The checks include original memory, file access, boot configuration, tweak
-registration, events, task scheduling, frame timing, camera diagnostics and camera
-asset loading. Movies, authored camera playback and the complete game frame loop
-remain in development.
+registration, events, task scheduling, frame timing and authored camera loading
+and playback. Movies and the complete game frame loop remain in development.
 
 For the host check alone, use `cmake --workflow --preset aurora`, then run
 `./build/aurora/mscharged-aurora-check --window`.
@@ -74,11 +73,21 @@ CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
 
 The preview loads the ball from a USA `R4QE01` revision 1 image and renders it
 through Aurora/Vulkan with selected original materials, lighting and texture
-animation. Its diagnostic poses pass through the original camera core;
-authored cameras remain pending.
+animation. Its poses pass through the original camera core. Use
+`--camera /DISC/camera.cam` to play an authored track with original timing and
+transforms; choose geometry in that camera's world coordinates. Bounded runs use
+a fixed 60 Hz camera clock. Depth-of-field rendering remains pending.
 An explicit `--world /DISC/gameworld.tmp.zlib --model-id HEX` selects a static world resource;
 shadow-volume models use a diagnostic receiver. Full scenes and character
 animation remain in development.
+
+For an authored frontend camera viewing one environment fragment:
+
+```sh
+./build/scene/mscharged --experimental-scene \
+  --world /Art/fe/environments/main/gameworld.tmp.zlib --model-id a883bcfb \
+  --camera /Art/fe/environments/cameras/camera_idle.cam
+```
 
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running

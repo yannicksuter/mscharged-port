@@ -1,6 +1,6 @@
 Subject: Expose the original initialization prefix for incremental native startup
 
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 Move the existing region/language selection and nlInit call into a callable
 startup unit. Full game Initialize calls the same function, preserving order.

@@ -4,6 +4,7 @@
 #include "runtime/frames.h"
 #include "runtime/frame_timing.h"
 #include "runtime/cameras.h"
+#include "runtime/animated_camera.h"
 #include "Game/Camera/CameraMan.h"
 #include "runtime/shadows.h"
 #include "Game/Render/ShadowVolume.h"
@@ -284,7 +285,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::invalid_argument("Object lighting and projected lookup options do not apply to shadow volumes");
         const bool camera_overlay = std::any_of(selected->packets.begin(), selected->packets.end(),
             [](const auto& p) { return p.material.program == 0x32bc21e8 || p.material.program == 0x845cad59; });
-        const auto bounds = Normalize(*selected, camera_overlay);
+        if (volume_preview && options.camera)
+            throw std::invalid_argument("Authored camera playback is not connected to the diagnostic shadow receiver");
+        const auto bounds = Normalize(*selected, camera_overlay || options.camera.has_value());
         const auto selected_id = selected->id;
         std::size_t vertices = 0, indices = 0;
         for (const auto& packet : selected->packets)
@@ -360,6 +363,27 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             plane.vertices={{{-1.5f,-1.5f,0},{0,0}},{{1.5f,-1.5f,0},{1,0}},{{1.5f,1.5f,0},{1,1}},{{-1.5f,1.5f,0},{0,1}}};
             plane.indices={0,1,2,0,2,3}; models.push_back({receiver_id,{std::move(plane)}});
         }
+        // Validate camera files before GX queues commands for its first render target.
+        OriginalCameras cameras;
+        CameraPoseInput camera_input;
+        std::optional<AnimatedCamera> authored_camera;
+        if (options.camera)
+        {
+            CameraAssetLoad request(options.camera->c_str(), "preview");
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (!request.Ready())
+            {
+                if (Update()) throw std::runtime_error("Camera preview cancelled while loading");
+                request.Service();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Camera asset load timed out");
+                if (!request.Ready()) SDL_Delay(1);
+            }
+            authored_camera.emplace(request.Result());
+            cCameraManager::PushCamera(&authored_camera->Camera());
+            log("Original authored camera playback: " + *options.camera + "; "
+                + std::to_string(authored_camera->Duration()) + " seconds; model coordinates preserved. Depth-of-field rendering remains pending.");
+        }
+        else cCameraManager::PushCamera(&camera_input);
         VIInit(); VIConfigure(&GXNtsc480IntDf);
         alignas(32) std::array<std::uint8_t, 65536> fifo{}; GXInit(fifo.data(), fifo.size());
         session.gx = true;
@@ -388,9 +412,6 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         AuroraFrames backend;
         OriginalFrames lifecycle(backend);
         FrameCounter timing("frame", "send");
-        OriginalCameras cameras;
-        CameraPoseInput camera_input;
-        cCameraManager::PushCamera(&camera_input);
         GLView* submitted = nullptr;
         RLViewCamera shadow_camera;
         std::unique_ptr<ShadowLayers> shadow_layers;
@@ -411,7 +432,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
-        log("Original camera core evaluates supplied preview poses; authored camera loading and gameplay selection remain pending.");
+        log("Original camera core supplies the view and position; full gameplay camera selection remains pending.");
         bool volume_enabled = true;
         float receiver_height = 0;
         // Render only game-pool records from here; discard host decoder storage.
@@ -429,7 +450,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             glBeginFrame();
             timing.StartTimer(0);
             const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
-            glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(elapsed - animation_time);
+            const float delta = elapsed - animation_time;
+            glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
             animation_time = elapsed;
             auto frame_lighting = lighting;
             if (!shadows_enabled) frame_lighting.shadow = {};
@@ -453,6 +475,19 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 if (volume_enabled) shadow_drawable->Draw(identity);
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
             }
+            else if (authored_camera)
+            {
+                // Bounded diagnostics use a reproducible 60 Hz playback clock.
+                const float camera_delta = frames ? (options.frames ? 1.f / 60 : delta) : 0;
+                cameras.Advance(camera_delta, camera_delta);
+                GXSetCopyClear({24,28,34,255}, GX_MAX_Z24);
+                view_matrices.view = cCameraManager::m_matView;
+                glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180,
+                    float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, .1f, 1000.f);
+                nlMatrix4 identity; identity.SetIdentity(); glModelSetMatrix(native_model, identity);
+                submitted->AttachModel(native_model, 0);
+                backend.camera_position = cCameraManager::m_cameraPosition;
+            }
             else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
                                                        camera_overlay ? &bounds : nullptr);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
@@ -472,6 +507,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::SetNextWindowBgAlpha(0.82f);
             ImGui::Begin("Static asset preview", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
+            if (authored_camera)
+                ImGui::Text("Authored camera: %.2f / %.2f s", authored_camera->Time() * authored_camera->Duration(), authored_camera->Duration());
             if (volume_preview)
             {
                 ImGui::TextUnformatted("Original stadium shadow mesh / diagnostic receiver");
@@ -509,7 +546,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         // Explicitly stop services while CPU texture storage and frame FIFO still exist.
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
-        cameras.Release();
+        authored_camera.reset(); cameras.Release();
         lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); inventory.Release(); materials.Release(); glShutdownMemory();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
             throw std::runtime_error("Graphics shutdown did not recover both original game arenas");

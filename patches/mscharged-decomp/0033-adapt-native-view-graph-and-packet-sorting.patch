@@ -1,5 +1,5 @@
 Subject: Adapt original GL views, frame sorters and slot pools for native rendering
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 Keep the original view traversal, per-layer AVL sorting, packet callback flags
 and pool algorithms. Allocate sorter tables lazily after game memory startup;

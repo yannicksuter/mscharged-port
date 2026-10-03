@@ -1,5 +1,5 @@
 Subject: [PATCH] Connect native whole-file requests to NL read failure and shutdown
-Upstream-base: 483cb6020288a347419f7e4bfa88eaa3059f063e
+Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
 
 The native port provides nlLoadEntireFileAsync/nlCancelEntireFileLoad in
 src/runtime/whole_file.cpp. Keep original console implementations unselected:
