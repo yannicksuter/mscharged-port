@@ -1,4 +1,5 @@
 #include "runtime/events.h"
+#include "runtime/tasks.h"
 #include "Game/EventConnection.h"
 #include "Game/EventRegistry.h"
 #include "Game/EventDispatcher.inl"
@@ -14,6 +15,7 @@ void ShutdownNativeDispatchTask()
     auto* task = gDispatchEventsTask;
     if (task->dispatcher.state.fields.dispatching || task->dispatcher.mNativeClearing)
         throw std::logic_error("Cannot destroy an active dispatch task");
+    RemoveNativeTask(task);
     std::exception_ptr failure;
     try { task->dispatcher.FreeBlocks(); } catch (...) { failure = std::current_exception(); }
     gDispatchEventsTask = nullptr;

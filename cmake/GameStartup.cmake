@@ -1,7 +1,7 @@
 include(cmake/NativeRuntime.cmake)
 include(cmake/Events.cmake)
 
-add_library(charged_game_startup STATIC src/runtime/startup.cpp)
+add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(charged_game_startup PRIVATE cxx_std_20)
 target_link_libraries(charged_game_startup PRIVATE charged_decomp_startup charged_host

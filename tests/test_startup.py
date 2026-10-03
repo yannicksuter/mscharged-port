@@ -46,6 +46,7 @@ class StartupTests(unittest.TestCase):
         self.assertIn("Original InitializeCore() and nlInit() completed", output)
         self.assertIn("Original event registry, callback transfer, delivery, self-disconnect and state cleanup verified; both arenas recovered", output)
         self.assertIn("Original DispatchEventsTask delivery, reset and queued payload cleanup verified; both arenas recovered", output)
+        self.assertIn("Original task manager scheduled DispatchEventsTask across state masks and batches; inactive movie path and arena recovery verified", output)
         self.assertIn("Native SAnim decoders verified: 16/12/8-bit rotations, unsigned scale and byte weights", output)
         self.assertIn("Original nlInitFileSystem completed; NL sync/async reads verified: /ini/common.ini", output)
         self.assertIn("34 of 34 bytes; FNV-1a 0x30853692", output)
