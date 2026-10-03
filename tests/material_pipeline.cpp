@@ -4,6 +4,8 @@
 #include "runtime/gpu_readback.h"
 #include "runtime/material_environment.h"
 #include "runtime/static_inventory.h"
+#include "Game/GL/GLInventory.h"
+#include "Game/GL/GLTextureAnim.h"
 #include "runtime/graphics_memory.h"
 #include "runtime/graphics_state.h"
 #include "runtime/startup.h"
@@ -195,6 +197,50 @@ void PixelCase(const char *name, glModel &model, float time, std::array<unsigned
     std::cout << name << ": RGB " << unsigned(pixel[0]) << ',' << unsigned(pixel[1]) << ',' << unsigned(pixel[2])
               << ", draws " << draws << '\n';
     Check(match && draws > 0, "Original material shader pixel mismatch");
+}
+
+void TextureAnimationCases()
+{
+    auto source=Model(1400,0xf2d57ac6,1450);
+    auto& m=source.packets[0].material;m.textures[1]={1451,3};m.textures[2]={1452,3};m.scalars[0]=1;
+    auto& pool=*glGetCurrentResourcePool();
+    StaticInventory inventory(pool,{source},
+        {Texture(1401,{80,100,120,255},8,true),Texture(1402,{200,40,20,128},8,true),
+         Texture(1403,{160,180,200,255}),Texture(1406,{40,80,120,255}),
+         Texture(1404,{255,255,255,255}),Texture(1405,{0,0,0,255})},Drain,
+        {{1450,0,0,false,0,{{1401,.25f},{1402,.5f}}},
+         {1451,2,0,false,0,{{1403,.5f},{1406,.5f}}},
+         {1452,1,1,false,0,{{1404,.75f},{1405,.75f}}}});
+    auto& model=*inventory.Model(1400);
+    auto& p=*static_cast<GXScrollingMaskedDetailBlendParameters*>(model.packets[0].materialParameters);
+    auto* diffuse=glGetTextureAnim(1450);auto* mask=glGetTextureAnim(1452);
+    PixelCase("IFL initial diffuse frame",model,0,{80,100,120});
+    pool.m_inventory->UpdateTextureAnims(.125f);
+    PixelCase("IFL partial frame duration",model,0,{80,100,120});
+    pool.m_inventory->UpdateTextureAnims(.125f);
+    PixelCase("IFL diffuse alias refresh and alpha",model,0,{110,32,25});
+    p.diffuseScrollSpeedX=.5f;
+    PixelCase("IFL frame and UV scrolling are independent",model,1,{20,40,200});
+    p.diffuseScrollSpeedX=0;diffuse->m_bPaused=1;diffuse->Update(10);
+    PixelCase("IFL paused frame retains pixels",model,0,{110,32,25});
+    diffuse->m_bPaused=0;pool.m_inventory->UpdateTextureAnims(10);
+    PixelCase("IFL one-step loop drops overshoot",model,0,{80,100,120});
+    p.blendAmount=0;
+    PixelCase("IFL animated black mask retains diffuse",model,0,{80,100,120});
+    mask->Update(.75f);
+    PixelCase("IFL ping-pong mask reveals held detail",model,0,{40,80,120});
+    p.blendAmount=.5f;
+    PixelCase("IFL masked detail fractional blend",model,0,{60,90,120});
+    // Resolve an existing cached animation binding to a static ID and back.
+    p.diffuseTexture.texture=1406;p.blendAmount=1;
+    PixelCase("IFL cached alias changed to static texture",model,0,{40,80,120});
+    p.diffuseTexture.texture=1450;
+    PixelCase("IFL cached binding returns to animation",model,0,{80,100,120});
+    inventory.Release();
+    StaticInventory restart(pool,{Model(1400,0x21db4385,1450)},
+        {Texture(1401,{20,40,200,255})},Drain,{{1450,0,0,false,0,{{1401,0}}}});
+    pool.m_inventory->UpdateTextureAnims(100);
+    PixelCase("IFL single-frame alias after release and reuse",*restart.Model(1400),0,{20,40,200});
 }
 
 void SpecularDetailCases()
@@ -865,6 +911,12 @@ int main(int argc, char **argv)
         StaticInventory inventory(*glGetCurrentResourcePool(),
                                   {unlit, vertex, scroll, masked, discard, blend, ci8, normal_left, normal_right},
                                   textures, Drain);
+        const bool animation_only = argc == 2 && std::string_view(argv[1]) == "--texture-animation-only";
+        if (animation_only)
+        {
+            TextureAnimationCases();
+            PixelCase("Unlit after texture animation cleanup", *inventory.Model(1), 0, {80,100,120});
+        }
         const bool targets_only = argc == 2 && std::string_view(argv[1]) == "--targets-only";
         const bool specular_only = argc == 2 && std::string_view(argv[1]) == "--specular-only";
         const bool scrolling_specular_only = argc == 2 && std::string_view(argv[1]) == "--scrolling-specular-only";
@@ -903,7 +955,7 @@ int main(int argc, char **argv)
             SpecularDetailCases();
             PixelCase("Unlit after detail/specular/shadow stages", *inventory.Model(1), 0, {80,100,120});
         }
-        if (!targets_only && !specular_only && !scrolling_specular_only && !camera_overlay_only && !masked_detail_only && !scrolling_masked_detail_only && !scrolling_camera_only)
+        if (!targets_only && !specular_only && !scrolling_specular_only && !camera_overlay_only && !masked_detail_only && !scrolling_masked_detail_only && !scrolling_camera_only && !animation_only)
         {
         PixelCase("Unlit diffuse", *inventory.Model(1), 0, {80, 100, 120});
         PixelCase("Vertex colour modulation", *inventory.Model(2), 0, {40, 100, 60});
@@ -1004,7 +1056,7 @@ int main(int argc, char **argv)
         // Switch back to verify TEV/channel/texture state does not leak between programs.
         PixelCase("Unlit after multi-stage materials", *inventory.Model(1), 0, {80, 100, 120});
         }
-        if (!specular_only && !scrolling_specular_only && !camera_overlay_only && !masked_detail_only && !scrolling_masked_detail_only && !scrolling_camera_only)
+        if (!specular_only && !scrolling_specular_only && !camera_overlay_only && !masked_detail_only && !scrolling_masked_detail_only && !scrolling_camera_only && !animation_only)
         {
         for (auto format : {GLTargetFormat_RGBA8, GLTargetFormat_RGB565, GLTargetFormat_RGB5A3, GLTargetFormat_A8, GLTargetFormat_IA8})
         {

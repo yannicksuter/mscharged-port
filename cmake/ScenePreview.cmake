@@ -60,6 +60,10 @@ if(BUILD_TESTING)
     target_link_libraries(render_views_tests PRIVATE charged_views)
     add_test(NAME render_views COMMAND render_views_tests)
     set_tests_properties(render_views PROPERTIES TIMEOUT 30)
+    add_executable(texture_animation_tests tests/texture_animation.cpp)
+    target_link_libraries(texture_animation_tests PRIVATE charged_static_inventory)
+    add_test(NAME texture_animation COMMAND texture_animation_tests)
+    set_tests_properties(texture_animation PROPERTIES TIMEOUT 30)
     add_executable(static_inventory_tests tests/static_inventory.cpp)
     target_link_libraries(static_inventory_tests PRIVATE charged_static_inventory)
     add_test(NAME static_inventory COMMAND static_inventory_tests)
@@ -112,6 +116,10 @@ if(BUILD_TESTING)
     target_link_libraries(material_pipeline_tests PRIVATE charged_views charged_static_inventory aurora::gx aurora::vi aurora::core)
 endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    add_test(NAME texture_animation_pipeline COMMAND material_pipeline_tests --texture-animation-only)
+    set_tests_properties(texture_animation_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME scrolling_camera_overlay_pipeline COMMAND material_pipeline_tests --scrolling-camera-only)
     set_tests_properties(scrolling_camera_overlay_pipeline PROPERTIES TIMEOUT 150 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check

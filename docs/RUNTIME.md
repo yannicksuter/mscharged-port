@@ -72,8 +72,9 @@ CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
 ```
 
 The preview loads the ball from a USA `R4QE01` revision 1 image and renders it
-through Aurora/Vulkan with selected original materials and lighting. Its diagnostic
-poses pass through the original camera core; authored cameras remain pending.
+through Aurora/Vulkan with selected original materials, lighting and texture
+animation. Its diagnostic poses pass through the original camera core;
+authored cameras remain pending.
 An explicit `--world /DISC/gameworld.tmp.zlib --model-id HEX` selects a static world resource;
 shadow-volume models use a diagnostic receiver. Full scenes and character
 animation remain in development.

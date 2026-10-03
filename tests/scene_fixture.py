@@ -212,7 +212,7 @@ def make_masked_detail_world(missing_mask=False):
     return struct.pack(">I",len(raw))+zlib.compress(raw)
 
 
-def make_scrolling_masked_detail_world(missing_mask=False):
+def make_scrolling_masked_detail_world(missing_mask=False, animated=False, missing_frame=False):
     """Three masked detail material bindings in a compressed synthetic world."""
     import zlib
 
@@ -243,6 +243,7 @@ def make_scrolling_masked_detail_world(missing_mask=False):
         entries.append(header + bytes([255,r]) * 16 + bytes([g,b]) * 16)
     table = b"".join(struct.pack(">4I",0x12345678+i,i*96,96,0) for i in range(count))
     textures = struct.pack(">4I",0x50544C47,count,0,0) + table + b"".join(entries)
+    if animated: textures = animate_texture_bundle(textures, missing_frame)
     raw = chunk(0x80000001,chunk(0x24100,textures)+chunk(0x8001B100,model))
     return struct.pack(">I",len(raw))+zlib.compress(raw)
 
@@ -280,3 +281,26 @@ def make_scrolling_camera_world(missing_mask=False):
     textures = struct.pack(">4I",0x50544C47,count,0,0) + table + b"".join(entries)
     raw = chunk(0x80000001,chunk(0x24100,textures)+chunk(0x8001B100,model))
     return struct.pack(">I",len(raw))+zlib.compress(raw)
+
+
+def animate_texture_bundle(bundle, missing_frame=False):
+    """Replace the first static ID with an IFL alias to two synthetic images."""
+    count = struct.unpack_from(">I", bundle, 4)[0]
+    start = 16 + count * 16
+    records = []
+    for i in range(count):
+        key, offset, size, _ = struct.unpack_from(">4I", bundle, 16 + i * 16)
+        records.append((key, bundle[start + offset:start + offset + size]))
+    key, image = records[0]
+    other = bytearray(image)
+    for i in range(32, len(other)):
+        if i % 2: other[i] = 255 - other[i]
+    anim = struct.pack(">IIiiiB3xIfI", 0x5f6c6669, key, 2, 0, 0, 0, 0xffff, 0, 0)
+    anim += struct.pack(">IfIf", 0xabc00001, .05, 0xabc00002, .05)
+    records = [(key, anim), *records[1:], (0xabc00001, image)]
+    if not missing_frame: records.append((0xabc00002, other))
+    table, body = bytearray(), bytearray()
+    for key, data in records:
+        table += struct.pack(">4I", key, len(body), len(data), 0)
+        body += data
+    return struct.pack(">4I", 0x50544c47, len(records), 0, 0) + table + body

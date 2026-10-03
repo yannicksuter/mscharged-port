@@ -33,6 +33,7 @@
 #include "NL/gl/glMemoryInit.h"
 #include "NL/gl/gl.h"
 #include "NL/gl/glModel.h"
+#include "Game/GL/GLInventory.h"
 #include "NL/gl/glMatrix.h"
 #include "NL/gl/glState.h"
 #include "NL/gl/glTextureManager.h"
@@ -243,7 +244,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             SDL_Delay(1);
         }
         std::vector<resources::StaticModel> models;
-        std::vector<resources::Texture> textures;
+        resources::TextureBundle texture_bundle;
+        auto& textures = texture_bundle.textures;
+        auto& animations = texture_bundle.animations;
         if (options.world)
         {
             auto decoded = resources::InflateAsset(model_data.Bytes());
@@ -257,7 +260,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     : packet.material.program == 0x3eccd955 ? 2u : 1u); ++i)
                     if (std::find(required.begin(), required.end(), packet.material.textures[i].texture) == required.end())
                         required.push_back(packet.material.textures[i].texture);
-            textures = resources::ReadTextureBundle(selected.textures, required);
+            texture_bundle = resources::ReadTextureBundle(selected.textures, required);
             models.push_back(std::move(selected.model));
             log(*options.world + ": " + std::to_string(model_data.size) + " compressed bytes -> "
                 + std::to_string(decoded.size()) + " checked world bytes; one explicit model selected.");
@@ -266,7 +269,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             log(options.model + ": " + std::to_string(model_data.size) + " bytes; " + options.textures + ": " + std::to_string(texture_data.size) + " bytes.");
             models = resources::ReadStaticModels(model_data.Bytes(), options.model_id);
-            textures = resources::ReadTextureBundle(texture_data.Bytes());
+            texture_bundle = resources::ReadTextureBundle(texture_data.Bytes());
         }
         model_data.data.reset(); texture_data.data.reset();
         auto selected = models.begin();
@@ -287,13 +290,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         for (const auto& packet : selected->packets)
         {
             vertices += packet.vertices.size(); indices += packet.indices.size();
-            if (std::none_of(textures.begin(), textures.end(), [&](const auto& texture) { return texture.id == packet.material.textures[0].texture; }))
+            if (std::none_of(textures.begin(), textures.end(), [&](const auto& texture) { return texture.id == packet.material.textures[0].texture; })
+                && std::none_of(animations.begin(), animations.end(), [&](const auto& anim) { return anim.id == packet.material.textures[0].texture; }))
                 throw std::runtime_error("RLG diffuse texture is missing from the selected RLT bundle");
         }
         std::ostringstream description;
         description << "Selected model 0x" << std::hex << selected->id << std::dec << ": " << selected->packets.size()
             << " packets, " << vertices << " vertices, " << indices << " indices; " << textures.size()
-            << " textures; original radius " << bounds.radius << '.';
+            << " textures, " << animations.size() << " texture animations; original radius " << bounds.radius << '.';
         log(description.str());
         const auto lookup_ids = MaterialLookupTextures(*selected);
         if (!lookup_ids.empty())
@@ -309,10 +313,11 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 SDL_Delay(1);
             }
             auto lookups = resources::ReadTextureBundle(global.Bytes(), lookup_ids);
-            for (auto& texture : lookups)
+            if (!lookups.animations.empty()) throw std::runtime_error("Material lookup ramps require static textures");
+            for (auto& texture : lookups.textures)
                 if (std::none_of(textures.begin(), textures.end(), [&](const auto& old) { return old.id == texture.id; }))
                     textures.push_back(std::move(texture));
-            log("Loaded " + std::to_string(lookups.size()) + " original material lookup textures from /Art/global.rlt.");
+            log("Loaded " + std::to_string(lookups.textures.size()) + " original material lookup textures from /Art/global.rlt.");
         }
         if (options.shadow_id)
         {
@@ -326,7 +331,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Shadow texture load timed out");
                 SDL_Delay(1);
             }
-            auto shadow = resources::ReadTextureBundle(shadow_data.Bytes(), {*options.shadow_id});
+            auto shadow_bundle = resources::ReadTextureBundle(shadow_data.Bytes(), {*options.shadow_id});
+            const auto& shadow = shadow_bundle.textures;
+            if (!shadow_bundle.animations.empty()) throw std::runtime_error("Projected shadow lookup requires a static texture");
             if (shadow.size() != 1 || shadow[0].game_format != GXTex_CI8)
                 throw std::runtime_error("Projected shadow lookup requires a CI8/RGB5A3 texture");
             auto existing = std::find_if(textures.begin(), textures.end(), [&](const auto& t) { return t.id == *options.shadow_id; });
@@ -359,7 +366,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         SetGraphicsCacheInvalidator(InvalidateCaches);
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         MaterialPrograms materials;
-        StaticInventory inventory(*glGetCurrentResourcePool(), models, textures, DrainGX);
+        StaticInventory inventory(*glGetCurrentResourcePool(), models, textures, DrainGX, animations);
         GameLighting lighting = DefaultGameLighting();
         lighting.enabled = !options.unlit;
         LightingLookup shadow_lookup;
@@ -409,8 +416,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         float receiver_height = 0;
         // Render only game-pool records from here; discard host decoder storage.
         models.clear(); models.shrink_to_fit(); textures.clear(); textures.shrink_to_fit();
+        animations.clear(); animations.shrink_to_fit();
         unsigned frames = 0, draws = 0, depth_hits = 0, colour_hits = 0, shadow_hits = 0;
         const auto start = std::chrono::steady_clock::now();
+        float animation_time = 0;
         while (!options.frames || frames < options.frames)
         {
             if (Update()) break;
@@ -420,6 +429,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             glBeginFrame();
             timing.StartTimer(0);
             const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+            glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(elapsed - animation_time);
+            animation_time = elapsed;
             auto frame_lighting = lighting;
             if (!shadows_enabled) frame_lighting.shadow = {};
             backend.time = elapsed;

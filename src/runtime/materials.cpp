@@ -2,6 +2,7 @@
 #include "runtime/material_environment.h"
 #include "runtime/lighting_state.h"
 #include "NL/gl/glMaterialProgram.h"
+#include "NL/gl/glTextureManager.h"
 #include "NL/gl/glState.h"
 #include "NL/platvmath.h"
 #include "NL/gl/glMatrix.h"
@@ -47,7 +48,7 @@ glTextureBinding Binding(const resources::MaterialBinding &input)
 {
     if (input.flags & ~3u)
         throw std::invalid_argument("Invalid material texture flags");
-    if (!glx_GetTex(input.texture))
+    if (!glGetTextureManager() || glGetTextureManager()->GetTextureIndex(input.texture) == 0xFFFF)
         throw std::runtime_error("Material texture is missing from the native inventory");
     return {input.texture, static_cast<u8>(input.flags & 1), static_cast<u8>((input.flags >> 1) & 1)};
 }
