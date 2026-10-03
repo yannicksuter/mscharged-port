@@ -19,19 +19,19 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `45f25bd6519586837e61251208d34d8dcf94e170`, adopted from
-published `main` on 2026-10-02. The current series contains thirty-seven patches.
-The dependency update retained the first eighteen. Patch 0006 was refreshed
-for the upstream entry's
-declaration/scope changes; its extracted startup behavior is unchanged.
-The other seventeen patches retain their hunks with updated base metadata.
-Patch 0019 selects native animation rotation decoders while retaining original
-unsigned scale and byte-weight code. The full series applies strictly, and
-startup/Debug/Release checks pass.
-Patch 0020 connects native whole-file request cleanup to read failure and
-shutdown; the implementation is a port adapter with opaque handles and explicit
-buffer ownership.
-Upstream's newly matching `Game/main.cpp` still needs its native dependencies;
+The current base is `4a9ab8151d9a74e321e52b36c95d1e157d41af60`, adopted from
+published `main` on 2026-10-03. The series contains thirty-seven patches.
+This update refreshes 0005, 0006, 0011, 0012, 0017, 0025 and 0031 for upstream
+declaration changes, named allocator fields and allocator helper extraction.
+The allocator uses the new shared helpers with native address widths, alignment
+and failure checks; startup
+and rendering extracts retain their behavior. The remaining patch hunks are
+unchanged, with all bases updated to the selected commit.
+
+Upstream now marks both `nlEvent.cpp` and `MemAlloc.cpp` matching. The event
+system still needs native ownership, layout and lifecycle work before runtime
+integration. Matching Wii code and a
+strictly applicable patch series do not establish a complete native game;
 see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-startup).
 
 | Patch | Reason | Current validation |

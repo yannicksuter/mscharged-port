@@ -1,6 +1,7 @@
 #pragma once
 
 #include "NL/MemAlloc.h"
+#include "NL/nlMemory.h"
 
 namespace mscharged
 {

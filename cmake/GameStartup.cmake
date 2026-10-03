@@ -14,7 +14,8 @@ add_library(charged_game_entry OBJECT EXCLUDE_FROM_ALL "${MSCHARGED_PREPARED}/sr
 add_dependencies(charged_game_entry verify_prepared)
 target_include_directories(charged_game_entry PRIVATE
     "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
-target_compile_definitions(charged_game_entry PRIVATE MSCHARGED_NATIVE=1)
+# The entry includes physics headers; retain upstream's single-precision ODE ABI.
+target_compile_definitions(charged_game_entry PRIVATE MSCHARGED_NATIVE=1 dSINGLE=1)
 target_compile_features(charged_game_entry PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_game_entry PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
