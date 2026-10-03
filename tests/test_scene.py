@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 from disc_fixture import write_disc
-from scene_fixture import make_assets, make_shadow, make_world
+from scene_fixture import make_assets, make_shadow, make_world, make_specular_world
 
 executable = pathlib.Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
@@ -46,6 +46,10 @@ with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
     corrupted = bytearray(world); corrupted[-1] ^= 1
     write_disc(disc, files={"world.tmp.zlib": corrupted})
     run(world_args, 1, "Invalid compressed asset")
+    write_disc(disc, files={"world.tmp.zlib": make_specular_world()})
+    run(world_args, 0, "4 textures; original radius")
+    write_disc(disc, files={"world.tmp.zlib": make_specular_world(missing_gloss=True)})
+    run(world_args, 1, "Requested texture")
     # Original alpha preparation disables depth writes for multibit textures.
     # The visibility gate must use actual colour samples for this valid case.
     blended = bytearray(texture)

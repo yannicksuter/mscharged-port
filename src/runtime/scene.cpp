@@ -229,7 +229,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             auto selected = resources::ReadStaticWorldModel(decoded, *options.model_id);
             std::vector<std::uint32_t> required;
             for (const auto& packet : selected.model.packets)
-                for (unsigned i = 0; i < (packet.material.program == 0x32475c7d ? 3u : 1u); ++i)
+                for (unsigned i = 0; i < (packet.material.program == 0x112ab470 ? 4u : packet.material.program == 0x32475c7d ? 3u : 1u); ++i)
                     if (std::find(required.begin(), required.end(), packet.material.textures[i].texture) == required.end())
                         required.push_back(packet.material.textures[i].texture);
             textures = resources::ReadTextureBundle(selected.textures, required);

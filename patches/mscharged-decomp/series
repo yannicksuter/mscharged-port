@@ -39,3 +39,4 @@
 0038-adapt-native-event-ownership-and-lifetimes.patch
 0039-adapt-native-queued-event-lifetimes.patch
 0040-select-original-event-dispatch-task.patch
+0041-enable-native-specular-detail-blend.patch

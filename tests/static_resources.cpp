@@ -170,6 +170,86 @@ void Materials()
     bad=fixture.data; bad[fixture.offsets.at(0x1b005)+21]=8; Reject([&]{ReadStaticModels(bad);},"Wrong material stream format");
     bad=fixture.data; bad[fixture.offsets.at(0x1b004)+11]=2; Reject([&]{ReadStaticModels(bad);},"Missing material vertex streams");
 }
+void SpecularDetail()
+{
+    ModelFixture fixture;
+    fixture.data.resize(8); fixture.offsets.clear();
+    Buffer parameters(68);
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        Put32(parameters, i * 8, 0x10000010 + i);
+        parameters[i * 8 + 6] = i;
+    }
+    const float values[] = {.25f, .75f, 64, .2f, .4f, .6f, .8f};
+    for (unsigned i = 0; i < 7; ++i) PutFloat(parameters, 32 + i * 4, values[i]);
+    Put32(parameters, 60, 1); Put32(parameters, 64, 1);
+    fixture.Chunk(0x1b016, parameters);
+    Buffer indices(6); Put16(indices, 2, 2); Put16(indices, 4, 1);
+    fixture.Chunk(0x1b007, indices);
+    Buffer vertices(105);
+    for (unsigned i = 0; i < 9; ++i) PutFloat(vertices, i * 4, float(i));
+    for (unsigned i = 0; i < 3; ++i)
+    {
+        vertices[38 + i * 3] = 64;
+        for (unsigned uv = 0; uv < 4; ++uv)
+        {
+            Put16(vertices, 45 + uv * 12 + i * 4, (uv + 1) * 1024);
+            Put16(vertices, 47 + uv * 12 + i * 4, 0x8000 + i);
+        }
+        vertices[93 + i * 4] = 10 + i;
+        vertices[96 + i * 4] = 255;
+    }
+    fixture.Chunk(0x1b006, vertices);
+    Buffer streams(56);
+    const unsigned offsets[] = {0,36,45,57,69,81,93}, strides[] = {12,3,4,4,4,4,4}, ids[] = {1,2,4,4,4,4,3};
+    for (unsigned i = 0; i < 7; ++i)
+    { Put32(streams, i * 8, offsets[i]); streams[i * 8 + 5] = strides[i]; streams[i * 8 + 6] = ids[i]; }
+    fixture.Chunk(0x1b005, streams);
+    Buffer packet(48); Put32(packet, 4, 3); Put16(packet, 8, 3); packet[11] = 7;
+    Put32(packet, 16, 0x112ab470); fixture.Chunk(0x1b004, packet);
+    Buffer matrix(64); for (unsigned i = 0; i < 4; ++i) PutFloat(matrix, i * 20, 1);
+    fixture.Chunk(0x1b002, matrix);
+    Buffer model(12); Put32(model, 0, 1); Put32(model, 4, 1); fixture.Chunk(0x1b003, model);
+    Put32(fixture.data, 0, 0x8001b000); Put32(fixture.data, 4, fixture.data.size() - 8);
+    const auto decoded = ReadStaticModels(fixture.data);
+    const auto& p = decoded[0].packets[0];
+    Check(p.material.scalars == std::array<float,4>{.25f,.75f,64,0}
+        && p.material.specular_colour == std::array<float,4>{.2f,.4f,.6f,.8f}
+        && p.material.switches[0] == 1 && p.material.switches[1] == 1, "Detail big-endian parameters");
+    for (unsigned i = 0; i < 4; ++i)
+        Check(p.material.textures[i].texture == 0x10000010 + i && p.material.textures[i].flags == i,
+            "Detail four independent texture bindings");
+    const auto& v = p.vertices[0];
+    Check(v.uv == std::array<float,2>{1,-32} && v.uv1 == std::array<float,2>{2,-32}
+        && v.uv2 == std::array<float,2>{3,-32} && v.uv3 == std::array<float,2>{4,-32}, "Detail four signed UV sets");
+    Check(v.normal == std::array<float,3>{0,0,1} && v.colour[0] == 10 && v.colour[3] == 255
+        && p.indices == std::vector<std::uint16_t>{0,2,1}, "Detail normal, colour and indices");
+    const auto params = fixture.offsets.at(0x1b016);
+    for (unsigned field = 0; field < 7; ++field)
+        for (float value : {-1.f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), field == 2 ? 10001.f : 1.01f})
+        {
+            auto bad = fixture.data; PutFloat(bad, params + 32 + field * 4, value);
+            Reject([&] { ReadStaticModels(bad); }, "Invalid detail float accepted");
+        }
+    for (unsigned field : {60u,64u})
+    {
+        auto bad = fixture.data; Put32(bad, params + field, 2);
+        Reject([&] { ReadStaticModels(bad); }, "Invalid detail switch accepted");
+    }
+    for (unsigned slot = 0; slot < 4; ++slot)
+    {
+        auto bad = fixture.data; bad[params + slot * 8 + 6] = 4;
+        Reject([&] { ReadStaticModels(bad); }, "Invalid detail binding accepted");
+    }
+    auto bad = fixture.data; Put32(bad, fixture.offsets.at(0x1b004) + 32, 4);
+    Reject([&] { ReadStaticModels(bad); }, "Truncated detail parameters accepted");
+    bad = fixture.data; bad[fixture.offsets.at(0x1b004) + 11] = 6;
+    Reject([&] { ReadStaticModels(bad); }, "Missing fourth detail UV accepted");
+    bad = fixture.data; bad[fixture.offsets.at(0x1b005) + 45] = 8;
+    Reject([&] { ReadStaticModels(bad); }, "Invalid fourth detail UV stride accepted");
+    bad = fixture.data; Put32(bad, fixture.offsets.at(0x1b005) + 40, 100);
+    Reject([&] { ReadStaticModels(bad); }, "Out-of-bounds fourth detail UV accepted");
+}
 void WorldModels()
 {
     const auto texture = TextureFixture();
@@ -261,6 +341,6 @@ void Textures()
 }
 int main()
 {
-    try { Models(); Materials(); WorldModels(); Textures(); std::cout << "Static Wii resource conversion and rejection checks passed\n"; return 0; }
+    try { Models(); Materials(); SpecularDetail(); WorldModels(); Textures(); std::cout << "Static Wii resource conversion and rejection checks passed\n"; return 0; }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

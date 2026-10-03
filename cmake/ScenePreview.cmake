@@ -15,7 +15,7 @@ add_library(charged_materials STATIC
     "${MSCHARGED_PREPARED}/src/Game/Render/LightingLookupNative.cpp"
     src/runtime/materials.cpp src/runtime/material_gx.cpp src/runtime/material_texture.cpp
     src/runtime/gpu_readback.cpp src/runtime/lighting.cpp)
-foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume)
+foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend)
     target_sources(charged_materials PRIVATE
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgram.cpp"
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgramRender.cpp")
@@ -101,6 +101,10 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME material_pipeline COMMAND material_pipeline_tests)
     set_tests_properties(material_pipeline PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
+    add_test(NAME specular_detail_pipeline COMMAND material_pipeline_tests --specular-only)
+    set_tests_properties(specular_detail_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME scene_synthetic

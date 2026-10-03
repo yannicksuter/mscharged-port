@@ -15,6 +15,7 @@
 #include "NL/glx/glxTarget.h"
 #include "NL/glx/GXMaskedSpecularFresnelMaterialProgram.h"
 #include "NL/glx/GXScrollingDiffuseMaterialProgram.h"
+#include "NL/glx/GXSpecularDetailBlendMaterialProgram.h"
 #include "Game/Render/LightingLookup.h"
 #include "NL/nlMemory.h"
 #include "NL/MemAlloc.h"
@@ -180,6 +181,116 @@ void PixelCase(const char *name, glModel &model, float time, std::array<unsigned
               << ", draws " << draws << '\n';
     Check(match && draws > 0, "Original material shader pixel mismatch");
 }
+
+void SpecularDetailCases()
+{
+    auto source = Model(501, 0x112ab470, 501);
+    auto& material = source.packets[0].material;
+    for (unsigned i = 0; i < 4; ++i) material.textures[i] = {501 + i, 3};
+    material.scalars = {1,0,0,0};
+    material.specular_colour = {1,.5f,.25f,1};
+    for (auto& v : source.packets[0].vertices) v.uv3 = v.uv;
+    StaticInventory inventory(*glGetCurrentResourcePool(), {source},
+        {Texture(501,{80,100,120,255},0,true), Texture(502,{200,40,20,255},0,true),
+         Texture(503,{128,128,128,255},0,true), Texture(504,{128,64,32,255},0,true)}, Drain);
+    auto& model = *inventory.Model(501);
+    auto& packet = model.packets[0];
+    auto& p = *static_cast<GXSpecularDetailBlendParameters*>(packet.materialParameters);
+    auto coordinate = [&](unsigned set, float u) {
+        auto* values = static_cast<float*>(packet.streams[2 + set].address);
+        for (unsigned i = 0; i < packet.numUniqueVertices; ++i) values[i * 2] = u;
+    };
+    auto normal = [&](float x, float z) {
+        auto* values = static_cast<float*>(packet.streams[1].address);
+        for (unsigned i = 0; i < packet.numUniqueVertices; ++i)
+        { values[i * 3] = x; values[i * 3 + 1] = 0; values[i * 3 + 2] = z; }
+    };
+    // Independent equation: weight = mask * (1-blend), then interpolate
+    // diffuse/detail per channel. GX's byte quantization permits +/-3 here.
+    auto blended = [](std::array<unsigned char,3> diffuse, std::array<unsigned char,3> detail,
+                      std::array<unsigned char,3> mask, float blend) {
+        std::array<unsigned char,3> result{};
+        for (unsigned i = 0; i < 3; ++i)
+        {
+            const float weight = mask[i] / 255.f * (1-blend);
+            result[i] = std::lround(diffuse[i] * (1-weight) + detail[i] * weight);
+        }
+        return result;
+    };
+    PixelCase("Detail blend=1 retains diffuse", model, 0, {80,100,120});
+    p.blendAmount = 0;
+    PixelCase("Detail blend=0 uses mask", model, 0, {140,70,70});
+    p.blendAmount = .5f;
+    PixelCase("Detail fractional blend", model, 0, {110,85,95});
+    coordinate(0,.875f);
+    PixelCase("Detail independent diffuse UV", model, 0,
+        blended({20,40,200},{200,40,20},{128,128,128},.5f));
+    coordinate(0,.125f); coordinate(1,.875f);
+    PixelCase("Detail independent detail UV", model, 0,
+        blended({80,100,120},{20,40,200},{128,128,128},.5f));
+    coordinate(1,.125f); coordinate(2,.875f);
+    PixelCase("Detail independent mask UV", model, 0,
+        blended({80,100,120},{200,40,20},{20,40,200},.5f));
+    coordinate(2,.125f);
+    auto* colours = static_cast<u8*>(packet.streams[6].address);
+    for (unsigned i = 0; i < packet.numUniqueVertices; ++i)
+    { colours[i*4] = 128; colours[i*4+2] = 128; }
+    PixelCase("Detail vertex colour", model, 0, {55,85,47});
+    for (unsigned i = 0; i < packet.numUniqueVertices; ++i)
+    { colours[i*4] = colours[i*4+2] = 255; }
+    GameLighting lighting;
+    lighting.enabled = true; lighting.ambient = {{64,128,192,0}};
+    p.lightingEnabled = 1;
+    PixelCase("Detail original ambient", model, 0, {28,43,71}, lighting);
+    lighting.ambient = {{0,0,0,0}};
+    lighting.light_count = 1;
+    lighting.lights[0].enabled = true;
+    lighting.lights[0].worldPosition = {0,0,1};
+    lighting.lights[0].intensity = .5f;
+    PixelCase("Detail original diffuse key", model, 0, {55,42,47}, lighting);
+    p.lightingEnabled = 0; p.blendAmount = 1; p.specularLevel = .5f;
+    lighting.lights[0].intensity = 1;
+    // Front-facing half-vector gives unit specular attenuation, independently
+    // of exponent. Gloss * level * RGB tint adds (64,16,4) to diffuse.
+    PixelCase("Detail zero-exponent specular", model, 0, {144,116,124}, lighting);
+    p.specularExponent = 64;
+    PixelCase("Detail original specular light", model, 0, {144,116,124}, lighting);
+    coordinate(3,.875f);
+    PixelCase("Detail independent gloss UV", model, 0, {90,110,145}, lighting);
+    coordinate(3,.125f);
+    normal(.5f, std::sqrt(.75f));
+    // Attenuation at n.h=sqrt(.75): .75 / (32 - 31*.75) = 3/35.
+    PixelCase("Detail exponent controls highlight", model, 0, {85,101,120}, lighting);
+    normal(0,1);
+    nlMatrix4 rotated;
+    nlMakeRotationMatrixY(rotated, 3.1415927f / 6);
+    rotated.SetTranslation({.15f,0,-.04019238f});
+    PixelCase("Detail specular follows model normals", model, 0, {85,101,120}, lighting, &rotated);
+    normal(.5f, std::sqrt(.75f));
+    p.specularExponent = 0;
+    // With exponent zero the nonzero half-vector term cancels in the
+    // numerator/denominator, restoring unit attenuation even for a tilt.
+    PixelCase("Detail zero exponent after another exponent", model, 0, {144,116,124}, lighting);
+    normal(0,1);
+    lighting.lights[0].intensity = .25f;
+    PixelCase("Detail light refresh at unchanged exponent", model, 0, {96,104,121}, lighting);
+    lighting.light_count = 0;
+    PixelCase("Detail zero lights clears previous specular", model, 0, {80,100,120}, lighting);
+    lighting.light_count = 2; lighting.lights[0].intensity = 0;
+    lighting.lights[1] = lighting.lights[0]; lighting.lights[1].intensity = 1;
+    PixelCase("Detail original slot-6 mask excludes slot 7", model, 0, {80,100,120}, lighting);
+    lighting.lights[0].intensity = 1;
+    lighting.lights[0].worldPosition = {0,0,-1};
+    p.specularExponent = 64;
+    PixelCase("Detail back-facing specular", model, 0, {80,100,120}, lighting);
+    lighting = {};
+    LightingLookup shadow;
+    shadow.LoadTexture(17);
+    lighting.shadow.lookup = &shadow; lighting.shadow.texture = 17;
+    p.shadowEnabled = 1; p.specularLevel = 0; p.blendAmount = .5f;
+    PixelCase("Detail original projected shadow", model, 0, {57,44,49}, lighting);
+    PixelCase("Detail shadow state restored", model, 0, {110,85,95});
+}
 } // namespace
 int main(int argc, char **argv)
 {
@@ -268,7 +379,13 @@ int main(int argc, char **argv)
                                   {unlit, vertex, scroll, masked, discard, blend, ci8, normal_left, normal_right},
                                   textures, Drain);
         const bool targets_only = argc == 2 && std::string_view(argv[1]) == "--targets-only";
-        if (!targets_only)
+        const bool specular_only = argc == 2 && std::string_view(argv[1]) == "--specular-only";
+        if (specular_only)
+        {
+            SpecularDetailCases();
+            PixelCase("Unlit after detail/specular/shadow stages", *inventory.Model(1), 0, {80,100,120});
+        }
+        if (!targets_only && !specular_only)
         {
         PixelCase("Unlit diffuse", *inventory.Model(1), 0, {80, 100, 120});
         PixelCase("Vertex colour modulation", *inventory.Model(2), 0, {40, 100, 60});
@@ -369,6 +486,8 @@ int main(int argc, char **argv)
         // Switch back to verify TEV/channel/texture state does not leak between programs.
         PixelCase("Unlit after multi-stage materials", *inventory.Model(1), 0, {80, 100, 120});
         }
+        if (!specular_only)
+        {
         for (auto format : {GLTargetFormat_RGBA8, GLTargetFormat_RGB565, GLTargetFormat_RGB5A3, GLTargetFormat_A8, GLTargetFormat_IA8})
         {
             GLTargetInfo info;
@@ -417,6 +536,7 @@ int main(int argc, char **argv)
             PixelCase("Copy mode 9 clears EFB alpha", *copied.Model(904), 0, {0,0,0}, {}, nullptr, nullptr, copied.Model(903), first, 9, second);
             PixelCase("Copy mode 10 clears EFB alpha", *copied.Model(904), 0, {0,0,0}, {}, nullptr, nullptr, copied.Model(903), first, 10, second);
             copied.Release(); glDestroyTarget(&second); glDestroyTarget(&first);
+        }
         }
         views.Release();
         inventory.Release();

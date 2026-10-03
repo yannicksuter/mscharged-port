@@ -13,6 +13,7 @@ std::size_t ParameterSize(std::uint32_t program)
 {
     switch (program)
     {
+    case 0x112ab470: return 68; // SpecularDetailBlend
     case 0x386ecbdd: return 12; // ShadowVolume
     case 0x32475c7d: return 48; // MaskedSpecularFresnel
     case 0x2169db5c: return 36; // ScrollingDiffuse
@@ -75,7 +76,8 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             const auto parameters = Slice(params, U32(record, 32), ParameterSize(material.program));
             const bool masked = material.program == 0x32475c7d, scrolling = material.program == 0x2169db5c;
             const bool shadow = material.program == 0x386ecbdd;
-            for (unsigned i = 0; i < (masked ? 3u : 1u); ++i)
+            const bool detail = material.program == 0x112ab470;
+            for (unsigned i = 0; i < (detail ? 4u : masked ? 3u : 1u); ++i)
             {
                 material.textures[i] = {U32(parameters, i * 8), parameters[i * 8 + 6]};
                 Require(!(material.textures[i].flags & ~3u) && !parameters[i * 8 + 7], "Unsupported RLG texture binding flags");
@@ -84,6 +86,26 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             {
                 material.switches[0] = U32(parameters, 8);
                 Require(material.switches[0] <= 1, "Invalid shadow material boolean");
+            }
+            if (detail)
+            {
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.scalars[i] = F32(parameters, 32 + i * 4);
+                    Require(material.scalars[i] >= 0 && material.scalars[i] <= (i == 2 ? 1e4f : 1.f),
+                        "Invalid detail blend/specular scalar");
+                }
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.specular_colour[i] = F32(parameters, 44 + i * 4);
+                    Require(material.specular_colour[i] >= 0 && material.specular_colour[i] <= 1,
+                        "Invalid detail specular colour");
+                }
+                for (unsigned i = 0; i < 2; ++i)
+                {
+                    material.switches[i] = U32(parameters, 60 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
             }
             if (masked || scrolling)
             {
@@ -119,6 +141,7 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             Require(record[11] >= 2 && record[11] <= 16, "Invalid RLG stream count");
             // Material programs bind streams by ordinal; reject mismatched layouts.
             const std::vector<unsigned> layout = shadow ? std::vector<unsigned>{1,3,4}
+                : detail ? std::vector<unsigned>{1,2,4,4,4,4,3}
                 : masked ? std::vector<unsigned>{1,2,4,4,4,3}
                 : scrolling ? std::vector<unsigned>{1,2,4,3}
                 : material.program == 0xd3e572da ? std::vector<unsigned>{1,4,3} : std::vector<unsigned>{1,4};
@@ -156,7 +179,7 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
                     if (layout[stream] == 3) std::copy_n(bytes.begin() + i * 4, 4, v.colour.begin());
                     else if (layout[stream] == 4)
                     {
-                        auto& uv = coordinate == 0 ? v.uv : coordinate == 1 ? v.uv1 : v.uv2;
+                        auto& uv = coordinate == 0 ? v.uv : coordinate == 1 ? v.uv1 : coordinate == 2 ? v.uv2 : v.uv3;
                         for (unsigned axis = 0; axis < 2; ++axis)
                             uv[axis] = stride == 8 ? F32(bytes, i * 8 + axis * 4)
                                 : std::bit_cast<std::int16_t>(U16(bytes, i * 4 + axis * 2)) / 1024.0f;
