@@ -1,6 +1,6 @@
 Subject: Route explicit native game allocations by owned arena
 
-Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
+Upstream-base: 01c9a4d61904afc927d6752c3cd29fca489ff5cc
 
 Compile the original nlMalloc/nlFree layer with allocator ownership checks instead
 of console address-nibble tests. Host global new/delete remain standard so SDL,

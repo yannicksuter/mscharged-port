@@ -1,5 +1,5 @@
 Subject: Select original static specular detail blend material and lights
-Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
+Upstream-base: 01c9a4d61904afc927d6752c3cd29fca489ff5cc
 
 Keep the original eight-stage TEV recipe and diffuse/specular/shadow calls.
 Use Aurora headers, bounded native float arrays and typed FIFO calls, reset

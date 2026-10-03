@@ -1,6 +1,6 @@
 Subject: Select original camera core with native ownership and checked lifecycle
 
-Upstream-base: 5baf5467811c779eb396ac8d2b456ec3a991732b
+Upstream-base: 01c9a4d61904afc927d6752c3cd29fca489ff5cc
 
 Separate stack, transitions and pose evaluation from the camera factory, asset
 loader and impostor/gameplay services. Keep native camera allocations paired

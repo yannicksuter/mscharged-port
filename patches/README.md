@@ -19,13 +19,15 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `5baf5467811c779eb396ac8d2b456ec3a991732b`, adopted from
-published `main` on 2026-10-03. The ordered patches are listed in
-[`mscharged-decomp/series`](mscharged-decomp/series).
-This update adopts the matched animated-camera implementation and refreshes
-0055 for its named camera data fields. Patches 0001–0054 retain their bodies,
-with their bases updated to the selected commit. Patch 0056 selects original
-authored playback with explicit native service inputs and checked lifetimes.
+The current base is `01c9a4d61904afc927d6752c3cd29fca489ff5cc`, adopted from
+published upstream main. It remains an incomplete development snapshot, not a
+complete decompilation release.
+
+This update includes matched DebugCam and reviewed camera/world-animation
+naming and header cleanups. All 56 existing patch bodies remain unchanged;
+their bases advance to the selected commit. Native DebugCam integration is a
+separate step; authored animated-camera playback is already selected by 0056.
+The ordered patches are listed in [`mscharged-decomp/series`](mscharged-decomp/series).
 
 Upstream now marks both `nlEvent.cpp` and `MemAlloc.cpp` matching. Patch 0038
 connects the original immediate event registry and listeners to native startup
