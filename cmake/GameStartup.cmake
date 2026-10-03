@@ -4,6 +4,7 @@ include(cmake/GameConfig.cmake)
 include(cmake/Tweaks.cmake)
 include(cmake/FrameTiming.cmake)
 include(cmake/AnimatedCamera.cmake)
+include(cmake/DebugCamera.cmake)
 include(cmake/CameraAssets.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp)

@@ -25,8 +25,8 @@ complete decompilation release.
 
 This update includes matched DebugCam and reviewed camera/world-animation
 naming and header cleanups. All 56 existing patch bodies remain unchanged;
-their bases advance to the selected commit. Native DebugCam integration is a
-separate step; authored animated-camera playback is already selected by 0056.
+their bases advance to the selected commit. Patch 0057 adds bounded native
+debug-camera desktop controls; authored animated-camera playback is selected by 0056.
 The ordered patches are listed in [`mscharged-decomp/series`](mscharged-decomp/series).
 
 Upstream now marks both `nlEvent.cpp` and `MemAlloc.cpp` matching. Patch 0038
@@ -94,6 +94,7 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0054-select-native-texture-animation.patch` | Select original IFL playback and inventory traversal with bounded native records, owned animation indices and ordered release. Material binding and alpha preparation resolve the current frame. | Fixed-width decoding and dependency checks, loop/ping-pong/hold/pause timing, alias refresh, allocation failure, rollback, sanitizer/leak checks, Vulkan pixels and owned Palace/Bowser models. Frames must be static textures in the same decoded batch; full world/task integration remains pending. |
 | `0055-select-native-camera-data.patch` | Select original camera-data initialization separately from playback; initialize ownership and pair game-allocated arrays with game frees. | Bounded big-endian CAM decoding, full names, native handles, allocation rollback and sync/async NL file lifetimes. |
 | `0056-select-native-animated-camera-playback.patch` | Select original camera interpolation, cuts, transforms, timing and focal calculations; provide explicit display/simulation inputs and validate sampling. | Retained asset ownership, loop/end callbacks, mirroring, facing, FOV, original CameraMan updates and authored scene preview. Full camera factory and DOF rendering remain pending. |
+| `0057-select-native-debug-camera.patch` | Select original desktop orbit/pan/distance/height controls and pose math through explicit native input values; define angle wrapping and reject degenerate look-at inputs. | CameraMan borrowing, input/toggle/task gating, numerical checks, failure cleanup and selected sanitizers. SDL bindings, Wii DPD, player/replay targets and full factory selection remain pending. |
 
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
