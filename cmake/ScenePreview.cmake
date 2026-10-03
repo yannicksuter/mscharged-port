@@ -16,7 +16,7 @@ add_library(charged_materials STATIC
     "${MSCHARGED_PREPARED}/src/Game/Render/LightingLookupNative.cpp"
     src/runtime/materials.cpp src/runtime/material_gx.cpp src/runtime/material_texture.cpp
     src/runtime/gpu_readback.cpp src/runtime/lighting.cpp)
-foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend ScrollingSpecular CameraScrolledOverlay)
+foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend ScrollingSpecular CameraScrolledOverlay MaskedDetailBlend ScrollingMaskedDetailBlend ScrollingCameraOverlay)
     target_sources(charged_materials PRIVATE
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgram.cpp"
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgramRender.cpp")
@@ -111,6 +111,18 @@ if(BUILD_TESTING)
     target_link_libraries(material_pipeline_tests PRIVATE charged_views charged_static_inventory aurora::gx aurora::vi aurora::core)
 endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    add_test(NAME scrolling_camera_overlay_pipeline COMMAND material_pipeline_tests --scrolling-camera-only)
+    set_tests_properties(scrolling_camera_overlay_pipeline PROPERTIES TIMEOUT 150 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
+    add_test(NAME scrolling_masked_detail_pipeline COMMAND material_pipeline_tests --scrolling-masked-detail-only)
+    set_tests_properties(scrolling_masked_detail_pipeline PROPERTIES TIMEOUT 150 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
+    add_test(NAME masked_detail_pipeline COMMAND material_pipeline_tests --masked-detail-only)
+    set_tests_properties(masked_detail_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME frame_pipeline COMMAND frame_pipeline_tests)
     set_tests_properties(frame_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check

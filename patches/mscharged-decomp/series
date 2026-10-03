@@ -47,3 +47,6 @@
 0046-enable-native-camera-scrolled-overlay.patch
 0047-adapt-native-tweak-registration.patch
 0048-select-original-frame-timing.patch
+0049-enable-native-masked-detail-blend.patch
+0050-enable-native-scrolling-masked-detail-blend.patch
+0051-enable-native-scrolling-camera-overlay.patch

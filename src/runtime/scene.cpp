@@ -245,7 +245,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             std::vector<std::uint32_t> required;
             for (const auto& packet : selected.model.packets)
                 for (unsigned i = 0; i < (packet.material.program == 0x112ab470 ? 4u
-                    : (packet.material.program == 0x32475c7d || packet.material.program == 0x32bc21e8) ? 3u
+                    : (packet.material.program == 0x32475c7d || packet.material.program == 0x32bc21e8
+                        || packet.material.program == 0x09609a35 || packet.material.program == 0xf2d57ac6
+                        || packet.material.program == 0x845cad59) ? 3u
                     : packet.material.program == 0x3eccd955 ? 2u : 1u); ++i)
                     if (std::find(required.begin(), required.end(), packet.material.textures[i].texture) == required.end())
                         required.push_back(packet.material.textures[i].texture);
@@ -272,7 +274,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (volume_preview && (options.unlit || options.shadow_id))
             throw std::invalid_argument("Object lighting and projected lookup options do not apply to shadow volumes");
         const bool camera_overlay = std::any_of(selected->packets.begin(), selected->packets.end(),
-            [](const auto& p) { return p.material.program == 0x32bc21e8; });
+            [](const auto& p) { return p.material.program == 0x32bc21e8 || p.material.program == 0x845cad59; });
         const auto bounds = Normalize(*selected, camera_overlay);
         const auto selected_id = selected->id;
         std::size_t vertices = 0, indices = 0;

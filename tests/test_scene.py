@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 from disc_fixture import write_disc
-from scene_fixture import make_assets, make_shadow, make_world, make_specular_world, make_scrolling_specular_world, make_camera_overlay_world
+from scene_fixture import make_assets, make_shadow, make_world, make_specular_world, make_scrolling_specular_world, make_camera_overlay_world, make_masked_detail_world, make_scrolling_masked_detail_world, make_scrolling_camera_world
 
 executable = pathlib.Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
@@ -57,6 +57,18 @@ with tempfile.TemporaryDirectory(prefix="mscharged-scene-") as directory:
     write_disc(disc, files={"world.tmp.zlib": make_camera_overlay_world()})
     run(world_args, 0, "3 textures; original radius")
     write_disc(disc, files={"world.tmp.zlib": make_camera_overlay_world(missing_mask=True)})
+    run(world_args, 1, "Requested texture")
+    write_disc(disc, files={"world.tmp.zlib": make_masked_detail_world()})
+    run(world_args, 0, "3 textures; original radius")
+    write_disc(disc, files={"world.tmp.zlib": make_masked_detail_world(missing_mask=True)})
+    run(world_args, 1, "Requested texture")
+    write_disc(disc, files={"world.tmp.zlib": make_scrolling_masked_detail_world()})
+    run(world_args, 0, "3 textures; original radius")
+    write_disc(disc, files={"world.tmp.zlib": make_scrolling_masked_detail_world(missing_mask=True)})
+    run(world_args, 1, "Requested texture")
+    write_disc(disc, files={"world.tmp.zlib": make_scrolling_camera_world()})
+    run(world_args, 0, "3 textures; original radius")
+    write_disc(disc, files={"world.tmp.zlib": make_scrolling_camera_world(missing_mask=True)})
     run(world_args, 1, "Requested texture")
     # Original alpha preparation disables depth writes for multibit textures.
     # The visibility gate must use actual colour samples for this valid case.
