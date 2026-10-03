@@ -12,6 +12,7 @@ include(cmake/NisCameraAssets.cmake)
 include(cmake/NisCameras.cmake)
 include(cmake/FrontendCameras.cmake)
 include(cmake/NisBootstrap.cmake)
+include(cmake/Bytecode.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
