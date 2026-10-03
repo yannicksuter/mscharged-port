@@ -19,7 +19,7 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `4a9ab8151d9a74e321e52b36c95d1e157d41af60`, adopted from
+The current base is `483cb6020288a347419f7e4bfa88eaa3059f063e`, adopted from
 published `main` on 2026-10-03. The ordered patches are listed in
 [`mscharged-decomp/series`](mscharged-decomp/series).
 This update refreshes 0005, 0006, 0011, 0012, 0017, 0025 and 0031 for upstream
@@ -84,7 +84,7 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0044-adapt-native-configuration-and-strings.patch` | Retain original configuration parsing with native array/string ownership, checked capacities, copy-on-write ranges and owned asynchronous loads. | Typed values, failed replacements, cancellation/reentrancy, global lifetime, owned boot configuration and arena recovery. |
 | `0045-enable-native-scrolling-specular.patch` | Select the original two-texture scrolling specular material with native arrays, explicit preview time/view inputs and refreshed specular lights. | Signed UV conversion, clamp/repeat scrolling, lighting modes, highlights, projected shadows, alpha and cleanup pixels, plus owned Vice/Crater Field models. Complete world loading and task/frame integration remain pending. |
 | `0046-enable-native-camera-scrolled-overlay.patch` | Select the original position-generated overlay, lighting and shadow recipe with bounded native arrays and an explicit active-camera input. Reject non-finite texture matrices and reset registry state. | Camera movement, scale, three bindings, alpha/mask pixels, original wrap mutation, failure recovery and owned stadium models. Preview keeps authored coordinate scale; the original camera manager and complete world loading remain unselected. |
-| `0047-adapt-native-tweak-registration.patch` | Size native registry pools, preserve borrowed values and registration order, select existing value methods and bound parsing. | Pre-memory registration, typed values, repeated initialization, native bindings, static shutdown, and arena recovery. Dynamic state push/reset remains pending. |
+| `0047-adapt-native-tweak-registration.patch` | Size native registry pools, preserve borrowed values and registration order, select original int/base methods and upstream inline float methods, and bound parsing. | Pre-memory registration, typed values, repeated initialization, native bindings, static shutdown, and arena recovery. Dynamic state push/reset remains pending. |
 | `0048-select-original-frame-timing.patch` | Select original phase timing, history and histograms independently of debug drawing and gameplay predicates. | Original scheduler, tick rollover, 30-frame averages, both history wraps, conditional samples and arena recovery. |
 
 The initial explicit game allocator is adapted; complete game allocation,
