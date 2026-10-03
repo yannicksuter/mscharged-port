@@ -9,6 +9,8 @@
 #include "runtime/shadows.h"
 #include "Game/Render/ShadowVolume.h"
 #include "resources/compressed_asset.h"
+#include "resources/world_scene.h"
+#include "runtime/world_objects.h"
 #include "NL/glx/glxTarget.h"
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
@@ -125,7 +127,28 @@ bool Update()
         if (event->type == AURORA_EXIT) exit = true;
     return exit || SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_ESCAPE];
 }
-struct Bounds { std::array<float, 3> center{}; float radius = 0; };
+using Bounds = resources::SceneBounds;
+class ScenePool
+{
+    GLResourcePool* previous_ = glGetCurrentResourcePool();
+public:
+    explicit ScenePool(GLResourcePool* pool) { glSetCurrentResourcePool(pool); }
+    ~ScenePool() { Restore(); }
+    void Restore() { if (previous_) { glSetCurrentResourcePool(previous_); previous_ = nullptr; } }
+};
+// Explicit diagnostic selection: submit every requested instance. Culling is
+// integrated separately. Preserve WorldDrawable's opaque/alpha packet keys.
+void SubmitWorldPreview(const StaticWorldObjects& world, GLView& opaque, GLView& alpha)
+{
+    for (const auto& object : world.Objects())
+        for (unsigned long i = 0; i < object.model->numPackets; ++i)
+        {
+            auto* packet = &object.model->packets[i];
+            if (glGetRasterState(packet->rasterState, GLS_AlphaBlend) == 0) opaque.AttachPacket(packet, 0);
+            else alpha.AttachPacket(packet, 1);
+        }
+}
+
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
     std::array<float, 3> low{1e7f, 1e7f, 1e7f}, high{-1e7f, -1e7f, -1e7f};
@@ -232,12 +255,16 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         InitializeOriginalGraphicsState();
         log("Original GL state and identity matrix initialized; native frame matrix handles and original NL camera math enabled.");
         log("Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
-        if (options.world && !options.model_id) throw std::invalid_argument("World preview needs an explicit model ID");
-        PendingAsset model_data, texture_data;
+        const bool world_batch = options.world_res.has_value();
+        if (world_batch && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
+            throw std::invalid_argument("World objects require resident/temporary files and explicit object IDs only");
+        if (options.world && !options.model_id && !world_batch) throw std::invalid_argument("World preview needs an explicit model ID");
+        PendingAsset model_data, texture_data, resident_data;
         model_data.Start(options.world.value_or(options.model));
         if (!options.world) texture_data.Start(options.textures);
+        if (world_batch) resident_data.Start(*options.world_res);
         const auto load_start = std::chrono::steady_clock::now();
-        while (!model_data.done || (!options.world && !texture_data.done))
+        while (!model_data.done || (!options.world && !texture_data.done) || (world_batch && !resident_data.done))
         {
             if (Update()) throw std::runtime_error("Static preview cancelled while loading");
             nlServiceFileSystem();
@@ -245,10 +272,22 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             SDL_Delay(1);
         }
         std::vector<resources::StaticModel> models;
+        std::vector<resources::StaticWorldObject> world_objects;
+        Bounds bounds;
         resources::TextureBundle texture_bundle;
         auto& textures = texture_bundle.textures;
         auto& animations = texture_bundle.animations;
-        if (options.world)
+        if (world_batch)
+        {
+            auto resident = resources::InflateAsset(resident_data.Bytes());
+            auto temporary = resources::InflateAsset(model_data.Bytes());
+            auto scene = resources::ReadStaticWorldScene(resident, temporary, options.object_ids);
+            models = std::move(scene.models); world_objects = std::move(scene.objects);
+            texture_bundle = std::move(scene.textures); bounds = scene.bounds;
+            log("Selected static world objects: " + std::to_string(world_objects.size()) + " instances, "
+                + std::to_string(models.size()) + " shared models; original transforms retained. All selected objects are submitted; culling is not enabled.");
+        }
+        else if (options.world)
         {
             auto decoded = resources::InflateAsset(model_data.Bytes());
             auto selected = resources::ReadStaticWorldModel(decoded, *options.model_id);
@@ -272,37 +311,48 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             models = resources::ReadStaticModels(model_data.Bytes(), options.model_id);
             texture_bundle = resources::ReadTextureBundle(texture_data.Bytes());
         }
-        model_data.data.reset(); texture_data.data.reset();
+        model_data.data.reset(); texture_data.data.reset(); resident_data.data.reset();
         auto selected = models.begin();
         if (options.model_id) selected = std::find_if(models.begin(), models.end(), [&](const auto& model) { return model.id == *options.model_id; });
         if (selected == models.end()) throw std::runtime_error("Requested model ID is absent from the RLG collection");
-        const auto shadow_packets = std::count_if(selected->packets.begin(), selected->packets.end(),
+        if (!world_batch)
+        {
+            auto chosen = std::move(*selected); models.clear(); models.push_back(std::move(chosen));
+        }
+        auto& selected_model = models.front();
+        const auto selected_id = selected_model.id;
+        const auto shadow_packets = std::count_if(selected_model.packets.begin(), selected_model.packets.end(),
             [](const auto& p) { return p.material.program == 0x386ecbdd; });
         const bool volume_preview = shadow_packets != 0;
-        if (volume_preview && shadow_packets != selected->packets.size())
+        if (volume_preview && shadow_packets != selected_model.packets.size())
             throw std::invalid_argument("Mixed shadow-volume and ordinary packets need original world selection");
         if (volume_preview && (options.unlit || options.shadow_id))
             throw std::invalid_argument("Object lighting and projected lookup options do not apply to shadow volumes");
-        const bool camera_overlay = std::any_of(selected->packets.begin(), selected->packets.end(),
+        const bool camera_overlay = std::any_of(selected_model.packets.begin(), selected_model.packets.end(),
             [](const auto& p) { return p.material.program == 0x32bc21e8 || p.material.program == 0x845cad59; });
         if (volume_preview && options.camera)
             throw std::invalid_argument("Authored camera playback is not connected to the diagnostic shadow receiver");
-        const auto bounds = Normalize(*selected, camera_overlay || options.camera.has_value());
-        const auto selected_id = selected->id;
-        std::size_t vertices = 0, indices = 0;
-        for (const auto& packet : selected->packets)
+        if (!world_batch) bounds = Normalize(selected_model, camera_overlay || options.camera.has_value());
+        std::size_t vertices = 0, indices = 0, packets = 0;
+        std::vector<std::uint32_t> lookup_ids;
+        for (const auto& model : models)
         {
-            vertices += packet.vertices.size(); indices += packet.indices.size();
-            if (std::none_of(textures.begin(), textures.end(), [&](const auto& texture) { return texture.id == packet.material.textures[0].texture; })
-                && std::none_of(animations.begin(), animations.end(), [&](const auto& anim) { return anim.id == packet.material.textures[0].texture; }))
-                throw std::runtime_error("RLG diffuse texture is missing from the selected RLT bundle");
+            for (const auto id : MaterialLookupTextures(model))
+                if (std::find(lookup_ids.begin(), lookup_ids.end(), id) == lookup_ids.end()) lookup_ids.push_back(id);
+            for (const auto& packet : model.packets)
+            {
+                ++packets; vertices += packet.vertices.size(); indices += packet.indices.size();
+                if (std::none_of(textures.begin(), textures.end(), [&](const auto& texture) { return texture.id == packet.material.textures[0].texture; })
+                    && std::none_of(animations.begin(), animations.end(), [&](const auto& anim) { return anim.id == packet.material.textures[0].texture; }))
+                    throw std::runtime_error("RLG diffuse texture is missing from the selected RLT bundle");
+            }
         }
         std::ostringstream description;
-        description << "Selected model 0x" << std::hex << selected->id << std::dec << ": " << selected->packets.size()
-            << " packets, " << vertices << " vertices, " << indices << " indices; " << textures.size()
+        if (world_batch) description << "Selected world batch: ";
+        else description << "Selected model 0x" << std::hex << selected_id << std::dec << ": ";
+        description << packets << " packets, " << vertices << " vertices, " << indices << " indices; " << textures.size()
             << " textures, " << animations.size() << " texture animations; original radius " << bounds.radius << '.';
         log(description.str());
-        const auto lookup_ids = MaterialLookupTextures(*selected);
         if (!lookup_ids.empty())
         {
             PendingAsset global;
@@ -346,8 +396,6 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                      existing->palette != shadow[0].palette)
                 throw std::runtime_error("Shadow texture ID conflicts with an existing material texture");
         }
-        // Install only the selected model and its material dependencies.
-        auto chosen = std::move(*selected); models.clear(); models.push_back(std::move(chosen));
         constexpr std::uint32_t receiver_id = 0xfffffffe;
         if (volume_preview)
         {
@@ -385,12 +433,15 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         else cCameraManager::PushCamera(&camera_input);
         VIInit(); VIConfigure(&GXNtsc480IntDf);
-        alignas(32) std::array<std::uint8_t, 65536> fifo{}; GXInit(fifo.data(), fifo.size());
-        session.gx = true;
-        SetGraphicsCacheInvalidator(InvalidateCaches);
-        AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+        alignas(32) std::array<std::uint8_t, 65536> fifo{};
         MaterialPrograms materials;
-        StaticInventory inventory(*glGetCurrentResourcePool(), models, textures, DrainGX, animations);
+        std::unique_ptr<StaticInventory> inventory;
+        std::unique_ptr<StaticWorldObjects> world;
+        if (world_batch)
+            world = std::make_unique<StaticWorldObjects>(world_objects, models, texture_bundle,
+                WorldObjectMemory{4 * 1024 * 1024, 24 * 1024 * 1024}, DrainGX);
+        else inventory = std::make_unique<StaticInventory>(*glGetCurrentResourcePool(), models, textures, DrainGX, animations);
+        ScenePool pool_selection(world ? &world->Pool() : glGetCurrentResourcePool());
         GameLighting lighting = DefaultGameLighting();
         lighting.enabled = !options.unlit;
         LightingLookup shadow_lookup;
@@ -404,8 +455,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         if (!volume_preview)
             log(options.unlit ? "Unlit comparison selected." : "Original key/fill object-light defaults and ambient colour enabled; material lighting flags are preserved.");
-        auto* native_model = inventory.Model(selected_id);
-        if (!native_model) throw std::runtime_error("Selected model is missing from original GLInventory");
+        auto* native_model = inventory ? inventory->Model(selected_id) : nullptr;
+        if (!world && !native_model) throw std::runtime_error("Selected model is missing from original GLInventory");
         log("Checked RLG/RLT data installed as pool-owned native glModel/PlatTexture records; drawing original material Activate/Draw/Deactivate and TEV shader recipes through Aurora.");
         ViewMatrices view_matrices;
         OriginalViews views(GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, DrainGX);
@@ -413,6 +464,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         OriginalFrames lifecycle(backend);
         FrameCounter timing("frame", "send");
         GLView* submitted = nullptr;
+        GLView* world_alpha = nullptr;
         RLViewCamera shadow_camera;
         std::unique_ptr<ShadowLayers> shadow_layers;
         std::unique_ptr<StadiumShadowVolume> shadow_drawable;
@@ -426,9 +478,19 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         else
         {
             auto child = std::make_unique<GLView>(&view_matrices, GLRenderPair{}, GLViewSort_Texture);
-            child->m_Name = "Static model";
-            gRootView.AddChild(child.get());
-            submitted = child.release(); // Ownership transfers after the list node is allocated.
+            child->m_Name = world ? "World opaque" : "Static model";
+            if (world)
+            {
+                // Children render first: opaque child, then its alpha parent.
+                auto alpha = std::make_unique<GLView>(&view_matrices, GLRenderPair{}, GLViewSort_Texture);
+                alpha->m_Name = "World alpha";
+                alpha->AddChild(child.get()); submitted = child.release();
+                gRootView.AddChild(alpha.get()); world_alpha = alpha.release();
+            }
+            else
+            {
+                gRootView.AddChild(child.get()); submitted = child.release();
+            }
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
@@ -438,6 +500,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         // Render only game-pool records from here; discard host decoder storage.
         models.clear(); models.shrink_to_fit(); textures.clear(); textures.shrink_to_fit();
         animations.clear(); animations.shrink_to_fit();
+        world_objects.clear(); world_objects.shrink_to_fit();
         unsigned frames = 0, draws = 0, depth_hits = 0, colour_hits = 0, shadow_hits = 0;
         const auto start = std::chrono::steady_clock::now();
         float animation_time = 0;
@@ -447,6 +510,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             nlServiceFileSystem();
             if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
             if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
+            if (!session.gx)
+            {
+                // GXInit queues viewport state; its first target must exist
+                // before any exception path can drain those commands.
+                GXInit(fifo.data(), fifo.size()); session.gx = true;
+                SetGraphicsCacheInvalidator(InvalidateCaches);
+                AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+            }
             glBeginFrame();
             timing.StartTimer(0);
             const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
@@ -470,7 +541,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 shadow_camera.Set(cCameraManager::m_matView, projection);
                 shadow_layers->ResetPartitions();
                 receiver.m43=receiver_height;
-                auto* ground=inventory.Model(receiver_id); glModelSetMatrix(ground, receiver);
+                auto* ground=inventory->Model(receiver_id); glModelSetMatrix(ground, receiver);
                 shadow_layers->Layer(eCLV_Shadowed).AttachModel(ground, 0);
                 if (volume_enabled) shadow_drawable->Draw(identity);
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
@@ -484,8 +555,27 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 view_matrices.view = cCameraManager::m_matView;
                 glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180,
                     float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, .1f, 1000.f);
-                nlMatrix4 identity; identity.SetIdentity(); glModelSetMatrix(native_model, identity);
-                submitted->AttachModel(native_model, 0);
+                if (world) SubmitWorldPreview(*world, *submitted, *world_alpha);
+                else
+                {
+                    nlMatrix4 identity; identity.SetIdentity(); glModelSetMatrix(native_model, identity);
+                    submitted->AttachModel(native_model, 0);
+                }
+                backend.camera_position = cCameraManager::m_cameraPosition;
+            }
+            else if (world)
+            {
+                // Diagnostic Z-up orbit around transformed world bounds.
+                const auto& c = bounds.center; const float radius = bounds.radius;
+                camera_input.position = {c[0] + 3 * radius * std::sin(elapsed * .15f),
+                    c[1] - 3 * radius * std::cos(elapsed * .15f), c[2] + 1.5f * radius};
+                camera_input.target = {c[0], c[1], c[2]};
+                glMatrixLookAt(camera_input.view, camera_input.position, camera_input.target, {0,0,1});
+                cameras.Advance(0,0); view_matrices.view = cCameraManager::m_matView;
+                glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180,
+                    float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, .01f * radius, 20 * radius);
+                GXSetCopyClear({24,28,34,255}, GX_MAX_Z24);
+                SubmitWorldPreview(*world, *submitted, *world_alpha);
                 backend.camera_position = cCameraManager::m_cameraPosition;
             }
             else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
@@ -507,6 +597,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::SetNextWindowBgAlpha(0.82f);
             ImGui::Begin("Static asset preview", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
+            if (world) ImGui::Text("Static world selection: %zu objects", world->Objects().size());
             if (authored_camera)
                 ImGui::Text("Authored camera: %.2f / %.2f s", authored_camera->Time() * authored_camera->Duration(), authored_camera->Duration());
             if (volume_preview)
@@ -547,7 +638,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
         authored_camera.reset(); cameras.Release();
-        lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); inventory.Release(); materials.Release(); glShutdownMemory();
+        lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); materials.Release(); glShutdownMemory();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
             throw std::runtime_error("Graphics shutdown did not recover both original game arenas");
         log("Original graphics shutdown recovered both game arenas.");
