@@ -1,11 +1,14 @@
 include(cmake/NativeRuntime.cmake)
 include(cmake/Events.cmake)
+include(cmake/GameConfig.cmake)
+include(cmake/Tweaks.cmake)
+include(cmake/FrameTiming.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(charged_game_startup PRIVATE cxx_std_20)
 target_link_libraries(charged_game_startup PRIVATE charged_decomp_startup charged_host
-    charged_events aurora::dvd aurora::os aurora::vi aurora::core mscharged_build_info)
+    charged_events charged_game_config charged_tweaks charged_frame_timing aurora::dvd aurora::os aurora::vi aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_game_startup)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_GAME_STARTUP=1)
 
@@ -52,7 +55,7 @@ if(BUILD_TESTING)
         ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy" TIMEOUT 45)
     add_executable(runtime_files_tests tests/runtime_files.cpp)
     target_compile_features(runtime_files_tests PRIVATE cxx_std_20)
-    target_link_libraries(runtime_files_tests PRIVATE charged_game_startup charged_decomp_startup
+    target_link_libraries(runtime_files_tests PRIVATE charged_game_startup charged_game_config charged_decomp_startup
         aurora::dvd aurora::core)
     add_test(NAME runtime_files
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_runtime_files.py"

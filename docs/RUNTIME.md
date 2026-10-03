@@ -12,7 +12,7 @@ The experimental presets add:
 | `aurora` | Host window, memory, and clock checks without game data. |
 | `startup` | Selected original game initialization and disc reads. |
 | `graphics` | Standalone Aurora GX/Vulkan rendering check without game data. |
-| `scene` | Static Wii models, original materials, lighting and stadium shadow diagnostics. |
+| `scene` | Static Wii models, original materials, lighting, shadows and graphics frame lifecycle. |
 
 ## Experimental original startup
 
@@ -27,9 +27,9 @@ cmake --workflow --preset startup
 This requires a USA `R4QE01` revision 1 ISO/RVZ. It stops explicitly with exit code
 3 after the implemented initialization checks; later startup stages remain pending.
 The same build exposes **Try startup** in the launcher.
-The checks include original memory, file access, immediate and queued events,
-and task scheduling across state changes. Movies and the complete game frame
-loop remain in development.
+The checks include original memory, file access, boot configuration, tweak
+registration, events, task scheduling and frame timing. Movies and the complete
+game frame loop remain in development.
 
 For the host check alone, use `cmake --workflow --preset aurora`, then run
 `./build/aurora/mscharged-aurora-check --window`.

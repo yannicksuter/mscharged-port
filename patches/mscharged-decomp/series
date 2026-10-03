@@ -41,5 +41,9 @@
 0040-select-original-event-dispatch-task.patch
 0041-enable-native-specular-detail-blend.patch
 0042-select-native-task-scheduling.patch
+0043-select-original-graphics-frame-lifecycle.patch
+0044-adapt-native-configuration-and-strings.patch
 0045-enable-native-scrolling-specular.patch
 0046-enable-native-camera-scrolled-overlay.patch
+0047-adapt-native-tweak-registration.patch
+0048-select-original-frame-timing.patch

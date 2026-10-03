@@ -1,6 +1,8 @@
 // First real Wii static asset drawn through Aurora GX. This is not glStartup or a game scene.
 #include "runtime/scene.h"
 #include "runtime/views.h"
+#include "runtime/frames.h"
+#include "runtime/frame_timing.h"
 #include "runtime/shadows.h"
 #include "Game/Render/ShadowVolume.h"
 #include "resources/compressed_asset.h"
@@ -27,6 +29,7 @@
 #include "NL/nlFileGC.h"
 #include "NL/nlMemory.h"
 #include "NL/gl/glMemoryInit.h"
+#include "NL/gl/gl.h"
 #include "NL/gl/glModel.h"
 #include "NL/gl/glMatrix.h"
 #include "NL/gl/glState.h"
@@ -145,8 +148,8 @@ Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 }
 void InvalidateCaches() { GXInvalidateVtxCache(); GXInvalidateTexAll(); }
 void DrainGX() { AuroraGXSync(); }
-void Draw(glModel& model, GLView& submitted, ViewMatrices& matrices, float time, const GameLighting& lighting,
-          const Bounds* authored_bounds)
+nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices, float time,
+                      const Bounds* authored_bounds)
 {
     GXSetCopyClear({24, 28, 34, 255}, GX_MAX_Z24);
     const float radius = authored_bounds ? authored_bounds->radius : 1;
@@ -167,8 +170,7 @@ void Draw(glModel& model, GLView& submitted, ViewMatrices& matrices, float time,
     glMatrixLookAt(matrices.view, camera, center, {0, 1, 0});
     glModelSetMatrix(&model, world);
     submitted.AttachModel(&model, 0);
-    RenderOriginalViews(time, lighting, &camera);
-    GXDrawDone();
+    return camera;
 }
 }
 
@@ -368,6 +370,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         log("Checked RLG/RLT data installed as pool-owned native glModel/PlatTexture records; drawing original material Activate/Draw/Deactivate and TEV shader recipes through Aurora.");
         ViewMatrices view_matrices;
         OriginalViews views(GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, DrainGX);
+        AuroraFrames backend;
+        OriginalFrames lifecycle(backend);
+        FrameCounter timing("frame", "send");
         GLView* submitted = nullptr;
         RLViewCamera shadow_camera;
         std::unique_ptr<ShadowLayers> shadow_layers;
@@ -387,6 +392,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             submitted = child.release(); // Ownership transfers after the list node is allocated.
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
+        log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
         bool volume_enabled = true;
         float receiver_height = 0;
         // Render only game-pool records from here; discard host decoder storage.
@@ -398,11 +404,15 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (Update()) break;
             nlServiceFileSystem();
             if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
-            if (!aurora_begin_frame()) { SDL_Delay(1); continue; }
-            glplatFrameAllocNextFrame();
+            if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
+            glBeginFrame();
+            timing.StartTimer(0);
             const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
             auto frame_lighting = lighting;
             if (!shadows_enabled) frame_lighting.shadow = {};
+            backend.time = elapsed;
+            backend.lighting = volume_preview ? GameLighting{} : frame_lighting;
+            backend.camera_position.reset();
             if (volume_preview)
             {
                 GXSetPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
@@ -417,9 +427,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 shadow_layers->Layer(eCLV_Shadowed).AttachModel(ground, 0);
                 if (volume_enabled) shadow_drawable->Draw(identity);
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
-                RenderOriginalViews(elapsed, {}); GXDrawDone();
             }
-            else Draw(*native_model, *submitted, view_matrices, elapsed, frame_lighting, camera_overlay ? &bounds : nullptr);
+            else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, elapsed,
+                                                       camera_overlay ? &bounds : nullptr);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
             // before one is available. Require perspective depth near our camera
@@ -452,9 +462,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
             ImGui::TextUnformatted("Full stadium scenes and character animation are pending.");
             ImGui::TextUnformatted("Escape or close the window to exit."); ImGui::End();
-            if ((!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames))
+            backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
+            glEndFrame();
+            timing.StartTimer(1);
+            glSendFrame();
+            timing.FinishTiming();
+            if (backend.read_colours)
             {
-                const auto colours=EndFrameAndReadColours();
+                const auto& colours=backend.colours;
                 if (aurora_get_stats()->drawCallCount)
                     for (const auto& c : colours)
                     {
@@ -464,11 +479,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                             && std::abs(int(c[2])-78)<=4) ++shadow_hits;
                     }
             }
-            else aurora_end_frame();
             draws += aurora_get_stats()->drawCallCount; ++frames;
         }
         // Explicitly stop services while CPU texture storage and frame FIFO still exist.
-        views.Release(); shadow_drawable.reset(); shadow_layers.reset(); inventory.Release(); materials.Release(); glShutdownMemory();
+        if (glGetCurrentFrame() != static_cast<int>(frames))
+            throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
+        lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); inventory.Release(); materials.Release(); glShutdownMemory();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
             throw std::runtime_error("Graphics shutdown did not recover both original game arenas");
         log("Original graphics shutdown recovered both game arenas.");

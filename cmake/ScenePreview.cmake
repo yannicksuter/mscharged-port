@@ -1,4 +1,5 @@
 include(cmake/NativeRuntime.cmake)
+include(cmake/FrameTiming.cmake)
 add_library(charged_compressed_assets STATIC src/resources/compressed_asset.cpp)
 target_include_directories(charged_compressed_assets PUBLIC src)
 target_compile_features(charged_compressed_assets PUBLIC cxx_std_20)
@@ -28,6 +29,13 @@ target_link_libraries(charged_materials PUBLIC charged_graphics_memory charged_s
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_materials PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
 endif()
+add_library(charged_frames STATIC
+    "${MSCHARGED_PREPARED}/src/NL/gl/glFrame.cpp"
+    src/runtime/frames.cpp src/runtime/frame_aurora.cpp)
+add_dependencies(charged_frames verify_prepared)
+target_include_directories(charged_frames PUBLIC src PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
+target_link_libraries(charged_frames PUBLIC charged_views PRIVATE aurora::gx)
+target_compile_features(charged_frames PUBLIC cxx_std_20)
 add_library(charged_static_inventory STATIC src/runtime/static_inventory.cpp)
 target_compile_features(charged_static_inventory PUBLIC cxx_std_20)
 target_include_directories(charged_static_inventory PUBLIC src)
@@ -86,15 +94,27 @@ endif()
 add_library(charged_scene_preview STATIC src/runtime/scene.cpp)
 target_compile_features(charged_scene_preview PRIVATE cxx_std_20)
 target_include_directories(charged_scene_preview PUBLIC src)
-target_link_libraries(charged_scene_preview PRIVATE charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
+target_link_libraries(charged_scene_preview PRIVATE charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
     charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)
 if(BUILD_TESTING)
+    include(cmake/Tasks.cmake)
+    add_executable(graphics_frames_tests tests/graphics_frames.cpp tests/task_clock.cpp)
+    target_include_directories(graphics_frames_tests PRIVATE "${MSCHARGED_PREPARED}/src")
+    target_link_libraries(graphics_frames_tests PRIVATE charged_frames charged_tasks)
+    add_test(NAME graphics_frames COMMAND graphics_frames_tests)
+    set_tests_properties(graphics_frames PROPERTIES TIMEOUT 30)
+    add_executable(frame_pipeline_tests tests/frame_pipeline.cpp)
+    target_link_libraries(frame_pipeline_tests PRIVATE charged_frames charged_static_inventory aurora::gx aurora::vi aurora::core)
     add_executable(material_pipeline_tests tests/material_pipeline.cpp)
     target_link_libraries(material_pipeline_tests PRIVATE charged_views charged_static_inventory aurora::gx aurora::vi aurora::core)
 endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    add_test(NAME frame_pipeline COMMAND frame_pipeline_tests)
+    set_tests_properties(frame_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME shadow_pipeline COMMAND shadow_pipeline_tests)
     set_tests_properties(shadow_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
