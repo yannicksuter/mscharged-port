@@ -1,6 +1,7 @@
 """Cross-file world assembly, instance transforms, and optional real GPU preview."""
 import json
 import math
+import re
 from pathlib import Path
 import struct
 import subprocess
@@ -87,12 +88,26 @@ with tempfile.TemporaryDirectory(prefix='mscharged-world-scene-') as directory:
             if code == 0:
                 assert 'Static preview rendered: 30 frames' in output and 'shutdown recovered both game arenas' in output, output
             print(message)
+            return output
         write(cam=camera_fixture(preview=True));run();run(selection+['--camera','/camera.cam'])
         r,t=gpu_fixture(alpha=True);write(r,t,camera_fixture(preview=True));run(selection+['--camera','/camera.cam'])
         r,t=gpu_fixture(animated=True);write(r,t,camera_fixture(preview=True));run(selection+['--camera','/camera.cam'],message='2 textures, 1 texture animations; original radius')
         # Applying this stored translation would move both objects out of view.
         r,t=gpu_fixture(stored_transform=[1,0,0,0, 0,1,0,0, 0,0,1,0, 100,200,300,1])
         write(r,t,camera_fixture(preview=True));run(selection+['--camera','/camera.cam'])
+
+        # The authored camera must control the actual scene submission. Move
+        # the second instance fully outside it while retaining a visible first.
+        r,t=gpu_fixture();r=bytearray(r)
+        struct.pack_into('>f',r,32+0x70+0x50,100)
+        write(r,t,camera_fixture(preview=True))
+        culled=run(selection+['--camera','/camera.cam'])
+        reference=run(selection+['--camera','/camera.cam','--no-world-culling'])
+        assert 'Static world submission totals: 30 / 60 objects, 30 packets.' in culled, culled
+        assert 'Static world submission totals: 60 / 60 objects, 60 packets.' in reference, reference
+        draws=lambda text:int(re.search(r'30 frames, (\d+) GX draw calls',text)[1])
+        assert 0<draws(culled)<draws(reference), (culled,reference)
+        run(['--no-world-culling'],2,'requires a world object selection')
         run(selection+['--model-id','87654321'],2,'cannot be combined')
         run(['--object-id','10'],2,'World objects require')
         run(selection+['--object-id','10'],1,'Duplicate selected world object ID')

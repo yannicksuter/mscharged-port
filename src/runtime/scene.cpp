@@ -11,6 +11,7 @@
 #include "resources/compressed_asset.h"
 #include "resources/world_scene.h"
 #include "runtime/world_objects.h"
+#include "runtime/world_render.h"
 #include "NL/glx/glxTarget.h"
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
@@ -136,18 +137,6 @@ public:
     ~ScenePool() { Restore(); }
     void Restore() { if (previous_) { glSetCurrentResourcePool(previous_); previous_ = nullptr; } }
 };
-// Explicit diagnostic selection: submit every requested instance. Culling is
-// integrated separately. Preserve WorldDrawable's opaque/alpha packet keys.
-void SubmitWorldPreview(const StaticWorldObjects& world, GLView& opaque, GLView& alpha)
-{
-    for (const auto& object : world.Objects())
-        for (unsigned long i = 0; i < object.model->numPackets; ++i)
-        {
-            auto* packet = &object.model->packets[i];
-            if (glGetRasterState(packet->rasterState, GLS_AlphaBlend) == 0) opaque.AttachPacket(packet, 0);
-            else alpha.AttachPacket(packet, 1);
-        }
-}
 
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
@@ -285,7 +274,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             models = std::move(scene.models); world_objects = std::move(scene.objects);
             texture_bundle = std::move(scene.textures); bounds = scene.bounds;
             log("Selected static world objects: " + std::to_string(world_objects.size()) + " instances, "
-                + std::to_string(models.size()) + " shared models; original transforms retained. All selected objects are submitted; culling is not enabled.");
+                + std::to_string(models.size()) + " shared models; original transforms retained.");
+            log(options.no_world_culling ? "Diagnostic world culling disabled; all selected objects are submitted."
+                : "Original sphere/box culling follows the current camera; the selected objects remain resident.");
         }
         else if (options.world)
         {
@@ -502,6 +493,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         animations.clear(); animations.shrink_to_fit();
         world_objects.clear(); world_objects.shrink_to_fit();
         unsigned frames = 0, draws = 0, depth_hits = 0, colour_hits = 0, shadow_hits = 0;
+        bool world_culling = !options.no_world_culling;
+        StaticWorldSubmission world_submission;
+        std::size_t world_considered = 0, world_visible = 0, world_packets = 0;
         const auto start = std::chrono::steady_clock::now();
         float animation_time = 0;
         while (!options.frames || frames < options.frames)
@@ -555,8 +549,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 view_matrices.view = cCameraManager::m_matView;
                 glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180,
                     float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, .1f, 1000.f);
-                if (world) SubmitWorldPreview(*world, *submitted, *world_alpha);
-                else
+                if (!world)
                 {
                     nlMatrix4 identity; identity.SetIdentity(); glModelSetMatrix(native_model, identity);
                     submitted->AttachModel(native_model, 0);
@@ -575,11 +568,18 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180,
                     float(GXNtsc480IntDf.fbWidth) / GXNtsc480IntDf.efbHeight, .01f * radius, 20 * radius);
                 GXSetCopyClear({24,28,34,255}, GX_MAX_Z24);
-                SubmitWorldPreview(*world, *submitted, *world_alpha);
                 backend.camera_position = cCameraManager::m_cameraPosition;
             }
             else backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
                                                        camera_overlay ? &bounds : nullptr);
+            if (world)
+            {
+                const auto frustum = StaticWorldFrustum::FromCamera(view_matrices.view, view_matrices.projection);
+                world_submission = SubmitStaticWorld(*world, *submitted, *world_alpha, frustum, world_culling);
+                world_considered += world_submission.objects;
+                world_visible += world_submission.visible;
+                world_packets += world_submission.opaque_packets + world_submission.alpha_packets;
+            }
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
             // before one is available. Require perspective depth near our camera
@@ -597,7 +597,11 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::SetNextWindowBgAlpha(0.82f);
             ImGui::Begin("Static asset preview", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
-            if (world) ImGui::Text("Static world selection: %zu objects", world->Objects().size());
+            if (world)
+            {
+                ImGui::Text("Static world selection: %zu / %zu objects submitted", world_submission.visible, world_submission.objects);
+                ImGui::Checkbox("Frustum culling", &world_culling);
+            }
             if (authored_camera)
                 ImGui::Text("Authored camera: %.2f / %.2f s", authored_camera->Time() * authored_camera->Duration(), authored_camera->Duration());
             if (volume_preview)
@@ -648,6 +652,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::runtime_error("Static preview incomplete: frames=" + std::to_string(frames) + ", draws=" + std::to_string(draws)
                 + ", depth hits=" + std::to_string(depth_hits) + ", colour hits=" + std::to_string(colour_hits) + ", backend errors=" + std::to_string(backend_errors.load()));
         log("Static preview rendered: " + std::to_string(frames) + " frames, " + std::to_string(draws) + " GX draw calls, " + std::to_string(depth_hits) + " geometry depth samples, " + std::to_string(colour_hits) + " visible colour samples. No game scene or gameplay was started.");
+        if (world_batch) log("Static world submission totals: " + std::to_string(world_visible)
+            + " / " + std::to_string(world_considered) + " objects, " + std::to_string(world_packets) + " packets.");
         if (volume_preview) log("Original stadium shadow blend samples: " + std::to_string(shadow_hits) + ".");
         return 0;
     }

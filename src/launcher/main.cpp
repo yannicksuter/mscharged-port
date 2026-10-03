@@ -721,7 +721,7 @@ int main(int argc, char** argv)
                          "                        [--model /DISC/PATH.rlg] [--textures /DISC/PATH.rlt] [--model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --world-res /DISC/gameworld.res.zlib\n"
-                         "                         --object-id HEX ...] (selected static objects)\n"
+                         "                         --object-id HEX ...] [--no-world-culling] (selected static objects)\n"
                          "                        [--camera /DISC/camera.cam]\n"
                          "                        [--unlit] [--shadow-textures /DISC/PATH.rlt --shadow-id HEX]\n";
 #endif
@@ -730,6 +730,7 @@ int main(int argc, char** argv)
         if (arg == "--smoke-test") options.smoke_test = true;
         else if (arg == "--experimental-startup") options.experimental_startup = true;
         else if (arg == "--experimental-scene") options.experimental_scene = true;
+        else if (arg == "--no-world-culling") { options.scene_arguments = true; options.scene.no_world_culling = true; }
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
         else if ((arg == "--frames" || arg == "--model" || arg == "--textures" || arg == "--model-id"
                   || arg == "--world" || arg == "--world-res" || arg == "--object-id"
@@ -795,6 +796,8 @@ int main(int argc, char** argv)
         if (options.scene.model_id || options.scene.shadow_id || options.standalone_assets)
         { std::cerr << "World object selection cannot be combined with model or shadow lookup options.\n"; return 2; }
     }
+    if (options.scene.no_world_culling && !options.scene.world_res)
+    { std::cerr << "--no-world-culling requires a world object selection.\n"; return 2; }
     if (options.scene.world && !options.scene.model_id && !options.scene.world_res)
     { std::cerr << "--world requires an explicit --model-id.\n"; return 2; }
     if (options.scene.world && options.standalone_assets)

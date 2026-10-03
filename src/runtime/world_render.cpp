@@ -8,6 +8,40 @@
 
 namespace mscharged
 {
+StaticWorldFrustum StaticWorldFrustum::FromCamera(const nlMatrix4& view, const nlMatrix4& projection)
+{
+    for (unsigned i = 0; i < 16; ++i)
+        if (!std::isfinite(view.e[i]) || !std::isfinite(projection.e[i]))
+            throw std::invalid_argument("Static world camera matrices must be finite");
+    // NL transforms row vectors, whereas C_MTXPerspective/C_MTXOrtho provide
+    // SDK column-vector matrices to GX. Combine projection * transpose(view).
+    // GX clip depth is -w <= z <= 0. Original ExtractFrustumPlanes converts it
+    // to 0..w by subtracting one from m33, relying on perspective w = -z;
+    // extracting the clip inequalities directly also handles orthographic w=1.
+    // Keep the original float transform precision, including cancellation of
+    // translated clip boundaries; normalize in double to avoid squaring overflow.
+    float clip[4][4]{};
+    for (unsigned row = 0; row < 4; ++row)
+        for (unsigned column = 0; column < 4; ++column)
+            for (unsigned k = 0; k < 4; ++k)
+                clip[row][column] += projection.e2[row][k] * view.e2[column][k];
+    std::array<nlVector4, 6> planes;
+    for (unsigned face = 0; face < planes.size(); ++face)
+    {
+        float p[4];
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            if (face < 4) p[i] = clip[3][i] + ((face & 1) ? -1 : 1) * clip[face / 2][i];
+            else p[i] = face == 4 ? clip[3][i] + clip[2][i] : -clip[2][i];
+        }
+        const double length = std::sqrt(double(p[0])*p[0] + double(p[1])*p[1] + double(p[2])*p[2]);
+        if (!(length > 0) || !std::isfinite(length))
+            throw std::invalid_argument("Static world camera produces a degenerate frustum");
+        planes[face] = {float(p[0]/length), float(p[1]/length), float(p[2]/length), float(p[3]/length)};
+    }
+    return StaticWorldFrustum(planes);
+}
+
 StaticWorldFrustum::StaticWorldFrustum(const std::array<nlVector4, 6>& planes) : planes_(planes)
 {
     for (const auto& p : planes_)
@@ -39,7 +73,7 @@ bool StaticWorldFrustum::Visible(const resources::StaticWorldObject& object) con
 }
 
 StaticWorldSubmission SubmitStaticWorld(const StaticWorldObjects& world,
-    GLView& opaque, GLView& alpha, const StaticWorldFrustum& frustum)
+    GLView& opaque, GLView& alpha, const StaticWorldFrustum& frustum, bool cull)
 {
     if (!OriginalViewsReady() || glNativeViewDispatchActive())
         throw std::logic_error("Static world submission requires idle initialized views");
@@ -51,7 +85,7 @@ StaticWorldSubmission SubmitStaticWorld(const StaticWorldObjects& world,
     for (const auto& object : world.Objects())
     {
         ++result.objects;
-        if (!frustum.Visible(object.record)) continue;
+        if (cull && !frustum.Visible(object.record)) continue;
         ++result.visible;
         for (unsigned long index = 0; index < object.model->numPackets; ++index)
         {

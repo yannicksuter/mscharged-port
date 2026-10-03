@@ -82,9 +82,10 @@ shadow-volume models use a diagnostic receiver. To render object instances, also
 provide `--world-res /DISC/gameworld.res.zlib` and repeat `--object-id HEX` for
 each selected object, instead of `--model-id`. This loads shared models/textures
 and preserves each object's transform. Up to 256 supported static objects can
-be selected; missing or unsupported objects report an error. The preview submits
-every selected object, with opaque and transparent packets in separate passes.
-Full scenes, visibility culling and character animation remain in development.
+be selected; missing or unsupported objects report an error. Original sphere/box
+culling follows the active camera, with opaque and transparent packets in separate
+passes. Use `--no-world-culling` or the preview toggle for comparison. Full scene
+loading, visibility hierarchies and character animation remain in development.
 
 For an authored frontend camera viewing one environment fragment:
 

@@ -118,6 +118,74 @@ void Synthetic(GLView& opaque,GLView& alpha)
     grid=Background();grid[3]={255,0,0};grid[5]={0,128,127};
     PixelCase("Mixed packets route separately",opaque,alpha,{wide,Object(2,2,.5f,0,-.75f)},{mixed,models[1]},textures,grid,2,2,1);
 }
+void CameraCulling(ViewMatrices& matrices, GLView& opaque, GLView& alpha)
+{
+    struct Pose { nlVector3 eye, right, up, back; };
+    for (bool perspective : {false, true})
+        for (const auto& pose : {Pose{{2,3,5},{1,0,0},{0,1,0},{0,0,1}},
+             Pose{{2,3,5},{0,0,-1},{0,1,0},{1,0,0}},
+             Pose{{2,3,5},{1,0,0},{0,0,1},{0,-1,0}}})
+        {
+            auto point = [&](float x, float y, float depth) {
+                return nlVector3{pose.eye.x + x*pose.right.x + y*pose.up.x - depth*pose.back.x,
+                    pose.eye.y + x*pose.right.y + y*pose.up.y - depth*pose.back.y,
+                    pose.eye.z + x*pose.right.z + y*pose.up.z - depth*pose.back.z};
+            };
+            glMatrixLookAt(matrices.view,pose.eye,point(0,0,1),pose.up);
+            if (perspective) glMatrixPerspective(matrices.projection,3.1415927f/2,1,1,9);
+            else glMatrixOrthographicCentered(matrices.projection,2,2,1,9);
+            const auto frustum=StaticWorldFrustum::FromCamera(matrices.view,matrices.projection);
+            std::vector<resources::StaticWorldObject> objects;
+            auto add = [&](unsigned model, float x, float y, float depth) {
+                const auto p=point(x,y,depth);
+                auto o=Object(unsigned(objects.size()+1),model,p.x,p.y,p.z);
+                o.transform={pose.right.x,pose.right.y,pose.right.z,0,
+                    pose.up.x,pose.up.y,pose.up.z,0,pose.back.x,pose.back.y,pose.back.z,0,p.x,p.y,p.z,1};
+                objects.push_back(o);
+            };
+            add(1,0,0,4);add(2,0,0,3.8f);
+            // Six genuine offscreen meshes, including behind the camera, use
+            // the same persistent world-space transforms as their bounds.
+            add(1,-30,0,4);add(1,30,0,4);add(1,0,-30,4);add(1,0,30,4);
+            add(1,0,0,-1);add(1,0,0,20);
+            auto* previous=glGetCurrentResourcePool();
+            resources::TextureBundle textures{{Texture(10,{255,0,0,255}),Texture(11,{0,255,0,128})},{}};
+            StaticWorldObjects world(objects,{Quad(1,10),Quad(2,11,1)},textures,{256*1024,256*1024},Drain);
+            glSetCurrentResourcePool(&world.Pool());
+            try
+            {
+                std::array<ColourSamples,3> reference;
+                unsigned reference_draws=0,culled_draws=0;
+                for (bool cull : {false,true})
+                    for (unsigned frame=0;frame<23;++frame)
+                    {
+                        Begin();const auto r=SubmitStaticWorld(world,opaque,alpha,frustum,cull);
+                        Check(r.objects==8&&r.visible==(cull?2:8)&&r.opaque_packets==(cull?1:7)&&r.alpha_packets==1,
+                            "Camera culling did not remove exactly six offscreen submissions");
+                        RenderOriginalViews(0,{});GXDrawDone();
+                        if(frame<20)aurora_end_frame();
+                        else
+                        {
+                            const auto pixels=EndFrameAndReadColours();
+                            Check(std::abs(int(pixels[4][0])-127)<=4 && std::abs(int(pixels[4][1])-128)<=4
+                                && pixels[4][2]<=4,"Camera culling lost opaque/alpha visible geometry");
+                            if(!cull)reference[frame-20]=pixels;
+                            else for(unsigned i=0;i<9;++i)for(unsigned c=0;c<4;++c)
+                                Check(pixels[i][c]==reference[frame-20][i][c],"Camera culling changed visible pixels");
+                        }
+                        (cull?culled_draws:reference_draws)+=aurora_get_stats()->drawCallCount;
+                    }
+                Check(culled_draws>0&&culled_draws<reference_draws,"Camera culling did not reduce GPU draw calls");
+                std::cout<<(perspective?"Perspective":"Orthographic")<<" camera at "<<pose.eye.x<<','<<pose.eye.y<<','<<pose.eye.z
+                    <<" back "<<pose.back.x<<','<<pose.back.y<<','<<pose.back.z
+                    <<": 6/8 objects culled, "<<reference_draws<<" -> "<<culled_draws
+                    <<" draw calls, three identical 3x3 pixel grids\n";
+            }
+            catch(...){opaque.ResetPackets();alpha.ResetPackets();glSetCurrentResourcePool(previous);throw;}
+            glSetCurrentResourcePool(previous);world.Release();
+        }
+}
+
 }
 int main(int argc,char** argv)
 {
@@ -148,7 +216,7 @@ int main(int argc,char** argv)
             opaque.m_ClearColour=opaque.m_ClearDepth=true;
             gRootView.AddChild(&opaque);gRootView.AddChild(&alpha);
             glGetBackBufferTarget().target->mClearColour={16,16,16,255};
-            if(argc==1)Synthetic(opaque,alpha);
+            if(argc==1){Synthetic(opaque,alpha);CameraCulling(matrices,opaque,alpha);}
             else world_owned::Run(argv+2,matrices,opaque,alpha,Begin,Drain);
         }
         glShutdownMemory();
