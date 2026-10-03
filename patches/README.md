@@ -113,6 +113,12 @@ Cargo metadata and build commands. The pinned upstream `Cargo.lock` is retained
 unchanged. The nod and Corrosion submodules are prepared and verified using the
 same process as the decompilation.
 
+`nod/0002-join-preloader-workers-before-stream-release.patch` disconnects and
+joins read-ahead workers before the final reader releases its stream. This keeps
+FFI close callbacks inside the host I/O lifetime. Generated-disc tests cover an
+active blocked read, retained partition/file readers, and threading-disabled
+builds.
+
 ## Aurora series
 
 `aurora/0001-isolate-core-build-dependencies.patch` makes SQLite conditional on
