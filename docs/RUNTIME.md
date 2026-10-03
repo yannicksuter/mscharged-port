@@ -28,8 +28,9 @@ This requires a USA `R4QE01` revision 1 ISO/RVZ. It stops explicitly with exit c
 3 after the implemented initialization checks; later startup stages remain pending.
 The same build exposes **Try startup** in the launcher.
 The checks include original memory, file access, boot configuration, tweak
-registration, events, task scheduling, frame timing and camera diagnostics.
-Movies and the complete game frame loop remain in development.
+registration, events, task scheduling, frame timing, camera diagnostics and camera
+asset loading. Movies, authored camera playback and the complete game frame loop
+remain in development.
 
 For the host check alone, use `cmake --workflow --preset aurora`, then run
 `./build/aurora/mscharged-aurora-check --window`.

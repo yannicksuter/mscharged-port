@@ -53,3 +53,4 @@
 0052-select-native-camera-core.patch
 0053-preserve-native-camera-filter-arithmetic.patch
 0054-select-native-texture-animation.patch
+0055-select-native-camera-data.patch
