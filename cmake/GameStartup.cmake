@@ -1,10 +1,11 @@
 include(cmake/NativeRuntime.cmake)
+include(cmake/Events.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(charged_game_startup PRIVATE cxx_std_20)
 target_link_libraries(charged_game_startup PRIVATE charged_decomp_startup charged_host
-    aurora::dvd aurora::os aurora::vi aurora::core mscharged_build_info)
+    charged_events aurora::dvd aurora::os aurora::vi aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_game_startup)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_GAME_STARTUP=1)
 
@@ -13,6 +14,7 @@ target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_GAME_STARTUP=1)
 add_library(charged_game_entry OBJECT EXCLUDE_FROM_ALL "${MSCHARGED_PREPARED}/src/Game/main.cpp")
 add_dependencies(charged_game_entry verify_prepared)
 target_include_directories(charged_game_entry PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 # The entry includes physics headers; retain upstream's single-precision ODE ABI.
 target_compile_definitions(charged_game_entry PRIVATE MSCHARGED_NATIVE=1 dSINGLE=1)

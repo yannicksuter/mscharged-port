@@ -1,6 +1,7 @@
 #include "runtime/startup.h"
 #include "runtime/startup_animation.h"
 #include "runtime/startup_files.h"
+#include "runtime/events.h"
 #include "bootstrap/config.h"
 #include "platform/disc.h"
 #include "platform/path.h"
@@ -97,6 +98,7 @@ int RunGameStartup(int argc, char** argv, const std::filesystem::path& config_pa
         log("Entering original InitializeCore() -> nlInit() -> nlInitMemory().");
         InitializeCore();
         log("Original InitializeCore() and nlInit() completed.");
+        log(VerifyStartupEvents());
         VerifyStartupFileReads();
         log(VerifyStartupAnimationDecoders());
         log(VerifyStartupWholeFileLoads());

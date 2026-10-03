@@ -38,7 +38,6 @@ add_library(charged_views STATIC
     "${MSCHARGED_PREPARED}/src/NL/gl/glTarget.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glStruct.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glViewMath.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlSlotPool.cpp"
     src/runtime/views.cpp src/runtime/targets.cpp)
 add_dependencies(charged_views verify_prepared)
 target_include_directories(charged_views PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
