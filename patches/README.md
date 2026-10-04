@@ -164,6 +164,11 @@ packets and shares font raster setup. Native font pages retain real pool/index
 bindings through frame completion; matrix state is restored on failed submission.
 Formatted, effect and scissored text remain unselected.
 
+Patch `0083-share-original-emission-controller-steps.patch` shares controller
+timing, completion callbacks, stop guards and manager ID progression. Native
+controller groups retain the original particle pool, atlas and RNG together;
+pose, model, light, user-effect and replay services remain separate work.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

@@ -21,8 +21,8 @@
 #include "runtime/frontend_images.h"
 #include "runtime/frontend_session.h"
 #include "runtime/particle_files.h"
-#include "runtime/particle_simulation.h"
-#include "runtime/particle_render.h"
+#include "runtime/particle_controller.h"
+#include "runtime/particle_controller_render.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
 #include "resources/frontend_instances.h"
@@ -351,7 +351,18 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::optional<resources::FrontendLayoutFrame> frontend_frame;
         std::unique_ptr<FrontendSession> frontend_session;
         FrontendSession::Handle frontend_published_frame;
-        std::unique_ptr<ParticleSimulation> particles;
+        EffectsRegistry::Handle particle_groups;
+        std::unique_ptr<ParticleControllers> particles;
+        const auto start_particles = [&] {
+            // Complete source-audited group; every authored spec is required.
+            // Two placements are explicit preview inputs, not actor bindings.
+            for (float x : {-.6f, .6f})
+            {
+                const auto token = particles->Start(particle_groups, 0xe6650c7c);
+                ParticleEmitterFrame frame; frame.position = {x, 0, 0};
+                particles->SetFrame(token, frame);
+            }
+        };
         if (options.particles)
         {
             ParticleFileLoad load;
@@ -363,10 +374,15 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Particle loading timed out");
                 if (load.State() == ParticleFileState::Loading) SDL_Delay(1);
             }
-            // Fixed source-audited USA emitter. An absent or unsupported record
+            // Fixed source-audited USA group. An absent or unsupported record
             // is an error; selection never tries alternatives until one succeeds.
-            particles = std::make_unique<ParticleSimulation>(EffectsRegistry::FromFiles(load.Result()), 0xfda2d744, 0);
-            log("Original particle emitter fda2d744/0 loaded through four NL reads; full effects-manager startup remains pending.");
+            particle_groups = EffectsRegistry::FromFiles(load.Result());
+            particles = std::make_unique<ParticleControllers>();
+            start_particles();
+            unsigned systems = 0;
+            for (const auto& controller : particles->Snapshot()) systems += controller.systems;
+            log("Original particle group e6650c7c loaded through four NL reads: 2 controllers, "
+                + std::to_string(systems) + " emitters; full effects-manager startup remains pending.");
         }
         const auto frontend_language = file.settings.language == "french" ? FrontendLanguage::NAFrench
             : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
@@ -749,14 +765,19 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         if (pip_scene) pip_scene->AttachOverlay();
         GLView* particle_view = nullptr;
-        std::unique_ptr<ParticleRenderer> particle_renderer;
+        std::unique_ptr<GLResourcePool, void (*)(GLResourcePool*)> particle_pool{nullptr, glDestroyResourcePool};
+        std::unique_ptr<ParticleControllerRenderer> particle_renderer;
         if (particles)
         {
-            particle_renderer = std::make_unique<ParticleRenderer>(*glGetCurrentResourcePool(), *particles, DrainGX);
+            // Resetting these bindings must not rewind the world/font owners.
+            const GLMemoryRequirement requirement{GLM_Header, 128 * 1024};
+            particle_pool.reset(glCreateResourcePool(&requirement, 1, "Particle controller textures"));
+            particle_renderer = std::make_unique<ParticleControllerRenderer>(*particle_pool, *particles, DrainGX);
             auto view = std::make_unique<GLView>(&view_matrices, GLRenderPair{}, GLViewSort_None);
             view->m_Name = "Original billboard particles";
             gRootView.AddChild(view.get()); particle_view = view.release();
-            log("Particle texture registered in the native GL pool; original billboard meshes follow world packets.");
+            log("Particle controller textures registered in the native GL pool: "
+                + std::to_string(particle_renderer->Textures()) + " shared bindings; original billboard meshes follow world packets.");
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         FrontendTextView* text_view = nullptr;
@@ -798,7 +819,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         bool animation_paused = false, animation_reset = false;
         unsigned animation_updates = 0;
         bool particles_paused = false, particles_reset = false, particles_visible = true;
-        unsigned particle_updates = 0, particle_peak = 0;
+        unsigned particle_updates = 0, particle_peak = 0, particle_live = 0, particle_active_controllers = 0;
         std::size_t particle_submissions = 0;
         bool preserve_component_time = false;
         std::array<char, 256> frontend_instance_path{};
@@ -824,13 +845,16 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
                 if (particles)
                 {
-                    if (particles_reset) { particles->Reset(0x9184eb0c); particles_reset = false; }
-                    else if (!particles_paused)
+                    if (!particles_paused)
                     {
                         particles->Advance(options.frames ? 1.f / 60 : std::clamp(delta, 0.f, .1f));
                         ++particle_updates;
                     }
-                    particle_peak = std::max(particle_peak, static_cast<unsigned>(particles->Snapshot().size()));
+                    const auto snapshot = particles->Snapshot();
+                    particle_active_controllers = static_cast<unsigned>(snapshot.size());
+                    particle_live = 0;
+                    for (const auto& controller : snapshot) particle_live += controller.particles;
+                    particle_peak = std::max(particle_peak, particle_live);
                 }
                 if (frontend_session && frontend_session->State() == FrontendSessionState::Loading)
                 {
@@ -1010,11 +1034,11 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
             if (particles)
             {
-                ImGui::Text("Original particles: %zu live | emitter fda2d744/0", particles->Snapshot().size());
+                ImGui::Text("Original particles: %u live | %u controllers", particle_live, particle_active_controllers);
                 ImGui::Checkbox("Pause particles", &particles_paused);
                 ImGui::SameLine(); ImGui::Checkbox("Show particles", &particles_visible);
                 if (ImGui::Button("Reset particles")) particles_reset = true;
-                ImGui::TextUnformatted("One authored emitter at the origin; complete effects manager pending.");
+                ImGui::TextUnformatted("Two group instances; complete effects manager pending.");
             }
             if (text_view)
             {
@@ -1220,6 +1244,16 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             if (Update()) break;
             nlServiceFileSystem();
+            if (particles_reset)
+            {
+                // The previous frame is drained. Recreate bindings only while
+                // idle, after invalidating the old controller tokens.
+                particle_renderer.reset();
+                particles->Reset(0x9184eb0c);
+                start_particles();
+                particle_renderer = std::make_unique<ParticleControllerRenderer>(*particle_pool, *particles, DrainGX);
+                particles_reset = false;
+            }
             if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
             if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
             if (!session.gx)
@@ -1283,7 +1317,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             log("Original particle preview rendered: " + std::to_string(particle_updates) + " updates, "
                 + std::to_string(particle_submissions) + " submitted quads, " + std::to_string(particle_peak) + " peak live.");
         font_registry.reset();
-        particle_renderer.reset(); particles.reset();
+        particle_renderer.reset(); particle_pool.reset(); particles.reset(); particle_groups.reset();
         debug_input.reset(); debug_camera.reset(); authored_camera.reset(); cameras.Release();
         lifecycle.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); graphics.Release();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
