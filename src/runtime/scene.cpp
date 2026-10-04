@@ -25,6 +25,7 @@
 #include "runtime/particle_render.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
+#include "resources/frontend_instances.h"
 #include "NL/glx/glxTarget.h"
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
@@ -787,6 +788,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         unsigned particle_updates = 0, particle_peak = 0;
         std::size_t particle_submissions = 0;
         bool preserve_component_time = false;
+        std::array<char, 256> frontend_instance_path{};
         std::string frontend_message;
         std::optional<std::chrono::steady_clock::time_point> frontend_deadline;
         const auto frontend_action = [&](auto&& action) {
@@ -1055,6 +1057,85 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     ImGui::TextUnformatted("Authored timeline only; scene handlers and menu actions pending.");
                 }
                 else ImGui::TextUnformatted("Stored frame only; use --frontend-animate for a timeline.");
+                if (ImGui::TreeNode("Instance inspection"))
+                {
+                    ImGui::SetNextItemWidth(330);
+                    ImGui::InputTextWithHint("Path", "Layer/Item", frontend_instance_path.data(), frontend_instance_path.size());
+                    const auto current = frontend_session->Current();
+                    std::optional<resources::FrontendNode> node;
+                    std::string lookup_error;
+                    try
+                    {
+                        const std::string_view path(frontend_instance_path.data());
+                        if (!path.empty())
+                        {
+                            std::vector<std::string_view> names;
+                            for (std::size_t begin = 0;;)
+                            {
+                                const auto end = path.find('/', begin);
+                                const auto name = path.substr(begin, end == path.npos ? path.size() - begin : end - begin);
+                                if (name.empty()) throw std::invalid_argument("Path components must not be empty");
+                                names.push_back(name);
+                                if (end == path.npos) break;
+                                begin = end + 1;
+                            }
+                            node = resources::FindFrontendNode(current->graph, {}, resources::FrontendNamedPath(names));
+                            if (!node) lookup_error = "No matching component in the active scene";
+                        }
+                    }
+                    catch (const std::exception& error) { lookup_error = error.what(); }
+                    if (node && node->kind == resources::FrontendNodeKind::Instance)
+                    {
+                        const auto& graph = current->graph;
+                        const auto found = std::find_if(graph.instances.begin(), graph.instances.end(),
+                            [&](const auto& instance) { return instance.offset == node->id; });
+                        if (found == graph.instances.end()) throw std::logic_error("Frontend finder returned an absent instance");
+                        const auto library = std::find_if(graph.library.begin(), graph.library.end(),
+                            [&](const auto& value) { return found->library == value.offset; });
+                        auto position = found->attributes.position;
+                        auto colour = found->attributes.colour;
+                        if (library != graph.library.end())
+                        {
+                            if (!(found->overload_flags & 1)) position = library->attributes.position;
+                            if (!(found->overload_flags & 16)) colour = library->attributes.colour;
+                        }
+                        std::vector<resources::FrontendInstanceChange> changes;
+                        bool visible = found->visible;
+                        if (ImGui::Checkbox("Visible", &visible))
+                        {
+                            resources::FrontendInstanceChange change;
+                            change.instance = node->id; change.property = resources::FrontendInstanceProperty::Visible;
+                            change.flag = visible; changes.push_back(std::move(change));
+                        }
+                        ImGui::SetNextItemWidth(330);
+                        if (ImGui::DragFloat3("Position", position.data(), 1, -10000, 10000, "%.1f"))
+                        {
+                            resources::FrontendInstanceChange change;
+                            change.instance = node->id; change.property = resources::FrontendInstanceProperty::Position;
+                            change.vector = position; changes.push_back(std::move(change));
+                        }
+                        std::array<float,4> rgba{};
+                        for (unsigned i = 0; i < 4; ++i) rgba[i] = colour[i] / 255.f;
+                        ImGui::SetNextItemWidth(330);
+                        if (ImGui::ColorEdit4("Colour", rgba.data()))
+                        {
+                            if (std::all_of(rgba.begin(), rgba.end(), [](float value) { return std::isfinite(value); }))
+                            {
+                                resources::FrontendInstanceChange change;
+                                change.instance = node->id; change.property = resources::FrontendInstanceProperty::Colour;
+                                for (unsigned i = 0; i < 4; ++i)
+                                    change.colour[i] = static_cast<std::uint8_t>(std::clamp(rgba[i], 0.f, 1.f) * 255.f + .5f);
+                                changes.push_back(std::move(change));
+                            }
+                            else frontend_message = "Colour components must be finite";
+                        }
+                        if (!changes.empty()) frontend_action([&] { frontend_session->Apply(current, changes); });
+                        ImGui::TextUnformatted("Preview edits; authored animation may update these values. Reload restores the file.");
+                    }
+                    else if (node) ImGui::TextUnformatted("The path selects a slide; choose one of its component instances.");
+                    if (!lookup_error.empty()) ImGui::TextWrapped("%s", lookup_error.c_str());
+                    ImGui::TreePop();
+                }
                 if (frontend_session->State() == FrontendSessionState::Loading)
                 {
                     ImGui::TextUnformatted("Reloading frontend; current scene remains active.");

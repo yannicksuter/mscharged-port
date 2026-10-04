@@ -75,4 +75,5 @@
 0074-select-native-particle-simulation.patch
 0075-share-original-frontend-selection.patch
 0076-select-original-particle-billboards.patch
+0077-share-original-frontend-instance-steps.patch
 0078-include-tweak-pool-destruction.patch

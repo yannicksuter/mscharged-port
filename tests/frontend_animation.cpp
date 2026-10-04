@@ -169,6 +169,30 @@ void Selection()
     Check(failed.Scene().library.back().active_slide==102&&failed.Scene().slides[1].time==.25f
         &&Target(failed.Scene()).attributes.colour[0]==255,"Failed component selection partially changed state");
 }
+void LoadingSetup()
+{
+    auto s=Scene();auto& layer=s.instances.front();layer.hash=FrontendLowerHash("layer");layer.children={610};
+    auto& top=s.slides.front();top.children={layer.offset};top.animations.clear();top.animated=false;
+    FrontendLibraryObject library{};library.offset=800;library.type=3;library.active_slide=102;library.slides={101,102};s.library.push_back(library);
+    FrontendInstance component{};component.offset=610;component.type=4;component.hash=FrontendLowerHash("no home");component.library=800;component.visible=true;component.duration=100;s.instances.push_back(component);
+    FrontendSlide wide{};wide.offset=101;wide.hash=FrontendLowerHash("widescreen");wide.duration=1;wide.time=.25f;wide.animated=true;wide.animations={2000};wide.children={600};s.slides.push_back(wide);
+    FrontendSlide regular{};regular.offset=102;regular.hash=FrontendLowerHash("slide1");regular.duration=1;s.slides.push_back(regular);
+    FrontendAnimationPlayback p(s);auto before=p.Clone();
+    auto result=p.SetupLoadingScene(false);Check(result.transition_component==610&&!result.widescreen&&!p.Scene().instances.back().visible,"Original loading setup did not hide transition");
+    Check(p.Scene().library.back().active_slide==102,"Regular loading setup changed component selection");
+    result=p.SetupLoadingScene(true);Check(result.widescreen&&p.Scene().library.back().active_slide==101,"Wide loading setup did not select authored slide");
+    Near(p.Scene().slides[1].time,0);Near(Target(p.Scene()).attributes.position[0],-160);
+    Check(before->Scene().instances.back().visible&&before->Scene().library.back().active_slide==102,"Setup mutated retained clone");
+    result=p.SetupLoadingScene(false);Check(result.widescreen,"Repeated setup lost original sticky widescreen state");
+    p.Reset();Check(p.Scene().instances.back().visible,"Reset did not restore setup visibility");
+    s.slides[1].hash=123;FrontendAnimationPlayback missing(s);Reject([&]{missing.SetupLoadingScene(true);});
+    Check(missing.Scene().instances.back().visible&&missing.Scene().library.back().active_slide==102,"Failed authored setup published partial hide/selection");
+    s.instances.back().hash=123;FrontendAnimationPlayback absent(s);Reject([&]{absent.SetupLoadingScene(false);});
+    // An ordinary handler setter remains until the original animation channel
+    // next writes it; setters never rewrite the exported Reset baseline.
+    FrontendInstanceChange edit;edit.instance=600;edit.property=FrontendInstanceProperty::Position;edit.vector={99,7,0};
+    p.Apply({&edit,1});Near(Target(p.Scene()).attributes.position[0],99);p.SetupLoadingScene(true);Near(Target(p.Scene()).attributes.position[0],-160);
+}
 void File(const std::filesystem::path& file)
 {
     auto s=ReadFrontendScene(Read(file));Check(s.animations.size()==1&&s.animations[0].keys.size()==2,"Generated FEN animation decode failed");
@@ -195,7 +219,7 @@ void Owned(const std::filesystem::path& root)
 }
 int main(int argc,char** argv)
 {
-    try{for(unsigned repeat=0;repeat<3;++repeat){Clock();Channels();Nested();Failure();WorkBudget();Selection();}
+    try{for(unsigned repeat=0;repeat<3;++repeat){Clock();Channels();Nested();Failure();WorkBudget();Selection();LoadingSetup();}
         if(argc==3&&std::string(argv[1])=="--file")File(argv[2]);else if(argc==2)Owned(argv[1]);
         std::cout<<checks<<" frontend animation checks passed\n";
     }catch(const std::exception& e){std::cerr<<"FAILED: "<<e.what()<<" (check "<<checks<<")\n";return 1;}

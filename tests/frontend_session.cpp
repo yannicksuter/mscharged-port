@@ -93,6 +93,18 @@ void Transactions()
     auto text=owner.Result();Inspect(text,false);
     Check(owner.Progress().fen_completed&&owner.Progress().visual_completed_mask==7,"Real FEN/font reads did not complete");
     Reject([&]{owner.Advance(0);});Reject([&]{owner.SelectPresentation("Slide");});
+    FrontendInstanceChange text_edit;text_edit.instance=0x80;text_edit.property=FrontendInstanceProperty::String;text_edit.text=u"BA";
+    owner.Apply(text,{&text_edit,1});auto edited=owner.Current();
+    Check(edited!=text&&edited->graph.instances[0].text==u"BA"&&edited->layout.TextCount()==1,"Static user string did not publish retained layout");
+    Check(text->graph.instances[0].text.empty(),"Setter mutated retained old snapshot");
+    Reject([&]{owner.Apply(text,{&text_edit,1});});
+    FrontendInstanceChange position;position.instance=0x80;position.property=FrontendInstanceProperty::Position;position.vector={17,29,0};
+    FrontendInstanceChange missing;missing.instance=0x80;missing.property=FrontendInstanceProperty::StringId;missing.string_id="LOC_missing";
+    const std::array bad_edits{position,missing};Reject([&]{owner.Apply(edited,bad_edits);});
+    Check(owner.Current()==edited&&owner.Current()->graph.instances[0].attributes.position==edited->graph.instances[0].attributes.position,
+        "Layout failure published partial static mutations");
+    owner.Begin(Request(false));Pump(owner);text=owner.Result();Inspect(text,false);
+
     owner.Begin(Request());Check(owner.Current()==text,"Loading replacement removed current scene");
     Reject([&]{owner.Result();});owner.Cancel();owner.Cancel();
     Check(owner.State()==FrontendSessionState::Cancelled&&owner.Current()==text&&!nlAsyncReadsPending(nullptr),"Cancel did not preserve current or drain work");
@@ -109,6 +121,13 @@ void Transactions()
     Check(!owner.SelectPresentation("missing")&&!owner.Current()->graph.active_slide&&owner.Current()->layout.entries.empty(),"Missing live slide did not clear active");
     owner.Advance(1);Check(owner.Current()->graph.presentation_time==0,"Inactive presentation advanced its clock");
     owner.Reset();Inspect(owner.Current(),true);
+    auto original=owner.Current();FrontendInstanceChange tint;tint.instance=0x80;tint.property=FrontendInstanceProperty::Colour;tint.colour={32,64,96,128};
+    owner.Apply(original,{&tint,1});auto tinted=owner.Current();
+    Check(tinted->graph.instances[0].attributes.colour==tint.colour&&original->graph.instances[0].attributes.colour[0]==255,"Animated mutation did not isolate snapshots");
+    owner.Advance(.125f);Check(owner.Current()->graph.instances[0].attributes.colour==tint.colour,"Unrelated animation discarded setter state");
+    const auto keep=owner.Current();Reject([&]{owner.Apply(original,{&tint,1});});Reject([&]{owner.SetupLoadingScene(keep,true);});
+    Check(owner.Current()==keep,"Failed loading setup replaced current frame");owner.Reset();
+
     bool wrong_thread=false;std::thread thread([&]{try{owner.Pop();}catch(const std::logic_error&){wrong_thread=true;}});thread.join();Check(wrong_thread,"Wrong-thread session mutation accepted");
     for(const char* path:{"/Art/fe/bad.fen","/Art/fe/missing-image.fen","/Art/fe/absent.fen"})
     {

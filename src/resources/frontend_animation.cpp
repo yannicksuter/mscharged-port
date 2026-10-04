@@ -1,6 +1,7 @@
 #include "resources/frontend_animation.h"
 #include "Game/FE/FrontendAnimationSteps.h"
 #include "Game/FE/FrontendSelectionSteps.h"
+#include "Game/FE/FrontendInstanceSteps.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -12,13 +13,6 @@ namespace
 {
 void Finite(float value)
 {Require(std::isfinite(value)&&std::abs(value)<=1e7f,"Frontend animation scalar exceeds its finite profile");}
-std::uint32_t LowerHash(std::string_view name)
-{
-    Require(name.size()<=4096&&name.find('\0')==std::string_view::npos,"Invalid frontend slide name");
-    std::uint32_t hash=0xffffffff;
-    for(unsigned char c:name){if(c>='A'&&c<='Z')c+='a'-'A';hash=hash*33+c;}
-    return hash;
-}
 std::uint8_t Colour(float value)
 {Require(std::isfinite(value)&&value>=0&&value<=255,"Frontend animated colour exceeds its byte range");return static_cast<std::uint8_t>(value);}
 struct Index
@@ -149,6 +143,7 @@ struct FrontendAnimationPlayback::Impl
     FrontendScene baseline,current;
     Index index;
     std::size_t channels=0;
+    bool loading_widescreen=false;
     Impl(const FrontendScene& scene,FrontendReference selected):baseline(scene),index(baseline)
     {
         if(!selected)selected=baseline.active_slide;
@@ -161,7 +156,7 @@ struct FrontendAnimationPlayback::Impl
     void Reset()
     {
         auto next=baseline;next.presentation_time=0;Step step{next,index};step.Run(0);
-        current=std::move(next);channels=step.channels;
+        current=std::move(next);channels=step.channels;loading_widescreen=false;
     }
     void Advance(float delta)
     {
@@ -170,7 +165,7 @@ struct FrontendAnimationPlayback::Impl
     }
     FrontendReference Find(const std::vector<std::uint32_t>& ring,std::string_view name) const
     {
-        const auto hash=LowerHash(name);
+        const auto hash=FrontendLowerHash(name);
         for(auto id:ring)
         {
             Require(index.slides.contains(id),"Frontend selection references a missing slide");
@@ -199,6 +194,40 @@ struct FrontendAnimationPlayback::Impl
         Step step{next,index};if(selected)step.Slide(*selected,0,0);
         current=std::move(next);channels=step.channels;return selected.has_value();
     }
+    FrontendLoadingSetup SetupLoadingScene(bool widescreen)
+    {
+        auto next=std::make_unique<Impl>(*this);
+        struct Transition
+        {
+            Impl& owner;
+            std::uint32_t library;
+            bool& m_bVisible;
+            void SetActiveSlide(const char* name,bool reset,bool preserve)
+            {
+                Require(owner.SelectComponent(library,name,reset,preserve),"Loading setup requires the authored widescreen slide");
+            }
+        };
+        struct Presentation { FrontendReference m_currentSlide; } presentation{next->current.active_slide};
+        struct Scene { Presentation* mPresentation;Transition* mTransitionComponent=nullptr;bool mWidescreen; } setup{&presentation,nullptr,next->loading_widescreen};
+        std::optional<Transition> transition;FrontendLoadingSetup result;
+        const auto find=[&](FrontendReference slide,const char* layer,const char* name)->Transition*
+        {
+            Require(slide.has_value(),"Loading setup requires an active presentation slide");
+            const std::array<std::string_view,2> path{layer,name};
+            const auto node=FindFrontendNode(next->current,{FrontendNodeKind::Slide,*slide},FrontendNamedPath(path),FrontendNodeType::Component);
+            Require(node.has_value(),"Loading setup requires an authored no home component; no default substitute is supplied");
+            auto& instance=next->current.instances.at(next->index.instances.at(node->id));
+            Require(instance.library&&next->index.library.contains(*instance.library)
+                &&next->current.library[next->index.library.at(*instance.library)].type==3,"Loading setup component library is unavailable");
+            result.transition_component=node->id;
+            transition.emplace(Transition{*next,*instance.library,instance.visible});return &*transition;
+        };
+        FrontendLoadingSceneSetupPrefix(setup,[&]{return widescreen;},find);
+        next->loading_widescreen=setup.mWidescreen;result.widescreen=setup.mWidescreen;
+        // The proxy's visibility reference was used before SetActiveSlide's
+        // transactional graph replacement. No proxy data is read afterward.
+        *this=std::move(*next);return result;
+    }
 };
 FrontendAnimationPlayback::FrontendAnimationPlayback(const FrontendScene& scene,FrontendReference selected)
     :impl_(std::make_unique<Impl>(scene,selected)){}
@@ -212,6 +241,10 @@ bool FrontendAnimationPlayback::SelectPresentation(std::string_view name,bool re
 {return impl_->SelectPresentation(name,reset);}
 bool FrontendAnimationPlayback::SelectComponent(std::uint32_t id,std::string_view name,bool reset,bool preserve)
 {return impl_->SelectComponent(id,name,reset,preserve);}
+void FrontendAnimationPlayback::Apply(std::span<const FrontendInstanceChange> changes)
+{ApplyFrontendInstanceChanges(impl_->current,changes);impl_->channels=0;}
+FrontendLoadingSetup FrontendAnimationPlayback::SetupLoadingScene(bool widescreen)
+{return impl_->SetupLoadingScene(widescreen);}
 const FrontendScene& FrontendAnimationPlayback::Scene() const{return impl_->current;}
 float FrontendAnimationPlayback::PresentationTime() const{return impl_->current.presentation_time;}
 std::size_t FrontendAnimationPlayback::ChannelsEvaluated() const{return impl_->channels;}

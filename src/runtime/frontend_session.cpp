@@ -213,4 +213,25 @@ bool FrontendSession::SelectPresentation(std::string_view name, bool reset)
 { return impl_->Mutate([&](auto& playback) { return playback.SelectPresentation(name, reset); }); }
 bool FrontendSession::SelectComponent(std::uint32_t id, std::string_view name, bool reset, bool preserve)
 { return impl_->Mutate([&](auto& playback) { return playback.SelectComponent(id, name, reset, preserve); }); }
+void FrontendSession::Apply(const Handle& expected, std::span<const resources::FrontendInstanceChange> changes)
+{
+    auto& s = *impl_; s.CheckMutation();
+    if (!expected || expected != s.current) throw std::logic_error("Frontend mutation requires the current retained snapshot");
+    if (s.playback)
+    {
+        s.Mutate([&](auto& playback) { playback.Apply(changes); return true; });
+        return;
+    }
+    auto next = std::make_shared<FrontendSessionFrame>(*s.current);
+    resources::ApplyFrontendInstanceChanges(next->graph, changes);
+    next->layout = Implementation::Layout(*next); s.current = std::move(next);
+}
+resources::FrontendLoadingSetup FrontendSession::SetupLoadingScene(const Handle& expected, bool widescreen)
+{
+    auto& s = *impl_; s.CheckMutation();
+    if (!expected || expected != s.current) throw std::logic_error("Loading setup requires the current retained snapshot");
+    resources::FrontendLoadingSetup result;
+    s.Mutate([&](auto& playback) { result = playback.SetupLoadingScene(widescreen); return true; });
+    return result;
+}
 }

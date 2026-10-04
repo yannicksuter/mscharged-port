@@ -2,6 +2,7 @@
 #include "runtime/frontend_images.h"
 #include "runtime/frontend_visuals.h"
 #include "resources/frontend_layout.h"
+#include "resources/frontend_instances.h"
 #include <string>
 
 namespace mscharged
@@ -64,5 +65,12 @@ public:
     bool SelectPresentation(std::string_view name, bool reset_time = false);
     bool SelectComponent(std::uint32_t component_library_id, std::string_view name,
                          bool force_reset = false, bool preserve_time = false);
+    // IDs belong to this exact retained snapshot. Stale/foreign snapshots fail
+    // before mutation; successful changes atomically include layout rebuilding.
+    // Supported on static and animated current scenes, including replacement.
+    void Apply(const Handle& expected_current, std::span<const resources::FrontendInstanceChange>);
+    // Shared original BaseLoadingScene setup prefix; requires animated current
+    // scene and stops before the unavailable HBMManager::SetBlocked call.
+    resources::FrontendLoadingSetup SetupLoadingScene(const Handle& expected_current, bool widescreen);
 };
 }

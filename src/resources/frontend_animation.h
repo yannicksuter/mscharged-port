@@ -1,5 +1,6 @@
 #pragma once
 #include "resources/frontend_scene.h"
+#include "resources/frontend_instances.h"
 #include <memory>
 #include <string_view>
 
@@ -28,6 +29,8 @@ public:
     bool SelectPresentation(std::string_view name, bool reset_time = false);
     bool SelectComponent(std::uint32_t component_library_id, std::string_view name,
                          bool force_reset = false, bool preserve_time = false);
+    void Apply(std::span<const FrontendInstanceChange>);
+    FrontendLoadingSetup SetupLoadingScene(bool widescreen);
     const FrontendScene& Scene() const;
     float PresentationTime() const;
     std::size_t ChannelsEvaluated() const; // Last committed update, incl shared slide visits.

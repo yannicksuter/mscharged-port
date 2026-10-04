@@ -84,6 +84,7 @@ int main(int argc, char** argv)
         const auto font=resources::ReadFrontendFont(font_fixture::Font(),"fe/fonts/fixture","test");
         const std::array fonts{font};resources::Localization localization;
         auto graph=frontend_layout_fixture::Scene(font->alias);
+        graph.instances[0].hash=resources::FrontendLowerHash("parent");
         graph.instances[0].children={300};
         graph.instances[1].text=u"A";graph.instances[1].attributes.position={155,3,0};
         graph.instances[1].attributes.colour={255,0,0,255};
@@ -156,8 +157,28 @@ int main(int argc, char** argv)
         bool rejected=false;try{fade.Advance(-1);}catch(const std::exception&){rejected=true;}
         Check(rejected,"Invalid frontend timeline delta was accepted");
         Case(resources::BuildFrontendLayout(fade.Scene(),localization,fonts,{},catalog),initial);
+        // Original named lookup and instance setters must affect actual pixels
+        // while previously published frames retain their own transform/visibility.
+        const std::array<std::string_view,1> instance_path{"PARENT"};
+        const auto parent=resources::FindFrontendNode(fade.Scene(),{},resources::FrontendNamedPath(instance_path),
+            resources::FrontendNodeType::Layer);
+        Check(parent && parent->id==200,"Named parent lookup failed");
+        auto old_frame=resources::BuildFrontendLayout(fade.Scene(),localization,fonts,{},catalog);
+        resources::FrontendInstanceChange change;change.instance=parent->id;
+        change.property=resources::FrontendInstanceProperty::Visible;change.flag=false;
+        fade.Apply(std::span(&change,1));
+        Case(resources::BuildFrontendLayout(fade.Scene(),localization,fonts,{},catalog),flat());
+        Case(old_frame,initial);
+        change.flag=true;fade.Apply(std::span(&change,1));
+        change.property=resources::FrontendInstanceProperty::Position;change.vector={0,0,0};
+        fade.Apply(std::span(&change,1));
+        Case(resources::BuildFrontendLayout(fade.Scene(),localization,fonts,{},catalog),middle);
+        change.property=resources::FrontendInstanceProperty::Colour;change.colour={255,255,255,128};
+        fade.Apply(std::span(&change,1));
+        auto mutated_half=flat();mutated_half[4]=RGB{10,12,143};mutated_half[5]=RGB{138,12,15};
+        Case(resources::BuildFrontendLayout(fade.Scene(),localization,fonts,{},catalog),mutated_half);
         AuroraGXSync(); Check(errors == 0, "Aurora reported frontend rendering errors");
-        std::cout << "Frontend animated hierarchy, original clock, loop/reset, opacity and retained-frame pixel checks passed\n";
+        std::cout << "Frontend animated hierarchy, original clock, named instance mutation and retained-frame pixel checks passed\n";
     }
     catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << '\n'; return 1; }
 }

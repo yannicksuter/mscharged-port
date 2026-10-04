@@ -137,6 +137,11 @@ raster and quad writing, selects the textured-colour mesh writer and handles its
 signed short UV streams on the native vertex-colour material path. Real texture
 bindings and original frame storage are owned by the bounded renderer.
 
+Patch `0077-share-original-frontend-instance-steps.patch` shares original named
+instance traversal, setter effects and the loading scene's component setup.
+Native mutations publish complete retained layouts; the HOME-menu manager and
+full scene-handler lifecycle remain separate dependencies.
+
 Patch `0078-include-tweak-pool-destruction.patch` exposes the original inline
 slot-pool destructors to native tweak-registry exception cleanup. Optimized
 builds must not depend on another translation unit emitting those definitions.

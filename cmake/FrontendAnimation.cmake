@@ -1,9 +1,10 @@
 include_guard(GLOBAL)
 include(cmake/FrontendLayout.cmake)
+include(cmake/FrontendInstances.cmake)
 add_library(charged_frontend_animation STATIC src/resources/frontend_animation.cpp
     "${MSCHARGED_PREPARED}/src/NL/FrontendBezier.cpp")
 add_dependencies(charged_frontend_animation verify_prepared)
-target_link_libraries(charged_frontend_animation PUBLIC charged_frontend_layout)
+target_link_libraries(charged_frontend_animation PUBLIC charged_frontend_layout charged_frontend_instances)
 target_compile_features(charged_frontend_animation PUBLIC cxx_std_20)
 target_compile_definitions(charged_frontend_animation PRIVATE MSCHARGED_NATIVE=1)
 target_include_directories(charged_frontend_animation PRIVATE "${MSCHARGED_PREPARED}/include"
