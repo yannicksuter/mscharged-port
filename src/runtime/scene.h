@@ -25,6 +25,7 @@ struct SceneOptions
     std::optional<std::string> frontend_frame; // Authored static frame, with explicit unsupported branches.
     std::optional<std::string> frontend_slide; // Optional stored presentation slide name.
     std::optional<std::string> frontend_images; // Explicit Main/InGame/BootLoading context; defaults to Main.
+    std::optional<std::string> frontend_pointer; // Observe original pointer events for a rendered instance path.
     bool frontend_animate = false; // Checked authored timeline; no scene handlers or menu transitions.
     bool frontend_boot = false; // Retail boot handler through its qualified service boundary.
     bool character_shock = false; // Authored Bowser shock mesh and FE bone animation diagnostic.

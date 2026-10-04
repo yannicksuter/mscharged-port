@@ -728,6 +728,7 @@ int main(int argc, char** argv)
                          "                        [--frontend-frame /Art/fe/SCENE.fen [--frontend-slide NAME]] (static image/text layout)\n"
                          "                        [--frontend-images main|ingame|boot] (image bundle context; default main)\n"
                          "                        [--frontend-animate] (authored timeline; pause/reset in preview)\n"
+                         "                        [--frontend-pointer Layer/Item] (rendered bounds/input inspection; no menu action)\n"
                          "                        [--frontend-boot] (retail boot screen; stops at unavailable services)\n"
                          "                        [--character-shock] (original Bowser skin and FE animation)\n"
                          "                        [--particles] (authored emitter groups; pause/reset in preview)\n"
@@ -753,6 +754,7 @@ int main(int argc, char** argv)
                   || arg == "--world" || arg == "--world-res" || arg == "--object-id"
                   || arg == "--nis-primary" || arg == "--nis-secondary" || arg == "--pip-expand"
                   || arg == "--frontend-frame" || arg == "--frontend-slide" || arg == "--frontend-images"
+                  || arg == "--frontend-pointer"
                   || arg == "--camera" || arg == "--frontend-layout" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
         {
             options.scene_arguments = true;
@@ -776,6 +778,7 @@ int main(int argc, char** argv)
             else if (arg == "--frontend-frame") options.scene.frontend_frame = value;
             else if (arg == "--frontend-slide") options.scene.frontend_slide = value;
             else if (arg == "--frontend-images") options.scene.frontend_images = value;
+            else if (arg == "--frontend-pointer") options.scene.frontend_pointer = value;
             else if (arg == "--model") options.scene.model = value;
             else if (arg == "--textures") options.scene.textures = value;
             else if (arg == "--shadow-textures") options.scene.shadow_textures = value;
@@ -825,10 +828,12 @@ int main(int argc, char** argv)
     { std::cerr << "Asset/frame options require --experimental-scene.\n"; return 2; }
     if (options.scene.frame_timeout && !options.scene.frames)
     { std::cerr << "--frame-timeout requires --frames.\n"; return 2; }
+    if (options.scene.frontend_pointer && (!options.scene.frontend_frame || options.scene.frontend_pointer->empty()))
+    { std::cerr << "--frontend-pointer requires --frontend-frame and a nonempty instance path.\n"; return 2; }
     if (options.scene.frontend_boot && (options.standalone_assets || options.scene.model_id || options.scene.world
         || options.scene.world_res || !options.scene.object_ids.empty() || options.scene.frontend_world
         || options.scene.frontend_layout || options.scene.frontend_frame || options.scene.frontend_slide
-        || options.scene.frontend_images || options.scene.frontend_animate || options.scene.nis_primary
+        || options.scene.frontend_images || options.scene.frontend_pointer || options.scene.frontend_animate || options.scene.nis_primary
         || options.scene.nis_secondary || options.scene.pip_expand || options.scene.camera || options.scene.debug_camera
         || options.scene.shadow_id || options.scene.shadow_textures || options.scene.particles || options.scene.unlit
         || options.scene.no_world_culling || options.scene.character_shock))
@@ -836,7 +841,7 @@ int main(int argc, char** argv)
     if (options.scene.character_shock && (options.standalone_assets || options.scene.model_id || options.scene.world
         || options.scene.world_res || !options.scene.object_ids.empty() || options.scene.frontend_world
         || options.scene.frontend_layout || options.scene.frontend_frame || options.scene.frontend_slide
-        || options.scene.frontend_images || options.scene.frontend_animate || options.scene.nis_primary
+        || options.scene.frontend_images || options.scene.frontend_pointer || options.scene.frontend_animate || options.scene.nis_primary
         || options.scene.nis_secondary || options.scene.pip_expand || options.scene.camera || options.scene.debug_camera
         || options.scene.shadow_id || options.scene.shadow_textures || options.scene.particles || options.scene.no_world_culling))
     { std::cerr << "--character-shock selects its own model, animation and camera; use --frames, --frame-timeout, --config or --unlit.\n"; return 2; }

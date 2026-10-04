@@ -21,6 +21,7 @@
 #include "runtime/frontend_images.h"
 #include "runtime/frontend_session.h"
 #include "runtime/frontend_handler.h"
+#include "runtime/frontend_pointer_display.h"
 #include "runtime/frontend_boot_loading.h"
 #include "runtime/frontend_boot_audio.h"
 #include "NL/nlMath.h"
@@ -370,6 +371,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
     try
     {
         auto options = requested;
+        if (options.frontend_pointer && (!options.frontend_frame || options.frontend_pointer->empty()))
+            throw std::invalid_argument("Frontend pointer inspection requires an authored frame and instance path");
         if (options.character_shock && (options.frontend_boot || options.frontend_frame || options.frontend_layout
             || options.frontend_slide || options.frontend_images || options.frontend_animate || options.frontend_world
             || options.world || options.world_res || options.model_id || !options.object_ids.empty() || options.camera
@@ -942,6 +945,29 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::unique_ptr<FrontendInputSDL> frontend_devices;
         std::unique_ptr<FrontendHandler> frontend_handler;
         std::unique_ptr<FrontendBootLoading> frontend_boot;
+        std::unique_ptr<FrontendPointerDisplay> frontend_pointer;
+        FrontendPointerDispatch pointer_dispatch;
+        std::uint64_t pointer_present_sequence = 0;
+        unsigned pointer_presses = 0;
+        const auto pointer_binding = [&](const FrontendSession::Handle& current) {
+            const std::string_view path = *options.frontend_pointer;
+            std::vector<std::string_view> names;
+            for (std::size_t begin = 0;;)
+            {
+                const auto end = path.find('/', begin);
+                const auto name = path.substr(begin, end == path.npos ? path.size() - begin : end - begin);
+                if (name.empty()) throw std::invalid_argument("Pointer path components must not be empty");
+                names.push_back(name);
+                if (end == path.npos) break;
+                begin = end + 1;
+            }
+            const auto node = resources::FindFrontendNode(current->graph, {}, resources::FrontendNamedPath(names));
+            if (!node || node->kind != resources::FrontendNodeKind::Instance)
+                throw std::invalid_argument("Frontend pointer instance path is absent");
+            const bool visible = std::any_of(current->layout.entries.begin(), current->layout.entries.end(),
+                [&](const auto& entry) { return std::visit([&](const auto& value) { return value.instance == node->id; }, entry); });
+            return std::pair{FrontendPointerBinding{node->id}, visible};
+        };
         if (frontend_text)
         {
             font_registry = std::make_unique<FrontendFontRegistry>(*glGetCurrentResourcePool(), inspector_fonts, DrainGX);
@@ -971,6 +997,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 log("Original retail BootLoadingScene selected: strap, nunchuk, ESRB and logo with resident audio.");
             }
             else frontend_handler = std::make_unique<FrontendHandler>(frontend_session, *frontend_input);
+            if (options.frontend_pointer) (void)pointer_binding(frontend_session->Current());
             frame_packets->Prepare(frontend_session->Current());
             glMatrixOrthographic(text_matrices.projection, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
             auto view = std::make_unique<FrontendFrameView>(text_matrices, *frame_packets);
@@ -1046,6 +1073,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     if (frontend_boot && options.frames) frontend_input->Update({}, 1.f / 60);
                     else frontend_devices->Poll(*frontend_input, info.window, std::clamp(delta, 0.f, .1f),
                         io.WantCaptureKeyboard, io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad));
+                    if (frontend_pointer) pointer_dispatch = frontend_pointer->Poll(info.window, io.WantCaptureMouse);
                     if (text_view)
                     {
                         const auto previous = text_view->Index();
@@ -1293,6 +1321,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
             if (frame_view && !frontend_boot)
             {
+                if (options.frontend_pointer)
+                {
+                    ImGui::Text("Pointer inspection: %s", options.frontend_pointer->c_str());
+                    ImGui::Text("Position %.1f, %.1f | %s | %u presses", pointer_dispatch.event.position[0],
+                        pointer_dispatch.event.position[1], frontend_pointer && pointer_dispatch.active ? "active" : "inactive", pointer_presses);
+                    ImGui::TextUnformatted("Mouse/Enter: original region events. Concrete menu actions remain pending.");
+                }
                 ImGui::Text("Authored %s layout: %zu text, %zu images", options.frontend_animate ? "animated" : "static",
                     frame_view->TextCount(), frame_view->ImageCount());
                 const bool editable = frame_packets->Current() == frontend_session->Current();
@@ -1565,6 +1600,38 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 throw;
             }
             finish_renderers();
+            if (options.frontend_pointer)
+            {
+                const auto present = aurora_get_last_presentation();
+                if (present.sequence > pointer_present_sequence)
+                {
+                    // The sent frame and all its GPU references have drained.
+                    // Register only the exact successful presentation, never an
+                    // acquired/discarded frame or a pending scene replacement.
+                    const auto shown = frame_packets->Current();
+                    const auto [binding, visible] = pointer_binding(shown);
+                    if (visible)
+                    {
+                        if (!frontend_pointer)
+                        {
+                            frontend_pointer = std::make_unique<FrontendPointerDisplay>(*frontend_input,
+                                [&](auto event, unsigned index, const auto&) {
+                                    if (event == FrontendPointerCallback::Press)
+                                    {
+                                        ++pointer_presses;
+                                        log("Original frontend pointer Press: " + *options.frontend_pointer
+                                            + "; pointer " + std::to_string(index) + ". Menu actions remain pending.");
+                                    }
+                                });
+                        }
+                        frontend_pointer->Acknowledge(present, shown, binding);
+                        if (!pointer_present_sequence)
+                            log("Frontend pointer bound to a successful Aurora presentation: " + *options.frontend_pointer + ".");
+                    }
+                    else { frontend_pointer.reset(); pointer_dispatch = {}; }
+                    pointer_present_sequence = present.sequence;
+                }
+            }
             timing.FinishTiming();
             if (backend.read_colours)
             {
@@ -1609,6 +1676,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");
             log("Frontend text inspection rendered: " + std::to_string(text_view->Rendered()) + " frames through the original view graph.");
         }
+        frontend_pointer.reset();
         frontend_boot.reset(); boot_audio.reset(); frontend_handler.reset(); frontend_devices.reset(); frontend_input.reset();
         frontend_session.reset(); // Drain pending reloads before NL services/arenas shut down.
         frontend_published_frame.reset();

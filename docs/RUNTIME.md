@@ -137,6 +137,9 @@ Animated previews also offer original presentation/component slide selection.
 Left/Right or a controller selects presentation slides through the original
 frontend input code, unless the debug camera is active. The bounded native
 handler uses original base update rules; game menu actions remain pending.
+`--frontend-pointer Layer/Item` inspects original pointer events for a rendered
+image/text instance. It uses the actual presented viewport and respects UI capture
+and focus changes; concrete menu actions remain in development.
 Instance inspection finds named component paths such as `Layer/Item` and changes
 visibility, position and colour through the original setter rules. These edits
 affect only the preview; animation can update them and Reload restores the file.
