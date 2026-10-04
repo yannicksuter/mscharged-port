@@ -113,3 +113,9 @@ It uses separate controls from `--debug-camera`.
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running
 `./build/scene/mscharged` without arguments opens the launcher.
+
+For a camera-only NIS picture-in-picture preview, add `--nis-primary /DISC/first.nis`
+and `--nis-secondary /DISC/second.nis`. Each selects its first embedded camera.
+The preview offers PIP, camera swap and expansion controls; `--pip-expand 1`
+starts a one-second expansion. Geometry remains static; NIS actors, audio and
+scripted effects are not enabled.

@@ -6,6 +6,7 @@
 #include "runtime/cameras.h"
 #include "runtime/animated_camera.h"
 #include "runtime/debug_camera_input.h"
+#include "runtime/nis_pip_scene.h"
 #include "Game/Camera/CameraMan.h"
 #include "runtime/shadows.h"
 #include "Game/Render/ShadowVolume.h"
@@ -251,13 +252,17 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
     try
     {
         auto options = requested;
+        if (options.nis_primary.has_value() != options.nis_secondary.has_value()
+            || (options.pip_expand && !options.nis_primary)
+            || (options.nis_primary && (options.camera || options.debug_camera || options.shadow_id || options.frontend_layout)))
+            throw std::invalid_argument("PIP requires two NIS paths and no other camera, shadow or text selection");
         if (options.frontend_layout && options.debug_camera)
             throw std::invalid_argument("Frontend text inspection and debug camera use separate controls");
         if (options.frontend_world)
         {
             if (options.world || options.world_res || !options.object_ids.empty() || options.model_id || options.shadow_id)
                 throw std::invalid_argument("Frontend world selection cannot be combined with explicit world/model/shadow IDs");
-            if (!options.camera && !options.debug_camera) options.camera = "/Art/fe/environments/cameras/start_idle.cam";
+            if (!options.camera && !options.debug_camera && !options.nis_primary) options.camera = "/Art/fe/environments/cameras/start_idle.cam";
         }
         const auto file = LoadConfig(config_path);
         const auto disc_path = ResolveDiscPath(file.settings, file.path);
@@ -440,7 +445,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::invalid_argument("Debug camera is not connected to the diagnostic shadow receiver");
         if (volume_preview && options.camera)
             throw std::invalid_argument("Authored camera playback is not connected to the diagnostic shadow receiver");
-        if (!world_batch) bounds = Normalize(selected_model, camera_overlay || options.camera.has_value() || options.debug_camera);
+        if (volume_preview && options.nis_primary)
+            throw std::invalid_argument("NIS PIP is not connected to the diagnostic shadow receiver");
+        if (!world_batch) bounds = Normalize(selected_model, camera_overlay || options.camera.has_value() || options.debug_camera || options.nis_primary.has_value());
         std::size_t vertices = 0, indices = 0, packets = 0;
         std::vector<std::uint32_t> lookup_ids;
         for (const auto& model : models)
@@ -525,7 +532,36 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::optional<AnimatedCamera> authored_camera;
         std::optional<DebugCamera> debug_camera;
         std::optional<DebugCameraInput> debug_input;
+        std::array<std::unique_ptr<NisCameraBinding>, 2> nis_bindings;
+        std::unique_ptr<NisCameras> nis_cameras;
+        std::unique_ptr<NisPlayback> nis_playback;
+        std::unique_ptr<NisPip> pip;
         DebugCameraOrbit fitted_orbit;
+        if (options.nis_primary)
+        {
+            std::array<PendingAsset, 2> reads;
+            reads[0].Start(*options.nis_primary); reads[1].Start(*options.nis_secondary);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (!reads[0].done || !reads[1].done)
+            {
+                if (Update()) throw std::runtime_error("NIS camera loading cancelled");
+                nlServiceFileSystem();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("NIS camera loading timed out");
+                SDL_Delay(1);
+            }
+            nis_cameras = std::make_unique<NisCameras>(cameras);
+            for (unsigned slot = 0; slot < 2; ++slot)
+            {
+                NisCameraAssets assets(reads[slot].Bytes(), slot ? *options.nis_secondary : *options.nis_primary);
+                nis_bindings[slot] = std::make_unique<NisCameraBinding>(assets, slot);
+                nis_cameras->Select(slot, *nis_bindings[slot], 0);
+            }
+            nis_cameras->Activate();
+            nis_playback = std::make_unique<NisPlayback>(*nis_cameras);
+            pip = std::make_unique<NisPip>(*nis_playback, options.pip_expand.value_or(1.f));
+            if (options.pip_expand) pip->SetMode(NisPipMode::Expand);
+            log("Original NIS PIP: two retained authored cameras, 256x128 RGB565 target; static geometry only, no actors/audio/triggers.");
+        }
         if (options.debug_camera)
         {
             // Keep original Z-up, nonnegative target height and world units.
@@ -555,7 +591,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             log("Original authored camera playback: " + *options.camera + "; "
                 + std::to_string(authored_camera->Duration()) + " seconds; model coordinates preserved. Depth-of-field rendering remains pending.");
         }
-        else if (!debug_camera) cCameraManager::PushCamera(&camera_input);
+        else if (!debug_camera && !nis_cameras) cCameraManager::PushCamera(&camera_input);
         alignas(32) std::array<std::uint8_t, 65536> fifo{};
         std::unique_ptr<StaticInventory> inventory;
         std::unique_ptr<StaticWorldObjects> world;
@@ -589,6 +625,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         RLViewCamera shadow_camera;
         std::unique_ptr<ShadowLayers> shadow_layers;
         std::unique_ptr<StadiumShadowVolume> shadow_drawable;
+        std::unique_ptr<NisPipScene> pip_scene;
+        if (pip) pip_scene = std::make_unique<NisPipScene>();
         if (volume_preview)
         {
             shadow_layers = std::make_unique<ShadowLayers>(shadow_camera);
@@ -600,6 +638,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             auto child = std::make_unique<GLView>(&view_matrices, GLRenderPair{}, GLViewSort_Texture);
             child->m_Name = world ? "World opaque" : "Static model";
+            if (pip) child->m_ClearColour = child->m_ClearDepth = true;
             if (world)
             {
                 // Children render first: opaque child, then its alpha parent.
@@ -613,6 +652,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 gRootView.AddChild(child.get()); submitted = child.release();
             }
         }
+        if (pip_scene) pip_scene->AttachOverlay();
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         FrontendTextView* text_view = nullptr;
         std::unique_ptr<FrontendInput> frontend_input;
@@ -639,6 +679,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         bool world_culling = !options.no_world_culling;
         StaticWorldSubmission world_submission;
         std::size_t world_considered = 0, world_visible = 0, world_packets = 0;
+        std::size_t pip_objects = 0, pip_packets = 0;
         const auto start = std::chrono::steady_clock::now();
         float elapsed = 0, delta = 0;
         GraphicsFrameTasks frame_tasks(graphics, lifecycle, {
@@ -681,6 +722,30 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 shadow_layers->Layer(eCLV_Shadowed).AttachModel(ground, 0);
                 if (volume_enabled) shadow_drawable->Draw(identity);
                 RenderShadowVolumeBlend(&shadow_layers->Layer(eCLV_ShadowVolumeBlend));
+            }
+            else if (nis_cameras)
+            {
+                const auto step = nis_playback->Advance({frames ? (options.frames ? 1.f/60 : delta) : 0.f, 1, 0x10});
+                if (step.active) pip->Update(step.delta);
+                cameras.Advance(0,0);
+                view_matrices.view = cCameraManager::m_matView;
+                glMatrixPerspective(view_matrices.projection, cCameraManager::m_fFOV * 3.1415927f / 180, 4.f/3, .25f, 4096.f);
+                backend.camera_position = cCameraManager::m_cameraPosition;
+                pip_scene->SetCamera(*nis_cameras->Camera(1));
+                if (world)
+                {
+                    const auto& matrices = pip_scene->Matrices();
+                    const auto secondary = SubmitStaticWorld(*world, pip_scene->Opaque(), pip_scene->Alpha(),
+                        StaticWorldFrustum::FromCamera(matrices.view, matrices.projection), world_culling);
+                    pip_objects += secondary.visible;
+                    pip_packets += secondary.opaque_packets + secondary.alpha_packets;
+                }
+                else
+                {
+                    nlMatrix4 identity; identity.SetIdentity(); glModelSetMatrix(native_model, identity);
+                    pip_scene->Opaque().AttachModel(native_model, 0); submitted->AttachModel(native_model, 0);
+                }
+                pip_scene->Submit(*pip);
             }
             else if (authored_camera)
             {
@@ -800,6 +865,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 ImGui::SliderFloat2("Shadow scale", lighting.shadow.scale.data(), 0.001f, 2.0f);
                 ImGui::SliderFloat2("Shadow offset", lighting.shadow.translation.data(), -1, 1);
             }
+            if (pip)
+            {
+                if (ImGui::Button("PIP")) pip->SetMode(NisPipMode::Pip);
+                ImGui::SameLine(); if (ImGui::Button("Swap cameras")) pip->SetMode(NisPipMode::Swap);
+                ImGui::SameLine(); if (ImGui::Button("Expand PIP")) pip->SetMode(NisPipMode::Expand);
+            }
             ImGui::TextUnformatted("Full stadium scenes and character animation are pending.");
             ImGui::TextUnformatted("Escape or close the window to exit."); ImGui::End();
             backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
@@ -841,6 +912,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
         frame_tasks.Release();
+        if (pip && world) log("NIS secondary world submission totals: " + std::to_string(pip_objects)
+            + " visible objects, " + std::to_string(pip_packets) + " packets. Pixel visibility is camera-dependent.");
+        pip_scene.reset(); pip.reset(); nis_playback.reset(); nis_cameras.reset();
+        for (auto& binding : nis_bindings) binding.reset();
         if (text_view)
         {
             if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");

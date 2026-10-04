@@ -109,10 +109,13 @@ include(cmake/EffectsBundle.cmake)
 include(cmake/SAnimAssets.cmake)
 include(cmake/AnimationBundle.cmake)
 include(cmake/GraphicsStartup.cmake)
+include(cmake/NisPip.cmake)
+add_library(charged_nis_pip_scene STATIC src/runtime/nis_pip_scene.cpp)
+target_link_libraries(charged_nis_pip_scene PUBLIC charged_nis_pip charged_nis_pip_render charged_static_inventory PRIVATE aurora::gx)
 add_library(charged_scene_preview STATIC src/runtime/scene.cpp)
 target_compile_features(charged_scene_preview PRIVATE cxx_std_20)
 target_include_directories(charged_scene_preview PUBLIC src)
-target_link_libraries(charged_scene_preview PRIVATE charged_graphics_startup charged_frontend_world_files charged_animated_camera charged_debug_camera_input charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
+target_link_libraries(charged_scene_preview PRIVATE charged_nis_pip_scene charged_graphics_startup charged_frontend_world_files charged_animated_camera charged_debug_camera_input charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
     charged_world_scene charged_world_objects charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
 target_link_libraries(charged_scene_preview PRIVATE charged_frontend_visuals charged_frontend_text_gx charged_frontend_text_catalog charged_frontend_input)
@@ -135,6 +138,15 @@ if(BUILD_TESTING)
     target_link_libraries(material_pipeline_tests PRIVATE charged_views charged_static_inventory aurora::gx aurora::vi aurora::core)
 endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    add_test(NAME nis_pip_scene_synthetic COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_nis_pip_scene.py" "$<TARGET_FILE:mscharged>")
+    set_tests_properties(nis_pip_scene_synthetic PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check)
+    add_executable(nis_pip_pipeline_tests tests/nis_pip_pipeline.cpp)
+    target_link_libraries(nis_pip_pipeline_tests PRIVATE charged_nis_pip_scene aurora::gx aurora::vi aurora::core)
+    add_test(NAME nis_pip_pipeline COMMAND nis_pip_pipeline_tests)
+    set_tests_properties(nis_pip_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_executable(debug_camera_scene_tests tests/debug_camera_scene.cpp)
     target_link_libraries(debug_camera_scene_tests PRIVATE charged_scene_preview charged_frames charged_cameras SDL3::SDL3)
     add_test(NAME debug_camera_scene COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_debug_camera_scene.py"

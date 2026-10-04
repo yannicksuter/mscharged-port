@@ -16,6 +16,8 @@ struct SceneOptions
     std::optional<std::string> world_res; // Resident world containing selected object instances.
     std::vector<std::uint32_t> object_ids;
     std::optional<std::string> camera; // Authored CAM track; preserves model world coordinates.
+    std::optional<std::string> nis_primary, nis_secondary; // First embedded CAM in each explicit NIS.
+    std::optional<float> pip_expand; // Start the original expansion immediately, in seconds.
     std::optional<std::string> shadow_textures;
     std::optional<std::uint32_t> shadow_id;
     bool frontend_world = false; // Original FE paths, automatic supported-static subset.
