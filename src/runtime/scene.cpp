@@ -17,6 +17,7 @@
 #include "runtime/frontend_world_files.h"
 #include "runtime/frontend_visuals.h"
 #include "runtime/frontend_text_gx.h"
+#include "runtime/frontend_layout_gx.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
 #include "NL/glx/glxTarget.h"
@@ -186,6 +187,22 @@ public:
     { DrawFrontendText(display_, 40, 350, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight); ++rendered_; }
 };
 
+class FrontendFrameView final : public GLView
+{
+    resources::FrontendLayoutFrame frame_;
+    unsigned rendered_ = 0;
+public:
+    FrontendFrameView(GLViewInterface& interface, resources::FrontendLayoutFrame frame)
+        : GLView(&interface, GLRenderPair{}, GLViewSort_None), frame_(std::move(frame)) {}
+    unsigned Rendered() const { return rendered_; }
+    std::size_t Count() const { return frame_.text.size(); }
+    void EndRender() override
+    {
+        DrawFrontendLayout(frame_, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
+        ++rendered_;
+    }
+};
+
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
     std::array<float, 3> low{1e7f, 1e7f, 1e7f}, high{-1e7f, -1e7f, -1e7f};
@@ -254,8 +271,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         auto options = requested;
         if (options.nis_primary.has_value() != options.nis_secondary.has_value()
             || (options.pip_expand && !options.nis_primary)
-            || (options.nis_primary && (options.camera || options.debug_camera || options.shadow_id || options.frontend_layout)))
+            || (options.nis_primary && (options.camera || options.debug_camera || options.shadow_id || options.frontend_layout || options.frontend_frame)))
             throw std::invalid_argument("PIP requires two NIS paths and no other camera, shadow or text selection");
+        if ((options.frontend_frame && options.frontend_layout) || (options.frontend_slide && !options.frontend_frame))
+            throw std::invalid_argument("Select one frontend text mode; slide selection requires an authored frame");
         if (options.frontend_layout && options.debug_camera)
             throw std::invalid_argument("Frontend text inspection and debug camera use separate controls");
         if (options.frontend_world)
@@ -308,12 +327,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         log("Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
         const bool world_batch = options.world_res.has_value() || options.frontend_world;
         std::optional<resources::FrontendTextCatalog> frontend_text;
-        if (options.frontend_layout)
+        std::optional<resources::FrontendLayoutFrame> frontend_frame;
+        if (options.frontend_layout || options.frontend_frame)
         {
             const auto language = file.settings.language == "french" ? FrontendLanguage::NAFrench
                 : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
             FrontendVisualLoad visuals(language);
-            PendingAsset layout; layout.Start(*options.frontend_layout);
+            PendingAsset layout; layout.Start(options.frontend_frame ? *options.frontend_frame : *options.frontend_layout);
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
             while (!visuals.Ready() || !layout.done)
             {
@@ -325,13 +345,38 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             const auto assets = visuals.Result();
             const auto graph = resources::ReadFrontendScene(layout.Bytes());
             const std::array fonts{assets->text, assets->heading};
-            frontend_text = resources::InspectFrontendText(graph, *assets->localization, fonts);
-            log("Frontend layout decoded: " + std::to_string(graph.slides.size()) + " slides, "
-                + std::to_string(graph.instances.size()) + " instances; " + std::to_string(frontend_text->entries.size())
-                + " stored text components. Font/localization language: " + file.settings.language + ".");
-            for (const auto& [reason, count] : frontend_text->unavailable)
-                log("Unavailable text components (" + std::to_string(count) + "): " + reason);
-            log("Text inspection uses original font pages/metrics and original FE input; authored layout, timelines and menu handlers remain pending.");
+            if (options.frontend_frame)
+            {
+                std::optional<std::uint32_t> slide_id;
+                if (options.frontend_slide)
+                {
+                    for (const auto& slide : graph.slides)
+                        if (slide.name == *options.frontend_slide
+                            && std::find(graph.presentation_slides.begin(), graph.presentation_slides.end(), slide.offset) != graph.presentation_slides.end())
+                        {
+                            if (slide_id) throw std::invalid_argument("Frontend presentation slide name is ambiguous");
+                            slide_id = slide.offset;
+                        }
+                    if (!slide_id) throw std::invalid_argument("Frontend presentation slide name is absent");
+                }
+                frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id);
+                log("Authored frontend static frame: " + std::to_string(frontend_frame->text.size())
+                    + " text components; " + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
+                for (const auto& [reason, count] : frontend_frame->unavailable)
+                    log("Unavailable frontend frame components (" + std::to_string(count) + "): " + reason);
+                if (frontend_frame->text.empty()) throw std::runtime_error("Selected frontend frame has no supported static text");
+                log("Original stored transforms, text-box rows and Anark draw order; missing font effects, timelines and menu actions remain pending.");
+            }
+            else
+            {
+                frontend_text = resources::InspectFrontendText(graph, *assets->localization, fonts);
+                log("Frontend layout decoded: " + std::to_string(graph.slides.size()) + " slides, "
+                    + std::to_string(graph.instances.size()) + " instances; " + std::to_string(frontend_text->entries.size())
+                    + " stored text components. Font/localization language: " + file.settings.language + ".");
+                for (const auto& [reason, count] : frontend_text->unavailable)
+                    log("Unavailable text components (" + std::to_string(count) + "): " + reason);
+                log("Text inspection uses original font pages/metrics and original FE input; authored layout, timelines and menu handlers remain pending.");
+            }
         }
         if (world_batch && !options.frontend_world && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
             throw std::invalid_argument("World objects require resident/temporary files and explicit object IDs only");
@@ -655,6 +700,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (pip_scene) pip_scene->AttachOverlay();
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
         FrontendTextView* text_view = nullptr;
+        FrontendFrameView* frame_view = nullptr;
         std::unique_ptr<FrontendInput> frontend_input;
         std::unique_ptr<FrontendInputSDL> frontend_devices;
         if (frontend_text)
@@ -666,6 +712,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 frontend_input->SetRepeat(action, .35f, .12f);
             auto view = std::make_unique<FrontendTextView>(view_matrices, std::move(*frontend_text));
             gRootView.AddChild(view.get()); text_view = view.release(); frontend_text.reset();
+        }
+        if (frontend_frame)
+        {
+            auto view = std::make_unique<FrontendFrameView>(view_matrices, std::move(*frontend_frame));
+            view->m_Name = "Authored frontend static text";
+            gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
         }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
         log("Original camera core supplies the view and position; full gameplay camera selection remains pending.");
@@ -833,6 +885,11 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 if (ImGui::Button("Previous text")) text_view->Step(true);
                 ImGui::SameLine(); if (ImGui::Button("Next text")) text_view->Step(false);
             }
+            if (frame_view)
+            {
+                ImGui::Text("Authored static text: %zu components", frame_view->Count());
+                ImGui::TextUnformatted("Stored frame only; timelines and menu actions pending.");
+            }
             if (world)
             {
                 ImGui::Text("Static world selection: %zu / %zu objects submitted", world_submission.visible, world_submission.objects);
@@ -916,6 +973,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             + " visible objects, " + std::to_string(pip_packets) + " packets. Pixel visibility is camera-dependent.");
         pip_scene.reset(); pip.reset(); nis_playback.reset(); nis_cameras.reset();
         for (auto& binding : nis_bindings) binding.reset();
+        if (frame_view)
+        {
+            if (frame_view->Rendered() != frames) throw std::runtime_error("Frontend static frame missed a render pass");
+            log("Authored frontend frame rendered: " + std::to_string(frames) + " frames, "
+                + std::to_string(frame_view->Count()) + " text components per frame.");
+        }
         if (text_view)
         {
             if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");

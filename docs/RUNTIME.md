@@ -107,8 +107,14 @@ menu behavior remain pending. Use `--debug-camera` to inspect it freely.
 Add `--frontend-layout /Art/fe/main_menu_v3.fen` to inspect stored text components
 using the game's font textures and your configured USA text language. Up/Down
 or a controller selects text through the original frontend input code. This is
-a text asset viewer; authored layout, animation and menu actions are still pending.
+a text asset viewer; animation and menu actions are still pending.
 It uses separate controls from `--debug-camera`.
+
+For multiple text components in their stored layout, use
+`--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1` instead.
+This renders the supported static text with inherited transforms, colors and
+original draw order. Unsupported images, animation, clipping and text formats
+are reported and omitted; this does not run the menu.
 
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running
