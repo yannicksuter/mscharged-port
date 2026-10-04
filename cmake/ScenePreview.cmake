@@ -100,7 +100,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
 endif()
 include(cmake/WorldSceneResources.cmake)
 include(cmake/FrontendWorldFiles.cmake)
+include(cmake/FrontendInput.cmake)
+include(cmake/FrontendVisuals.cmake)
 include(cmake/FrontendScene.cmake)
+include(cmake/FrontendTextCatalog.cmake)
 include(cmake/GraphicsStartup.cmake)
 add_library(charged_scene_preview STATIC src/runtime/scene.cpp)
 target_compile_features(charged_scene_preview PRIVATE cxx_std_20)
@@ -108,6 +111,7 @@ target_include_directories(charged_scene_preview PUBLIC src)
 target_link_libraries(charged_scene_preview PRIVATE charged_graphics_startup charged_frontend_world_files charged_animated_camera charged_debug_camera_input charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
     charged_world_scene charged_world_objects charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
+target_link_libraries(charged_scene_preview PRIVATE charged_frontend_visuals charged_frontend_text_gx charged_frontend_text_catalog charged_frontend_input)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)
 if(BUILD_TESTING)
     include(cmake/Tasks.cmake)
@@ -136,6 +140,10 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
     add_test(NAME world_scene_synthetic COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_world_scene.py"
         --gpu "$<TARGET_FILE:mscharged>")
     set_tests_properties(world_scene_synthetic PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check)
+    add_test(NAME frontend_layout_synthetic COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_frontend_layout.py"
+        "$<TARGET_FILE:mscharged>")
+    set_tests_properties(frontend_layout_synthetic PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check)
     add_test(NAME texture_animation_pipeline COMMAND material_pipeline_tests --texture-animation-only)
     set_tests_properties(texture_animation_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"

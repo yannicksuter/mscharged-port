@@ -723,6 +723,7 @@ int main(int argc, char** argv)
                          "                        [--world /DISC/gameworld.tmp.zlib --world-res /DISC/gameworld.res.zlib\n"
                          "                         --object-id HEX ...] [--no-world-culling] (selected static objects)\n"
                          "                        [--frontend-world] (available static frontend objects; no menu)\n"
+                         "                        [--frontend-layout /Art/fe/SCENE.fen] (stored text inspection)\n"
                          "                        [--camera /DISC/camera.cam | --debug-camera]\n"
                          "                        [--unlit] [--shadow-textures /DISC/PATH.rlt --shadow-id HEX]\n";
 #endif
@@ -737,7 +738,7 @@ int main(int argc, char** argv)
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
         else if ((arg == "--frames" || arg == "--model" || arg == "--textures" || arg == "--model-id"
                   || arg == "--world" || arg == "--world-res" || arg == "--object-id"
-                  || arg == "--camera" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
+                  || arg == "--camera" || arg == "--frontend-layout" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
         {
             options.scene_arguments = true;
             const std::string value = argv[++i];
@@ -745,6 +746,7 @@ int main(int argc, char** argv)
             if (arg == "--world") options.scene.world = value;
             else if (arg == "--world-res") options.scene.world_res = value;
             else if (arg == "--camera") options.scene.camera = value;
+            else if (arg == "--frontend-layout") options.scene.frontend_layout = value;
             else if (arg == "--model") options.scene.model = value;
             else if (arg == "--textures") options.scene.textures = value;
             else if (arg == "--shadow-textures") options.scene.shadow_textures = value;
@@ -790,6 +792,8 @@ int main(int argc, char** argv)
     { std::cerr << "Select one runtime mode; capture/smoke options require the launcher.\n"; return 2; }
     if (options.scene_arguments && !options.experimental_scene)
     { std::cerr << "Asset/frame options require --experimental-scene.\n"; return 2; }
+    if (options.scene.frontend_layout && options.scene.debug_camera)
+    { std::cerr << "--frontend-layout cannot be combined with --debug-camera; they use separate controls.\n"; return 2; }
     if (options.scene.debug_camera && (options.scene.camera || options.scene.shadow_id || options.scene.shadow_textures))
     { std::cerr << "--debug-camera cannot be combined with --camera or shadow options.\n"; return 2; }
     if (options.scene.shadow_id.has_value() != options.scene.shadow_textures.has_value())

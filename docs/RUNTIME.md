@@ -101,6 +101,12 @@ This reads the original compressed world files and selects an authored frontend
 camera. Unsupported object types are reported; animated objects, effects and
 menu behavior remain pending. Use `--debug-camera` to inspect it freely.
 
+Add `--frontend-layout /Art/fe/main_menu_v3.fen` to inspect stored text components
+using the game's font textures and your configured USA text language. Up/Down
+or a controller selects text through the original frontend input code. This is
+a text asset viewer; authored layout, animation and menu actions are still pending.
+It uses separate controls from `--debug-camera`.
+
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running
 `./build/scene/mscharged` without arguments opens the launcher.

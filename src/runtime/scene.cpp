@@ -14,6 +14,10 @@
 #include "runtime/world_objects.h"
 #include "runtime/world_render.h"
 #include "runtime/frontend_world_files.h"
+#include "runtime/frontend_visuals.h"
+#include "runtime/frontend_text_gx.h"
+#include "runtime/frontend_input_sdl.h"
+#include "resources/frontend_text_catalog.h"
 #include "NL/glx/glxTarget.h"
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
@@ -142,6 +146,45 @@ public:
     void Restore() { if (previous_) { glSetCurrentResourcePool(previous_); previous_ = nullptr; } }
 };
 
+// Last child of the original view graph: glyphs draw after queued world packets.
+// The view owns the decoded text/font pages until the frame owner drains GX and
+// destroys the graph. Placement is diagnostic, not original textbox behavior.
+class FrontendTextView final : public GLView
+{
+    resources::FrontendTextCatalog catalog_;
+    resources::FontLayout display_;
+    std::size_t selected_ = 0;
+    unsigned rendered_ = 0;
+    void Select(std::size_t index)
+    {
+        auto layout = catalog_.entries.at(index).layout;
+        const float scale = std::min({1.f, 560.f / std::max(1.f, layout.width), 100.f / std::max(1.f, layout.height)});
+        for (auto& quad : layout.quads)
+        { quad.left *= scale; quad.right *= scale; quad.top *= scale; quad.bottom *= scale; }
+        layout.width *= scale; layout.height *= scale;
+        display_ = std::move(layout); selected_ = index;
+    }
+public:
+    FrontendTextView(GLViewInterface& interface, resources::FrontendTextCatalog catalog)
+        : GLView(&interface, GLRenderPair{}, GLViewSort_Texture), catalog_(std::move(catalog))
+    {
+        if (catalog_.entries.empty()) throw std::runtime_error("FEN has no text supported by the selected font/format profile");
+        m_Name = "Frontend text inspection";
+        const auto heading = std::find_if(catalog_.entries.begin(), catalog_.entries.end(), [](const auto& entry) {
+            return entry.layout.font->alias == resources::FrontendNameHash("scratchy36");
+        });
+        Select(heading == catalog_.entries.end() ? 0 : std::size_t(heading - catalog_.entries.begin()));
+    }
+    void Step(bool previous)
+    { Select(previous ? (selected_ + catalog_.entries.size() - 1) % catalog_.entries.size() : (selected_ + 1) % catalog_.entries.size()); }
+    std::size_t Index() const { return selected_; }
+    std::size_t Count() const { return catalog_.entries.size(); }
+    unsigned Rendered() const { return rendered_; }
+    const std::string& Name() const { return catalog_.entries[selected_].name; }
+    void EndRender() override
+    { DrawFrontendText(display_, 40, 350, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight); ++rendered_; }
+};
+
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
     std::array<float, 3> low{1e7f, 1e7f, 1e7f}, high{-1e7f, -1e7f, -1e7f};
@@ -208,6 +251,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
     try
     {
         auto options = requested;
+        if (options.frontend_layout && options.debug_camera)
+            throw std::invalid_argument("Frontend text inspection and debug camera use separate controls");
         if (options.frontend_world)
         {
             if (options.world || options.world_res || !options.object_ids.empty() || options.model_id || options.shadow_id)
@@ -257,6 +302,32 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         log("Original GL state and identity matrix initialized; native frame matrix handles and original NL camera math enabled.");
         log("Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
         const bool world_batch = options.world_res.has_value() || options.frontend_world;
+        std::optional<resources::FrontendTextCatalog> frontend_text;
+        if (options.frontend_layout)
+        {
+            const auto language = file.settings.language == "french" ? FrontendLanguage::NAFrench
+                : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
+            FrontendVisualLoad visuals(language);
+            PendingAsset layout; layout.Start(*options.frontend_layout);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (!visuals.Ready() || !layout.done)
+            {
+                if (Update()) throw std::runtime_error("Frontend visual loading cancelled");
+                nlServiceFileSystem(); visuals.Poll();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Frontend visual loading timed out");
+                SDL_Delay(1);
+            }
+            const auto assets = visuals.Result();
+            const auto graph = resources::ReadFrontendScene(layout.Bytes());
+            const std::array fonts{assets->text, assets->heading};
+            frontend_text = resources::InspectFrontendText(graph, *assets->localization, fonts);
+            log("Frontend layout decoded: " + std::to_string(graph.slides.size()) + " slides, "
+                + std::to_string(graph.instances.size()) + " instances; " + std::to_string(frontend_text->entries.size())
+                + " stored text components. Font/localization language: " + file.settings.language + ".");
+            for (const auto& [reason, count] : frontend_text->unavailable)
+                log("Unavailable text components (" + std::to_string(count) + "): " + reason);
+            log("Text inspection uses original font pages/metrics and original FE input; authored layout, timelines and menu handlers remain pending.");
+        }
         if (world_batch && !options.frontend_world && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
             throw std::invalid_argument("World objects require resident/temporary files and explicit object IDs only");
         if (options.world && !options.model_id && !world_batch) throw std::invalid_argument("World preview needs an explicit model ID");
@@ -543,6 +614,19 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
         }
         log("Original GLView graph, packet sorting and callback flags connected to Aurora; native target registry initialized.");
+        FrontendTextView* text_view = nullptr;
+        std::unique_ptr<FrontendInput> frontend_input;
+        std::unique_ptr<FrontendInputSDL> frontend_devices;
+        if (frontend_text)
+        {
+            frontend_input = std::make_unique<FrontendInput>();
+            frontend_devices = std::make_unique<FrontendInputSDL>();
+            frontend_input->EnableAnalogDirections(true);
+            for (const auto action : {FrontendAction::Up, FrontendAction::Down})
+                frontend_input->SetRepeat(action, .35f, .12f);
+            auto view = std::make_unique<FrontendTextView>(view_matrices, std::move(*frontend_text));
+            gRootView.AddChild(view.get()); text_view = view.release(); frontend_text.reset();
+        }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
         log("Original camera core supplies the view and position; full gameplay camera selection remains pending.");
         bool volume_enabled = true;
@@ -563,6 +647,17 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
                 delta = scheduler_delta;
                 glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
+                if (frontend_input)
+                {
+                    const auto& io = ImGui::GetIO();
+                    frontend_devices->Poll(*frontend_input, info.window, std::clamp(delta, 0.f, .1f),
+                        io.WantCaptureKeyboard, io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad));
+                    const auto previous = text_view->Index();
+                    if (frontend_input->Button(FrontendAction::Up, FrontendButtonQuery::Repeat)) text_view->Step(true);
+                    else if (frontend_input->Button(FrontendAction::Down, FrontendButtonQuery::Repeat)) text_view->Step(false);
+                    if (previous != text_view->Index())
+                        log("Original FE input selected text component " + std::to_string(text_view->Index() + 1) + ".");
+                }
             },
             [&](float) {
             auto frame_lighting = lighting;
@@ -666,6 +761,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::SetNextWindowBgAlpha(0.82f);
             ImGui::Begin("Static asset preview", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextUnformatted("Original Wii mesh and material programs / Aurora GX Vulkan");
+            if (text_view)
+            {
+                ImGui::Text("Stored FE text: %zu / %zu | %s", text_view->Index() + 1, text_view->Count(), text_view->Name().c_str());
+                ImGui::TextUnformatted("Up/Down or pad: inspect text | Font rendering only; original menu/layout pending.");
+                if (ImGui::Button("Previous text")) text_view->Step(true);
+                ImGui::SameLine(); if (ImGui::Button("Next text")) text_view->Step(false);
+            }
             if (world)
             {
                 ImGui::Text("Static world selection: %zu / %zu objects submitted", world_submission.visible, world_submission.objects);
@@ -739,6 +841,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
         frame_tasks.Release();
+        if (text_view)
+        {
+            if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");
+            log("Frontend text inspection rendered: " + std::to_string(text_view->Rendered()) + " frames through the original view graph.");
+        }
+        frontend_devices.reset(); frontend_input.reset();
         debug_input.reset(); debug_camera.reset(); authored_camera.reset(); cameras.Release();
         lifecycle.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); graphics.Release();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
