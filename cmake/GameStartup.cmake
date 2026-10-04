@@ -22,6 +22,7 @@ include(cmake/FrontendInput.cmake)
 include(cmake/FrontendVisuals.cmake)
 include(cmake/FrontendScene.cmake)
 include(cmake/FrontendTextCatalog.cmake)
+include(cmake/Hierarchy.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
