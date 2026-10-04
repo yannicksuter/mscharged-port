@@ -145,6 +145,10 @@ Patch `0078-include-tweak-pool-destruction.patch` exposes the original inline
 slot-pool destructors to native tweak-registry exception cleanup. Optimized
 builds must not depend on another translation unit emitting those definitions.
 
+Patch `0081-drain-failed-native-raw-reads.patch` removes failed raw NL requests
+and paired tails before optional whole-file cleanup. Workers are joined,
+unrelated reads survive, and the original I/O failure remains visible.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The
