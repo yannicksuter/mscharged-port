@@ -37,7 +37,8 @@ def extract(source, header):
         raise ValueError("Original 20-character table is missing")
     rows, cursor = [], 0
     for match in re.finditer(r"\{([^{}]*)\}", table[1]):
-        if table[1][cursor:match.start()].strip(" \t\r\n,"):
+        separator = table[1][cursor:match.start()].strip()
+        if separator != ("," if rows else ""):
             raise ValueError("Unrecognized expression in original character table")
         cursor = match.end()
         # This source profile allows literals and identifiers, not evaluated C++.
@@ -70,7 +71,7 @@ def extract(source, header):
         if "/" in name or not hierarchy.endswith(".shier") or not animation.endswith(".sanim") or not retarget.endswith(".bin"):
             raise ValueError("Original animation profile changed format; review native selection")
         rows.append((index, *values))
-    if table[1][cursor:].strip(" \t\r\n,") or len(rows) != 20:
+    if table[1][cursor:].strip() not in ("", ",") or len(rows) != 20:
         raise ValueError("Incomplete original 20-character initializer")
     return rows
 

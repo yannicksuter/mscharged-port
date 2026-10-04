@@ -25,6 +25,8 @@ for bad_source, bad_header in (
     (source.replace('"art/animation/mario.shier",', '"art/animation/mario.shier", 19,'), header),
     (source.replace("fn_801BE234,", "InventedCallback(),"), header),
     (source.replace("GLOBALAnimProperties,", "Unknown + 1,"), header),
+    (source.replace("    },\n    {", "    },,\n    {", 1), header),
+    (source.replace("    },\n    {", "    }\n    {", 1), header),
     (source.replace('"art/animation/mariofe.sanim",', '"art/animation/mariofe.sanim" + suffix,'), header),
     (source, header.replace("szHierarchyFilename;", "newHierarchyField;")),
     (source, header.replace("int nNumAnimProperties;", "int nNumAnimProperties; int newField;")),
@@ -35,4 +37,4 @@ for bad_source, bad_header in (
         pass
     else:
         raise AssertionError("Changed original schema/initializer accepted")
-print("14 original character profile extraction checks passed")
+print("16 original character profile extraction checks passed")
