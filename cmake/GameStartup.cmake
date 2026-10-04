@@ -27,6 +27,7 @@ include(cmake/BootLoading.cmake)
 include(cmake/ParticleFiles.cmake)
 include(cmake/EffectsBundle.cmake)
 include(cmake/SAnimAssets.cmake)
+include(cmake/AnimationBundle.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp src/runtime/startup_boot_loading.cpp src/runtime/startup_particles.cpp)
 target_include_directories(charged_game_startup PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")

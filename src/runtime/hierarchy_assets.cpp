@@ -48,10 +48,12 @@ struct HierarchyAsset::Storage : cSHierarchy
         BuildPushPopFlags(0, 0, current_depth);
     }
 };
-HierarchyAsset::HierarchyAsset(resources::Bytes file)
-    : storage_(std::make_unique<Storage>(resources::ReadHierarchy(file))) {}
+HierarchyAsset::HierarchyAsset(resources::Bytes file, std::size_t offset, std::size_t end)
+    : storage_(std::make_unique<Storage>(resources::ReadHierarchy(file, offset, end))) {}
 HierarchyAsset::Handle HierarchyAsset::Decode(resources::Bytes file)
-{ return Handle(new HierarchyAsset(file)); }
+{ return Decode(file, 0, file.size()); }
+HierarchyAsset::Handle HierarchyAsset::Decode(resources::Bytes file, std::size_t offset, std::size_t end)
+{ return Handle(new HierarchyAsset(file, offset, end)); }
 HierarchyAsset::~HierarchyAsset() = default;
 const cSHierarchy& HierarchyAsset::Data() const { return *storage_; }
 unsigned HierarchyAsset::MaximumDepth() const { return storage_->depth; }

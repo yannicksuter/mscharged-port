@@ -28,4 +28,6 @@ struct HierarchyData
 // Wii SHierarchy has translation offsets, not bind matrices. Disk pointers and
 // push/pop scratch words are discarded. Every returned value owns its storage.
 HierarchyData ReadHierarchy(Bytes file);
+// Embedded roots retain alignment relative to their containing file.
+HierarchyData ReadHierarchy(Bytes file, std::size_t offset, std::size_t end);
 }

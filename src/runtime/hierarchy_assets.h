@@ -12,10 +12,11 @@ class HierarchyAsset
 {
     struct Storage;
     std::unique_ptr<Storage> storage_;
-    explicit HierarchyAsset(resources::Bytes file);
+    HierarchyAsset(resources::Bytes file, std::size_t offset, std::size_t end);
 public:
     using Handle = std::shared_ptr<const HierarchyAsset>;
     static Handle Decode(resources::Bytes file);
+    static Handle Decode(resources::Bytes file, std::size_t offset, std::size_t end);
     ~HierarchyAsset();
     HierarchyAsset(const HierarchyAsset&) = delete;
     HierarchyAsset& operator=(const HierarchyAsset&) = delete;

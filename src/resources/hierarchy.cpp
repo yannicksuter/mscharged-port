@@ -6,18 +6,20 @@
 namespace mscharged::resources
 {
 HierarchyData ReadHierarchy(Bytes file)
+{ return ReadHierarchy(file, 0, file.size()); }
+HierarchyData ReadHierarchy(Bytes file, std::size_t offset, std::size_t end)
 {
     Require(file.size() <= MaximumAssetBytes, "SHierarchy exceeds the 16 MiB asset limit");
-    const auto root = ReadChunk(file, 0, file.size());
-    Require(root.id == 0x80018000 && root.next == file.size(), "Invalid SHierarchy root or trailing data");
+    const auto root = ReadChunk(file, offset, end);
+    Require(root.id == 0x80018000 && root.next == end, "Invalid SHierarchy root or trailing data");
     // Initialize consumes these eleven chunks in this exact order. Validate
     // IDs as well as sizes before exposing data to its unchecked accessors.
     constexpr std::array<unsigned, 11> ids{
         0x18001, 0x18002, 0x18003, 0x18009, 0x18004, 0x18005,
         0x18006, 0x18007, 0x18008, 0x18010, 0x18011};
     std::array<Bytes, ids.size()> chunks;
-    auto offset = std::size_t(root.payload.data() - file.data());
-    const auto end = offset + root.payload.size();
+    offset = std::size_t(root.payload.data() - file.data());
+    end = offset + root.payload.size();
     for (std::size_t i = 0; i < ids.size(); ++i)
     {
         const auto c = ReadChunk(file, offset, end);
