@@ -336,3 +336,8 @@ decompilation/link release. Keep published tags fixed and use new tags for later
 snapshots. A tag is a readable label; the port's gitlink and this series' `base`
 still record the exact commit. Creating or pushing a tag does not change this
 port's pin. Record its label when deliberately adopting the corresponding commit.
+
+Patch `0088-share-original-sanim-pose-steps.patch` shares the original bone-channel
+interpolation and unmapped-node fallback with native pose sampling. Native bounds
+checks handle singleton and rounded terminal samples; complete animation
+controllers, morphs and skinning remain separate work.

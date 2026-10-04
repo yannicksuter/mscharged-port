@@ -85,3 +85,4 @@
 0084-select-native-pose-accumulator.patch
 0085-select-original-frontend-image-packets.patch
 0086-share-original-frontend-handler-steps.patch
+0088-share-original-sanim-pose-steps.patch
