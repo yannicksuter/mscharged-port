@@ -12,7 +12,8 @@ namespace mscharged
 // An immutable native bundle registration snapshot, independent of game arenas.
 // Groups borrow linked native templates/properties from shared retained storage.
 // These are read-only registration records, not ParticleSystem/GL readiness.
-// Never pass them to an in-place loader, mutable inventory, or particle runtime.
+// Never pass them to an in-place loader or mutable inventory. The checked
+// ParticleSimulation owner qualifies the selected immutable CPU particle profile.
 class EffectsRegistry
 {
     struct Storage;

@@ -122,6 +122,11 @@ sampling, Bezier interpolation and presentation/slide timing with a checked
 native owner. Authored animation runs in the scene preview; full frontend scene
 handlers and menu transitions remain unlinked.
 
+Patch `0074-select-native-particle-simulation.patch` selects original particle
+emission, motion, RNG and quad sampling for a checked CPU owner. It retains the
+authored colour table, bounds native sample conversions and pairs atlas memory
+with its game allocator. GL registration, lighting and rendering stay unselected.
+
 Patch `0075-share-original-frontend-selection.patch` shares the original
 presentation/component clock reset predicates. The native scene session owns
 actual FEN/font/image loading and retained frames; it does not supply the original
