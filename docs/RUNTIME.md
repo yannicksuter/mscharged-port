@@ -116,7 +116,10 @@ For a stored image/text layout, use
 instead. This loads the original in-game image bundles and renders supported
 static components in their authored order. Add `--frontend-animate` to play
 supported authored animation tracks, with pause/reset controls in the preview.
-Bounded runs use a fixed 60 Hz timeline. Other frontend layouts default to the
+Animated previews also offer original presentation/component slide selection.
+Reload keeps the current scene active until all replacement resources are ready;
+pending reloads can be cancelled. Bounded runs use a fixed 60 Hz timeline.
+Other frontend layouts default to the
 `main` image bundle context; missing textures report an error. Scene handlers,
 menu actions, movies, clipping and unsupported text formats remain pending.
 

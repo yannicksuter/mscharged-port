@@ -19,7 +19,7 @@
 #include "runtime/frontend_text_gx.h"
 #include "runtime/frontend_layout_gx.h"
 #include "runtime/frontend_images.h"
-#include "resources/frontend_animation.h"
+#include "runtime/frontend_session.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
 #include "NL/glx/glxTarget.h"
@@ -207,22 +207,6 @@ public:
     }
 };
 
-struct AnimatedFrontendFrame
-{
-    std::shared_ptr<const FrontendVisualAssets> visuals;
-    resources::FrontendImageCatalog::Handle images;
-    resources::FrontendReference slide;
-    resources::FrontendAnimationPlayback playback;
-    AnimatedFrontendFrame(const resources::FrontendScene& scene, resources::FrontendReference selected,
-        std::shared_ptr<const FrontendVisualAssets> assets, resources::FrontendImageCatalog::Handle catalog)
-        : visuals(std::move(assets)), images(std::move(catalog)), slide(selected), playback(scene, selected) {}
-    resources::FrontendLayoutFrame Frame() const
-    {
-        const std::array fonts{visuals->text, visuals->heading};
-        return resources::BuildFrontendLayout(playback.Scene(), *visuals->localization, fonts, slide, *images);
-    }
-};
-
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
 {
     std::array<float, 3> low{1e7f, 1e7f, 1e7f}, high{-1e7f, -1e7f, -1e7f};
@@ -353,13 +337,46 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         const bool world_batch = options.world_res.has_value() || options.frontend_world;
         std::optional<resources::FrontendTextCatalog> frontend_text;
         std::optional<resources::FrontendLayoutFrame> frontend_frame;
-        std::unique_ptr<AnimatedFrontendFrame> frontend_animation;
-        if (options.frontend_layout || options.frontend_frame)
+        std::unique_ptr<FrontendSession> frontend_session;
+        FrontendSession::Handle frontend_published_frame;
+        const auto frontend_language = file.settings.language == "french" ? FrontendLanguage::NAFrench
+            : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
+        if (options.frontend_frame)
         {
-            const auto language = file.settings.language == "french" ? FrontendLanguage::NAFrench
-                : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
-            FrontendVisualLoad visuals(language);
-            PendingAsset layout; layout.Start(options.frontend_frame ? *options.frontend_frame : *options.frontend_layout);
+            frontend_session = std::make_unique<FrontendSession>();
+            frontend_session->Begin({*options.frontend_frame, frontend_language,
+                options.frontend_images.value_or("main") == "ingame" ? FrontendImageProfile::InGame : FrontendImageProfile::Main,
+                options.frontend_slide.value_or(""), options.frontend_animate});
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (frontend_session->State() == FrontendSessionState::Loading)
+            {
+                if (Update()) throw std::runtime_error("Frontend scene loading cancelled");
+                frontend_session->Service();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Frontend scene loading timed out");
+                SDL_Delay(1);
+            }
+            const auto current = frontend_session->Result();
+            frontend_published_frame = current;
+            frontend_frame = current->layout;
+            log("Frontend image context: " + options.frontend_images.value_or("main") + "; "
+                + std::to_string(current->images->textures.size()) + " retained textures from "
+                + std::to_string(current->image_completed_files) + " original bundle reads.");
+            if (options.frontend_animate)
+                log("Original frontend timeline selected; bounded runs advance at 60 Hz. Scene handlers and menu transitions remain pending.");
+            log(std::string(options.frontend_animate ? "Authored frontend animated frame: " : "Authored frontend static frame: ")
+                + std::to_string(frontend_frame->TextCount()) + " text components, "
+                + std::to_string(frontend_frame->ImageCount()) + " image components; "
+                + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
+            for (const auto& [reason, count] : frontend_frame->unavailable)
+                log("Unavailable frontend frame components (" + std::to_string(count) + "): " + reason);
+            if (frontend_frame->entries.empty() && !options.frontend_animate)
+                throw std::runtime_error("Selected frontend frame has no supported static components");
+            log("Frontend scene session owns FEN, fonts, images and playback; original handlers and menu actions remain pending.");
+        }
+        else if (options.frontend_layout)
+        {
+            FrontendVisualLoad visuals(frontend_language);
+            PendingAsset layout; layout.Start(*options.frontend_layout);
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
             while (!visuals.Ready() || !layout.done)
             {
@@ -371,63 +388,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             const auto assets = visuals.Result();
             const auto graph = resources::ReadFrontendScene(layout.Bytes());
             const std::array fonts{assets->text, assets->heading};
-            if (options.frontend_frame)
-            {
-                std::optional<std::uint32_t> slide_id;
-                if (options.frontend_slide)
-                {
-                    for (const auto& slide : graph.slides)
-                        if (slide.name == *options.frontend_slide
-                            && std::find(graph.presentation_slides.begin(), graph.presentation_slides.end(), slide.offset) != graph.presentation_slides.end())
-                        {
-                            if (slide_id) throw std::invalid_argument("Frontend presentation slide name is ambiguous");
-                            slide_id = slide.offset;
-                        }
-                    if (!slide_id) throw std::invalid_argument("Frontend presentation slide name is absent");
-                }
-                const auto profile = options.frontend_images.value_or("main") == "ingame"
-                    ? FrontendImageProfile::InGame : FrontendImageProfile::Main;
-                FrontendImageLoad images;
-                images.Begin(graph, profile);
-                const auto image_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-                while (images.State() == FrontendImageState::Loading)
-                {
-                    if (Update()) throw std::runtime_error("Frontend image loading cancelled");
-                    nlServiceFileSystem(); images.Poll();
-                    if (std::chrono::steady_clock::now() > image_deadline)
-                        throw std::runtime_error("Frontend image loading timed out");
-                    SDL_Delay(1);
-                }
-                const auto catalog = images.Result();
-                log("Frontend image context: " + options.frontend_images.value_or("main") + "; "
-                    + std::to_string(catalog->textures.size()) + " retained textures from "
-                    + std::to_string(images.CompletedFiles()) + " original bundle reads.");
-                if (options.frontend_animate)
-                {
-                    frontend_animation = std::make_unique<AnimatedFrontendFrame>(graph, slide_id, assets, catalog);
-                    frontend_frame = frontend_animation->Frame();
-                    log("Original frontend timeline selected; bounded runs advance at 60 Hz. Scene handlers and menu transitions remain pending.");
-                }
-                else frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id, *catalog);
-                log(std::string(options.frontend_animate ? "Authored frontend animated frame: " : "Authored frontend static frame: ") + std::to_string(frontend_frame->TextCount())
-                    + " text components, " + std::to_string(frontend_frame->ImageCount())
-                    + " image components; " + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
-                for (const auto& [reason, count] : frontend_frame->unavailable)
-                    log("Unavailable frontend frame components (" + std::to_string(count) + "): " + reason);
-                if (frontend_frame->entries.empty() && !frontend_animation)
-                    throw std::runtime_error("Selected frontend frame has no supported static components");
-                log("Original transforms, text-box rows and Anark draw order; missing font effects and menu actions remain pending.");
-            }
-            else
-            {
-                frontend_text = resources::InspectFrontendText(graph, *assets->localization, fonts);
-                log("Frontend layout decoded: " + std::to_string(graph.slides.size()) + " slides, "
-                    + std::to_string(graph.instances.size()) + " instances; " + std::to_string(frontend_text->entries.size())
-                    + " stored text components. Font/localization language: " + file.settings.language + ".");
-                for (const auto& [reason, count] : frontend_text->unavailable)
-                    log("Unavailable text components (" + std::to_string(count) + "): " + reason);
-                log("Text inspection uses original font pages/metrics and original FE input; authored layout, timelines and menu handlers remain pending.");
-            }
+            frontend_text = resources::InspectFrontendText(graph, *assets->localization, fonts);
+            log("Frontend layout decoded: " + std::to_string(graph.slides.size()) + " slides, "
+                + std::to_string(graph.instances.size()) + " instances; " + std::to_string(frontend_text->entries.size())
+                + " stored text components. Font/localization language: " + file.settings.language + ".");
+            for (const auto& [reason, count] : frontend_text->unavailable)
+                log("Unavailable text components (" + std::to_string(count) + "): " + reason);
+            log("Text inspection uses original font pages/metrics and original FE input; authored layout, timelines and menu handlers remain pending.");
         }
         if (world_batch && !options.frontend_world && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
             throw std::invalid_argument("World objects require resident/temporary files and explicit object IDs only");
@@ -767,7 +734,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (frontend_frame)
         {
             auto view = std::make_unique<FrontendFrameView>(view_matrices, std::move(*frontend_frame));
-            view->m_Name = frontend_animation ? "Authored frontend animated layout" : "Authored frontend static layout";
+            view->m_Name = options.frontend_animate ? "Authored frontend animated layout" : "Authored frontend static layout";
             gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
         }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
@@ -782,6 +749,16 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         bool world_culling = !options.no_world_culling;
         bool animation_paused = false, animation_reset = false;
         unsigned animation_updates = 0;
+        bool preserve_component_time = false;
+        std::string frontend_message;
+        std::optional<std::chrono::steady_clock::time_point> frontend_deadline;
+        const auto frontend_action = [&](auto&& action) {
+            try { action(); frontend_message.clear(); }
+            catch (const std::exception& error) {
+                frontend_message = error.what();
+                log("Frontend session: " + frontend_message + "; current scene retained.");
+            }
+        };
         StaticWorldSubmission world_submission;
         std::size_t world_considered = 0, world_visible = 0, world_packets = 0;
         std::size_t pip_objects = 0, pip_packets = 0;
@@ -793,16 +770,40 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
                 delta = scheduler_delta;
                 glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
-                if (frontend_animation)
+                if (frontend_session && frontend_session->State() == FrontendSessionState::Loading)
                 {
-                    if (animation_reset) { frontend_animation->playback.Reset(); animation_reset = false; }
+                    frontend_action([&] {
+                        frontend_session->Service();
+                        if (frontend_session->State() == FrontendSessionState::Loading)
+                        {
+                            if (frontend_deadline && std::chrono::steady_clock::now() > *frontend_deadline)
+                            {
+                                frontend_session->Cancel();
+                                throw std::runtime_error("Frontend reload timed out");
+                            }
+                        }
+                        else
+                        {
+                            frontend_deadline.reset();
+                            frontend_session->Result();
+                            log("Frontend replacement published after all selected resources completed.");
+                        }
+                    });
+                }
+                if (frontend_session && options.frontend_animate)
+                {
+                    if (animation_reset) { frontend_session->Reset(); animation_reset = false; }
                     else if (!animation_paused)
                     {
                         const float step = frames ? (options.frames ? 1.f / 60 : std::clamp(delta, 0.f, .1f)) : 0.f;
-                        frontend_animation->playback.Advance(step);
+                        frontend_session->Advance(step);
                         ++animation_updates;
                     }
-                    frame_view->Replace(frontend_animation->Frame());
+                }
+                if (frontend_session && frontend_session->Current() != frontend_published_frame)
+                {
+                    frontend_published_frame = frontend_session->Current();
+                    frame_view->Replace(frontend_published_frame->layout);
                 }
                 if (frontend_input)
                 {
@@ -951,16 +952,64 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
             if (frame_view)
             {
-                ImGui::Text("Authored %s layout: %zu text, %zu images", frontend_animation ? "animated" : "static",
+                ImGui::Text("Authored %s layout: %zu text, %zu images", options.frontend_animate ? "animated" : "static",
                     frame_view->TextCount(), frame_view->ImageCount());
-                if (frontend_animation)
+                if (frontend_session && options.frontend_animate)
                 {
-                    ImGui::Text("Frontend time: %.2f s", frontend_animation->playback.PresentationTime());
+                    ImGui::Text("Frontend time: %.2f s", frontend_session->Current()->graph.presentation_time);
                     ImGui::Checkbox("Pause frontend", &animation_paused);
                     ImGui::SameLine(); if (ImGui::Button("Reset frontend")) animation_reset = true;
+                    const auto current = frontend_session->Current();
+                    const auto& graph = current->graph;
+                    const auto slide_name = [&](resources::FrontendReference id) -> const char* {
+                        for (const auto& slide : graph.slides) if (id == slide.offset) return slide.name.c_str();
+                        return "None";
+                    };
+                    if (ImGui::TreeNode("Slide selection"))
+                    {
+                        ImGui::SetNextItemWidth(190);
+                        if (ImGui::BeginCombo("Presentation", slide_name(graph.active_slide)))
+                        {
+                            for (auto id : graph.presentation_slides)
+                                if (ImGui::Selectable(slide_name(id), id == graph.active_slide))
+                                    frontend_action([&] { frontend_session->SelectPresentation(slide_name(id)); });
+                            ImGui::EndCombo();
+                        }
+                        ImGui::Checkbox("Preserve component time", &preserve_component_time);
+                        ImGui::BeginChild("Component slides", {430, 140}, ImGuiChildFlags_Borders);
+                        for (const auto& component : graph.library)
+                        {
+                            if (component.type != 3 || component.slides.empty()) continue;
+                            ImGui::PushID(static_cast<int>(component.offset));
+                            ImGui::SetNextItemWidth(190);
+                            if (ImGui::BeginCombo(component.name.c_str(), slide_name(component.active_slide)))
+                            {
+                                for (auto id : component.slides)
+                                    if (ImGui::Selectable(slide_name(id), id == component.active_slide))
+                                        frontend_action([&] { frontend_session->SelectComponent(component.offset,
+                                            slide_name(id), false, preserve_component_time); });
+                                ImGui::EndCombo();
+                            }
+                            ImGui::PopID();
+                        }
+                        ImGui::EndChild();
+                        ImGui::TreePop();
+                    }
                     ImGui::TextUnformatted("Authored timeline only; scene handlers and menu actions pending.");
                 }
                 else ImGui::TextUnformatted("Stored frame only; use --frontend-animate for a timeline.");
+                if (frontend_session->State() == FrontendSessionState::Loading)
+                {
+                    ImGui::TextUnformatted("Reloading frontend; current scene remains active.");
+                    if (ImGui::Button("Cancel reload")) frontend_action([&] {
+                        frontend_session->Cancel(); frontend_deadline.reset();
+                    });
+                }
+                else if (ImGui::Button("Reload frontend")) frontend_action([&] {
+                    frontend_session->Begin(frontend_session->Current()->request);
+                    frontend_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+                });
+                if (!frontend_message.empty()) ImGui::TextWrapped("Frontend: %s", frontend_message.c_str());
             }
             if (world)
             {
@@ -1051,9 +1100,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             log("Authored frontend frame rendered: " + std::to_string(frames) + " frames, "
                 + std::to_string(frame_view->TextCount()) + " text components, "
                 + std::to_string(frame_view->ImageCount())
-                + (frontend_animation ? " image components in the last frame." : " image components per frame."));
-            if (frontend_animation) log("Original frontend timeline advanced: " + std::to_string(animation_updates)
-                + " updates; presentation time " + std::to_string(frontend_animation->playback.PresentationTime()) + " seconds.");
+                + (options.frontend_animate ? " image components in the last frame." : " image components per frame."));
+            if (frontend_session && options.frontend_animate) log("Original frontend timeline advanced: " + std::to_string(animation_updates)
+                + " updates; presentation time " + std::to_string(frontend_session->Current()->graph.presentation_time) + " seconds.");
         }
         if (text_view)
         {
@@ -1061,6 +1110,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             log("Frontend text inspection rendered: " + std::to_string(text_view->Rendered()) + " frames through the original view graph.");
         }
         frontend_devices.reset(); frontend_input.reset();
+        frontend_session.reset(); // Drain pending reloads before NL services/arenas shut down.
+        frontend_published_frame.reset();
         debug_input.reset(); debug_camera.reset(); authored_camera.reset(); cameras.Release();
         lifecycle.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); graphics.Release();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)

@@ -1,6 +1,7 @@
 #pragma once
 #include "resources/frontend_scene.h"
 #include <memory>
+#include <string_view>
 
 namespace mscharged::resources
 {
@@ -13,6 +14,7 @@ class FrontendAnimationPlayback
 {
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    explicit FrontendAnimationPlayback(std::unique_ptr<Impl>);
 public:
     FrontendAnimationPlayback(const FrontendScene&,FrontendReference selected={});
     ~FrontendAnimationPlayback();
@@ -20,6 +22,12 @@ public:
     FrontendAnimationPlayback& operator=(const FrontendAnimationPlayback&)=delete;
     void Advance(float delta);
     void Reset();
+    std::unique_ptr<FrontendAnimationPlayback> Clone() const;
+    // Original lower-hash first-match selection. Missing names clear active.
+    // Presentation does not sample immediately; component calls Update(0).
+    bool SelectPresentation(std::string_view name, bool reset_time = false);
+    bool SelectComponent(std::uint32_t component_library_id, std::string_view name,
+                         bool force_reset = false, bool preserve_time = false);
     const FrontendScene& Scene() const;
     float PresentationTime() const;
     std::size_t ChannelsEvaluated() const; // Last committed update, incl shared slide visits.

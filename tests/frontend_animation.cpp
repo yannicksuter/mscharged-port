@@ -133,6 +133,42 @@ void WorkBudget()
         "Failed oversized playback replaced the retained owner");
     Check(Target(s).attributes.colour[3]==255,"Rejected playback mutated its source graph");
 }
+void Selection()
+{
+    auto source=Scene();source.slides[0].hash=FrontendNameHash("main");
+    auto second=source.slides[0];second.offset=101;second.hash=FrontendNameHash("other");second.animations.clear();second.animated=false;second.children.clear();second.time=.75f;
+    source.slides.push_back(second);source.presentation_slides.push_back(101);
+    auto duplicate=second;duplicate.offset=102;source.slides.push_back(duplicate);source.presentation_slides.push_back(102);
+    FrontendAnimationPlayback p(source);p.Advance(.125f);auto before=Target(p.Scene()).attributes.position;
+    auto clone=p.Clone();Check(clone->SelectPresentation("MAIN"),"Case-insensitive selection failed");Near(clone->PresentationTime(),.125f);
+    Check(clone->SelectPresentation("Main",true),"Forced selection failed");Near(clone->PresentationTime(),0);
+    Check(Target(clone->Scene()).attributes.position==before,"Presentation selection ran Update(0)");
+    Near(p.PresentationTime(),.125f);Check(Target(p.Scene()).attributes.position==before,"Clone mutated original owner");
+    Check(clone->SelectPresentation("Other")&&clone->Scene().active_slide==101,"Original first hash match changed");
+    Check(!clone->SelectPresentation("missing")&&!clone->Scene().active_slide,"Missing presentation did not clear");
+    clone->Advance(.25f);Near(clone->PresentationTime(),0);clone->Reset();Check(clone->Scene().active_slide==100,"Reset lost selected exported baseline");
+    Reject([&]{clone->SelectPresentation(std::string("ma\0in",5));});
+    // Component selection runs only the selected child slide at zero delta;
+    // preserve_time wins even when forced or changing active slide.
+    source=Scene();source.slides[0].animated=false;source.slides[0].animations.clear();source.slides[0].children.clear();
+    auto nested=source.slides[0];nested.offset=101;nested.hash=FrontendNameHash("in");nested.time=.25f;nested.animated=true;nested.animations={2000};nested.children={600};
+    source.slides.push_back(nested);auto out=nested;out.offset=102;out.hash=FrontendNameHash("out");out.time=.75f;out.animations.clear();out.animated=false;out.children.clear();source.slides.push_back(out);
+    FrontendLibraryObject component{};component.offset=800;component.type=3;component.active_slide=101;component.slides={101,102};source.library.push_back(component);
+    FrontendAnimationPlayback child(source);
+    const auto time=[&](unsigned n){return child.Scene().slides[n].time;};
+    Check(child.SelectComponent(800,"IN"),"Component lowercase lookup failed");Near(time(1),.25f);Near(Target(child.Scene()).attributes.position[0],-80);
+    Check(child.SelectComponent(800,"in",true,true),"Forced-preserved component selection failed");Near(time(1),.25f);
+    Check(child.SelectComponent(800,"out",false,true),"Changed-preserved component selection failed");Near(time(2),.75f);
+    Check(child.SelectComponent(800,"in"),"Changed reset component selection failed");Near(time(1),0);Near(Target(child.Scene()).attributes.position[0],-160);
+    Check(!child.SelectComponent(800,"missing")&&!child.Scene().library.back().active_slide,"Missing component slide did not clear");
+    Reject([&]{child.SelectComponent(12345,"in");});Reject([&]{child.SelectComponent(source.library[0].offset,"in");});
+    // Failure after a real selected-slide reset and sample must restore identity,
+    // time and attributes together.
+    source.animations[0]=Track(2000,600,5,{300,0,0},{300,0,0});source.library.back().active_slide=102;
+    FrontendAnimationPlayback failed(source);Reject([&]{failed.SelectComponent(800,"in");});
+    Check(failed.Scene().library.back().active_slide==102&&failed.Scene().slides[1].time==.25f
+        &&Target(failed.Scene()).attributes.colour[0]==255,"Failed component selection partially changed state");
+}
 void File(const std::filesystem::path& file)
 {
     auto s=ReadFrontendScene(Read(file));Check(s.animations.size()==1&&s.animations[0].keys.size()==2,"Generated FEN animation decode failed");
@@ -159,7 +195,7 @@ void Owned(const std::filesystem::path& root)
 }
 int main(int argc,char** argv)
 {
-    try{for(unsigned repeat=0;repeat<3;++repeat){Clock();Channels();Nested();Failure();WorkBudget();}
+    try{for(unsigned repeat=0;repeat<3;++repeat){Clock();Channels();Nested();Failure();WorkBudget();Selection();}
         if(argc==3&&std::string(argv[1])=="--file")File(argv[2]);else if(argc==2)Owned(argv[1]);
         std::cout<<checks<<" frontend animation checks passed\n";
     }catch(const std::exception& e){std::cerr<<"FAILED: "<<e.what()<<" (check "<<checks<<")\n";return 1;}

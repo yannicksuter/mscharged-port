@@ -91,7 +91,7 @@ int main(int argc, char** argv)
         resources::FrontendImageCatalog catalog;
         const frontend_image_fixture::Colour blue{0,0,255,255};
         catalog.textures[99]=frontend_image_fixture::Texture(99,1,{blue,blue,blue,blue});
-        auto& slide=graph.slides[0];slide.duration=1;slide.play_mode=1;slide.animated=true;slide.animations={2000};
+        auto& slide=graph.slides[0];slide.hash=0xc7b14a27;slide.duration=1;slide.play_mode=1;slide.animated=true;slide.animations={2000};
         resources::FrontendAnimation position;position.offset=2000;position.target=200;position.type=1;position.cast=1;
         const std::array<float,3> from{-160,120,0},to{160,-120,0};
         for(unsigned i=0;i<2;++i)
@@ -114,6 +114,34 @@ int main(int argc, char** argv)
         playback.Advance(.5f);Case(frame(),middle); // Original double-step plus single loop subtraction.
         playback.Reset();Case(frame(),initial);
         auto retained=frame();playback.Advance(.25f);Case(retained,initial); // Old frame owns its positions and texture.
+        // Source-defined selection resets the presentation clock, but does
+        // not sample until Update. Same-name lookup is case-insensitive.
+        Check(playback.SelectPresentation("STATIC"), "Case-insensitive presentation selection failed");
+        Case(frame(),middle);
+        Check(playback.SelectPresentation("Static",true), "Presentation reset selection failed");
+        Case(frame(),middle);playback.Advance(0);Case(frame(),initial);
+        Check(!playback.SelectPresentation("absent"), "Missing presentation did not clear active selection");
+        Case(frame(),flat());
+        Check(playback.SelectPresentation("Static"), "Presentation could not be reselected");
+        playback.Advance(0);Case(frame(),initial);
+        // Component selection samples immediately; changing away and back can
+        // preserve the prior component slide clock independently of presentation.
+        auto nested=graph;auto moving=nested.slides[0];moving.offset=101;moving.name="Moving";moving.hash=0xb96331af;
+        resources::FrontendSlide root{};root.offset=100;root.name="Root";root.duration=10;root.children={3001};
+        resources::FrontendSlide blank{};blank.offset=102;blank.name="Blank";blank.hash=0x04d51ce7;blank.duration=10;
+        nested.slides={root,moving,blank};
+        resources::FrontendLibraryObject component{};component.offset=3000;component.type=3;
+        component.attributes=frontend_layout_fixture::Attributes();component.active_slide=101;component.slides={101,102};
+        nested.library.push_back(component);
+        resources::FrontendInstance instance{};instance.offset=3001;instance.type=4;instance.library=3000;
+        instance.attributes=frontend_layout_fixture::Attributes();instance.duration=10;instance.visible=true;
+        nested.instances.push_back(instance);
+        resources::FrontendAnimationPlayback component_playback(nested);
+        const auto component_frame=[&]{return resources::BuildFrontendLayout(component_playback.Scene(),localization,fonts,{},catalog);};
+        component_playback.Advance(.5f);Case(component_frame(),middle);
+        Check(component_playback.SelectComponent(3000,"Blank"), "Blank component selection failed");Case(component_frame(),flat());
+        Check(component_playback.SelectComponent(3000,"Moving",false,true), "Preserved component selection failed");Case(component_frame(),middle);
+        Check(component_playback.SelectComponent(3000,"MOVING",true,false), "Reset component selection failed");Case(component_frame(),initial);
         resources::FrontendAnimation opacity;opacity.offset=2010;opacity.target=200;opacity.type=6;opacity.cast=0;
         resources::FrontendAnimationKey first,last;first.offset=2011;last.offset=2012;
         first.channels[0]={255,170,85,0};last.channels[0]={0,-1,-1,1};opacity.keys={first,last};

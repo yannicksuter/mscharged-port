@@ -1,5 +1,6 @@
 #include "resources/frontend_animation.h"
 #include "Game/FE/FrontendAnimationSteps.h"
+#include "Game/FE/FrontendSelectionSteps.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -11,6 +12,13 @@ namespace
 {
 void Finite(float value)
 {Require(std::isfinite(value)&&std::abs(value)<=1e7f,"Frontend animation scalar exceeds its finite profile");}
+std::uint32_t LowerHash(std::string_view name)
+{
+    Require(name.size()<=4096&&name.find('\0')==std::string_view::npos,"Invalid frontend slide name");
+    std::uint32_t hash=0xffffffff;
+    for(unsigned char c:name){if(c>='A'&&c<='Z')c+='a'-'A';hash=hash*33+c;}
+    return hash;
+}
 std::uint8_t Colour(float value)
 {Require(std::isfinite(value)&&value>=0&&value<=255,"Frontend animated colour exceeds its byte range");return static_cast<std::uint8_t>(value);}
 struct Index
@@ -160,12 +168,50 @@ struct FrontendAnimationPlayback::Impl
         Require(std::isfinite(delta)&&delta>=0&&delta<=60,"Frontend timeline delta exceeds its bounded profile");
         auto next=current;Step step{next,index};step.Run(delta);current=std::move(next);channels=step.channels;
     }
+    FrontendReference Find(const std::vector<std::uint32_t>& ring,std::string_view name) const
+    {
+        const auto hash=LowerHash(name);
+        for(auto id:ring)
+        {
+            Require(index.slides.contains(id),"Frontend selection references a missing slide");
+            if(current.slides[index.slides.at(id)].hash==hash)return id;
+        }
+        return {};
+    }
+    bool SelectPresentation(std::string_view name,bool reset)
+    {
+        const auto selected=Find(current.presentation_slides,name);
+        auto next=current;
+        FrontendSelectPresentationTime(next.presentation_time,reset,next.active_slide!=selected);
+        next.active_slide=selected;
+        current=std::move(next);channels=0;return selected.has_value();
+    }
+    bool SelectComponent(std::uint32_t id,std::string_view name,bool reset,bool preserve)
+    {
+        Require(index.library.contains(id),"Frontend component selection ID is absent");
+        const auto slot=index.library.at(id);
+        Require(current.library[slot].type==3,"Frontend selection ID is not a component");
+        const auto selected=Find(current.library[slot].slides,name);
+        auto next=current;auto& component=next.library[slot];
+        if(selected)FrontendSelectComponentTime(next.slides[index.slides.at(*selected)].time,
+            reset,component.active_slide!=selected,preserve);
+        component.active_slide=selected;
+        Step step{next,index};if(selected)step.Slide(*selected,0,0);
+        current=std::move(next);channels=step.channels;return selected.has_value();
+    }
 };
 FrontendAnimationPlayback::FrontendAnimationPlayback(const FrontendScene& scene,FrontendReference selected)
     :impl_(std::make_unique<Impl>(scene,selected)){}
+FrontendAnimationPlayback::FrontendAnimationPlayback(std::unique_ptr<Impl> impl):impl_(std::move(impl)){}
 FrontendAnimationPlayback::~FrontendAnimationPlayback()=default;
 void FrontendAnimationPlayback::Advance(float delta){impl_->Advance(delta);}
 void FrontendAnimationPlayback::Reset(){impl_->Reset();}
+std::unique_ptr<FrontendAnimationPlayback> FrontendAnimationPlayback::Clone() const
+{return std::unique_ptr<FrontendAnimationPlayback>(new FrontendAnimationPlayback(std::make_unique<Impl>(*impl_)));}
+bool FrontendAnimationPlayback::SelectPresentation(std::string_view name,bool reset)
+{return impl_->SelectPresentation(name,reset);}
+bool FrontendAnimationPlayback::SelectComponent(std::uint32_t id,std::string_view name,bool reset,bool preserve)
+{return impl_->SelectComponent(id,name,reset,preserve);}
 const FrontendScene& FrontendAnimationPlayback::Scene() const{return impl_->current;}
 float FrontendAnimationPlayback::PresentationTime() const{return impl_->current.presentation_time;}
 std::size_t FrontendAnimationPlayback::ChannelsEvaluated() const{return impl_->channels;}

@@ -122,6 +122,11 @@ sampling, Bezier interpolation and presentation/slide timing with a checked
 native owner. Authored animation runs in the scene preview; full frontend scene
 handlers and menu transitions remain unlinked.
 
+Patch `0075-share-original-frontend-selection.patch` shares the original
+presentation/component clock reset predicates. The native scene session owns
+actual FEN/font/image loading and retained frames; it does not supply the original
+scene-manager stack, handler callbacks or menu readiness.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The
