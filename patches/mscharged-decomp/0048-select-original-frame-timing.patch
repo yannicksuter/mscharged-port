@@ -1,6 +1,6 @@
 Subject: Select original frame timing and history without debug rendering
 
-Upstream-base: 2c71062ca827c5d2115ab76f4da80aaa8c515ff8
+Upstream-base: 4099ae94235b61f282b5770f7533020fc28e2d3b
 
 Extract original timing, history, condition-selected time regions and histogram
 math independently of debug text/mesh drawing and camera/gameplay predicates.
