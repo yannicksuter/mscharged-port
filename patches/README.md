@@ -150,6 +150,11 @@ and page-ordered glyph generation with bounded native font adapters. Plain
 colour text retains fractional draw advances and original short UVs; formatted
 effects and scissored text remain separate work.
 
+Patch `0080-share-original-font-loading-steps.patch` shares the original texture
+page order and completion predicate with staged native NL font reads. Decoded
+font assets are published together; full FontManager graphics registration is
+still a separate integration step.
+
 Patch `0081-drain-failed-native-raw-reads.patch` removes failed raw NL requests
 and paired tails before optional whole-file cleanup. Workers are joined,
 unrelated reads survive, and the original I/O failure remains visible.

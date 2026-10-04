@@ -119,7 +119,8 @@ or a controller selects text through the original frontend input code. This is
 a text asset viewer; animation and menu actions are still pending.
 It uses separate controls from `--debug-camera`.
 Supported plain text follows the original font measurement, kerning and glyph
-draw order.
+draw order. Font descriptions and texture pages load through staged NL reads;
+failed or cancelled loads leave the current scene intact.
 
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`

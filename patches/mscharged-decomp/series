@@ -78,4 +78,5 @@
 0077-share-original-frontend-instance-steps.patch
 0078-include-tweak-pool-destruction.patch
 0079-share-original-font-text-steps.patch
+0080-share-original-font-loading-steps.patch
 0081-drain-failed-native-raw-reads.patch
