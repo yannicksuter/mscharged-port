@@ -1547,7 +1547,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 particle_renderer = std::make_unique<ParticleControllerRenderer>(*particle_pool, *particles, DrainGX);
                 particles_reset = false;
             }
-            if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
+            if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(options.frame_timeout.value_or(30))) throw std::runtime_error("Static preview frame deadline exceeded");
             if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
             if (!session.gx)
             {

@@ -718,7 +718,7 @@ int main(int argc, char** argv)
             std::cout << "Original startup prototype: --experimental-startup [--config FILE] (not playable)\n";
 #endif
 #ifdef MSCHARGED_HAS_SCENE_PREVIEW
-            std::cout << "Static Wii asset preview: --experimental-scene [--config FILE] [--frames N]\n"
+            std::cout << "Static Wii asset preview: --experimental-scene [--config FILE] [--frames N [--frame-timeout SECONDS]]\n"
                          "                        [--model /DISC/PATH.rlg] [--textures /DISC/PATH.rlt] [--model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --world-res /DISC/gameworld.res.zlib\n"
@@ -749,7 +749,7 @@ int main(int argc, char** argv)
         else if (arg == "--no-world-culling") { options.scene_arguments = true; options.scene.no_world_culling = true; }
         else if (arg == "--debug-camera") { options.scene_arguments = true; options.scene.debug_camera = true; }
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
-        else if ((arg == "--frames" || arg == "--model" || arg == "--textures" || arg == "--model-id"
+        else if ((arg == "--frames" || arg == "--frame-timeout" || arg == "--model" || arg == "--textures" || arg == "--model-id"
                   || arg == "--world" || arg == "--world-res" || arg == "--object-id"
                   || arg == "--nis-primary" || arg == "--nis-secondary" || arg == "--pip-expand"
                   || arg == "--frontend-frame" || arg == "--frontend-slide" || arg == "--frontend-images"
@@ -787,9 +787,11 @@ int main(int argc, char** argv)
                 if (hex && (digits.size() >= 2 && digits.substr(0, 2) == "0x")) digits.remove_prefix(2);
                 const auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), number, hex ? 16 : 10);
                 if (parsed.ec != std::errc{} || parsed.ptr != digits.data() + digits.size()
-                    || (arg == "--frames" && (!number || number > 10000)))
+                    || (arg == "--frames" && (!number || number > 10000))
+                    || (arg == "--frame-timeout" && (!number || number > 600)))
                 { std::cerr << "Invalid " << arg << " value: " << value << '\n'; return 2; }
                 if (arg == "--frames") options.scene.frames = number;
+                else if (arg == "--frame-timeout") options.scene.frame_timeout = number;
                 else if (arg == "--object-id")
                 {
                     if (options.scene.object_ids.size() == 256)
@@ -821,6 +823,8 @@ int main(int argc, char** argv)
     { std::cerr << "Select one runtime mode; capture/smoke options require the launcher.\n"; return 2; }
     if (options.scene_arguments && !options.experimental_scene)
     { std::cerr << "Asset/frame options require --experimental-scene.\n"; return 2; }
+    if (options.scene.frame_timeout && !options.scene.frames)
+    { std::cerr << "--frame-timeout requires --frames.\n"; return 2; }
     if (options.scene.frontend_boot && (options.standalone_assets || options.scene.model_id || options.scene.world
         || options.scene.world_res || !options.scene.object_ids.empty() || options.scene.frontend_world
         || options.scene.frontend_layout || options.scene.frontend_frame || options.scene.frontend_slide
@@ -828,14 +832,14 @@ int main(int argc, char** argv)
         || options.scene.nis_secondary || options.scene.pip_expand || options.scene.camera || options.scene.debug_camera
         || options.scene.shadow_id || options.scene.shadow_textures || options.scene.particles || options.scene.unlit
         || options.scene.no_world_culling || options.scene.character_shock))
-    { std::cerr << "--frontend-boot selects its own retail scene and resources; only --frames and --config may accompany it.\n"; return 2; }
+    { std::cerr << "--frontend-boot selects its own retail scene and resources; use --frames, --frame-timeout or --config.\n"; return 2; }
     if (options.scene.character_shock && (options.standalone_assets || options.scene.model_id || options.scene.world
         || options.scene.world_res || !options.scene.object_ids.empty() || options.scene.frontend_world
         || options.scene.frontend_layout || options.scene.frontend_frame || options.scene.frontend_slide
         || options.scene.frontend_images || options.scene.frontend_animate || options.scene.nis_primary
         || options.scene.nis_secondary || options.scene.pip_expand || options.scene.camera || options.scene.debug_camera
         || options.scene.shadow_id || options.scene.shadow_textures || options.scene.particles || options.scene.no_world_culling))
-    { std::cerr << "--character-shock selects its own model, animation and camera; use --frames, --config or --unlit.\n"; return 2; }
+    { std::cerr << "--character-shock selects its own model, animation and camera; use --frames, --frame-timeout, --config or --unlit.\n"; return 2; }
     if (options.scene.nis_primary.has_value() != options.scene.nis_secondary.has_value()
         || (options.scene.pip_expand && !options.scene.nis_primary))
     { std::cerr << "PIP requires both --nis-primary and --nis-secondary.\n"; return 2; }

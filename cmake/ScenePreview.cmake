@@ -165,9 +165,9 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|FAILED:")
     add_test(NAME frontend_boot_scene COMMAND "${Python3_EXECUTABLE}" -B
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_frontend_boot_scene.py" "$<TARGET_FILE:mscharged>")
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_frontend_boot_scene.py" "$<TARGET_FILE:mscharged>" "$<TARGET_FILE:frontend_boot_audio_tests>")
     set_tests_properties(frontend_boot_scene PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"
-        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check)
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;SDL_AUDIODRIVER=dummy" RESOURCE_LOCK gx_check)
     add_test(NAME particle_preview_synthetic COMMAND "${Python3_EXECUTABLE}" -B
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_particle_preview.py" "$<TARGET_FILE:mscharged>")
     set_tests_properties(particle_preview_synthetic PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"

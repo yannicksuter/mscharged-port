@@ -33,6 +33,7 @@ struct SceneOptions
     bool no_world_culling = false; // Diagnostic reference: submit every selected world object.
     bool unlit = false;
     unsigned frames = 0; // Zero keeps the preview open until Escape/window close.
+    std::optional<unsigned> frame_timeout; // Explicit wall-clock bound for long diagnostics; defaults30s.
 };
 int RunScenePreview(int argc, char** argv, const std::filesystem::path& config, const SceneOptions& options);
 }

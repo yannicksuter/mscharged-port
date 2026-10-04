@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <new>
@@ -29,6 +30,35 @@ Fixture LogoFixture()
 {auto f=Make();Put(f.bytes,f.map+20,0xde83984e);Put(f.bytes,f.cues+40,0xde83984e);return f;}
 LoadedAudioBank::Handle FixtureBank()
 {const auto f=LogoFixture();return Loaded(ReadAudioResidentBank(f.bytes,f.wave));}
+void WriteFixture(const char* directory)
+{
+ const auto root=std::filesystem::path(directory);std::filesystem::create_directories(root);
+ Data table;constexpr unsigned base=0xe1000100;
+ Append(table,0x23501,Words({1,0xf1000800,24,base,26,0xd1000400}));
+ Append(table,0x23502,Words({0x55,0,24,0,0}));Data refs,slots,names;
+ for(unsigned i=0;i<24;++i)
+ {
+  auto ref=Words({base+i*24});refs.insert(refs.end(),ref.begin(),ref.end());
+  auto slot=Words({i,0,0,0,0,0});slots.insert(slots.end(),slot.begin(),slot.end());
+ }
+ Append(table,0x23503,refs);Append(table,0x23504,slots);
+ for(unsigned i=0;i<26;++i){auto entry=Words({i,0});names.insert(names.end(),entry.begin(),entry.end());}
+ Append(table,0x23505,names);
+ for(unsigned i=0;i<26;++i)
+ {
+  const auto name=i==25?std::string("FE_GEN_Splash"):"unused"+std::to_string(i);
+  Data bytes(name.begin(),name.end());bytes.push_back(0);Append(table,0x23506,bytes);
+ }
+ auto global=Wrap(0x80023500,table);const auto calculation=Calculation();
+ global.insert(global.end(),calculation.begin()+8,calculation.end());global=Wrap(0x80000001,global);
+ const auto fixture=LogoFixture();
+ for(const auto& [name,bytes]:std::initializer_list<std::pair<const char*,const Data*>>{
+  {"nlxgs.bun",&global},{"FE_GEN_Splash.resbun",&fixture.bytes},{"FE_GEN_Splash.nlxwb",&fixture.wave}})
+ {
+  std::ofstream file(root/name,std::ios::binary);file.write(reinterpret_cast<const char*>(bytes->data()),bytes->size());
+  if(!file)throw std::runtime_error("Cannot write generated boot audio fixture");
+ }
+}
 unsigned Next(unsigned seed)
 {const unsigned a=seed^0x1d872b41U;const unsigned b=a^(a>>5);return b^a^(b<<27);}
 unsigned Sample(unsigned seed)
@@ -103,4 +133,4 @@ void Owned(const char* global,const char* metadata,const char* wave)
 }
 }
 int main(int argc,char** argv)
-{try{Generated();if(argc==4)Owned(argv[1],argv[2],argv[3]);else if(argc!=1)throw std::runtime_error("Usage: frontend_boot_audio_tests [GLOBAL RESBUN WAVE]");std::cout<<checks<<" boot audio checks passed\n";return 0;}catch(const std::exception& e){allocation_budget=-1;std::cerr<<e.what()<<" (check"<<checks<<")\n";return 1;}}
+{try{if(argc==3&&std::string(argv[1])=="--fixture"){WriteFixture(argv[2]);return 0;}Generated();if(argc==4)Owned(argv[1],argv[2],argv[3]);else if(argc!=1)throw std::runtime_error("Usage: frontend_boot_audio_tests [GLOBAL RESBUN WAVE | --fixture DIRECTORY]");std::cout<<checks<<" boot audio checks passed\n";return 0;}catch(const std::exception& e){allocation_budget=-1;std::cerr<<e.what()<<" (check"<<checks<<")\n";return 1;}}
