@@ -169,6 +169,12 @@ timing, completion callbacks, stop guards and manager ID progression. Native
 controller groups retain the original particle pool, atlas and RNG together;
 pose, model, light, user-effect and replay services remain separate work.
 
+Patch `0084-select-native-pose-accumulator.patch` selects provisional original
+pose blending and matrix construction with paired native array ownership,
+allocation rollback and defined temporary lifetimes. The upstream TU remains
+NonMatching. Independent CPU checks cover transforms and ownership; pose-tree
+evaluation, replay and skinned rendering remain pending.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

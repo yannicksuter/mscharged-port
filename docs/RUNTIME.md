@@ -103,6 +103,8 @@ be selected; missing or unsupported objects report an error. Original sphere/box
 culling follows the active camera, with opaque and transparent packets in separate
 passes. Use `--no-world-culling` or the preview toggle for comparison. Full scene
 loading, visibility hierarchies and character animation remain in development.
+The provisional original pose accumulator also runs in CPU checks against checked
+hierarchies; animation playback and skinned character rendering remain pending.
 
 To preview the supported static objects in the frontend environment:
 
