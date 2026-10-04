@@ -175,6 +175,10 @@ allocation rollback and defined temporary lifetimes. The upstream TU remains
 NonMatching. Independent CPU checks cover transforms and ownership; pose-tree
 evaluation, replay and skinned rendering remain pending.
 
+Patch `0085-select-original-frontend-image-packets.patch` selects original image
+quad packets and shares their raster setup. Mixed frontend frames retain image
+and font registrations through submission, cancellation and transactional reload.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

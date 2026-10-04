@@ -1,4 +1,5 @@
 #include "runtime/frontend_font_registry.h"
+#include "runtime/frontend_font_packets.h"
 #include "runtime/views.h"
 #include "Game/GL/GLInventory.h"
 #include "NL/FontTextState.h"
@@ -27,33 +28,7 @@ bool Linked(const GLResourcePool* pool)
     do { if (item == pool) return true; item = item->m_next; } while (item != first);
     return false;
 }
-void Bound(float value)
-{
-    resources::Require(std::isfinite(value) && std::abs(value) <= 1e7f, "Invalid font polygon coordinate or matrix");
-}
-// Original DrawString changes working and current state separately. A native
-// submission keeps that exact packet state, but restores both caller snapshots.
-struct StateScope
-{
-    glStateBundle bundle;
-    unsigned long raster = glHandleizeRasterState();
-    unsigned long long texture = glHandleizeTextureState();
-    StateScope()
-    {
-        glStateSave(bundle);
-        // Validate before establishing this noexcept restoration scope. A
-        // caller-provided stale handle must fail here, not in the destructor.
-        glStateRestore(bundle);
-    }
-    ~StateScope()
-    {
-        for (unsigned i = 0; i < GLS_Num; ++i)
-            glSetRasterState(static_cast<eGLState>(i), glGetRasterState(raster, static_cast<eGLState>(i)));
-        for (unsigned i = 0; i < GLTS_Num; ++i)
-            glSetTextureState(static_cast<eGLTextureState>(i), glGetTextureState(texture, static_cast<eGLTextureState>(i)));
-        glStateRestore(bundle);
-    }
-};
+
 }
 struct FrontendFontRegistry::Implementation
 {
@@ -211,23 +186,8 @@ unsigned FrontendFontRegistry::Submit(GLView& view, const resources::FontLayout&
     const auto found = impl_->fonts.find(layout.font->alias);
     resources::Require(found != impl_->fonts.end() && found->second.owner == layout.font,
         "Font layout does not retain its registered alias owner");
-    for (float value : model.e) Bound(value);
-    std::vector<glPoly2> quads(layout.quads.size());
-    for (std::size_t i = 0; i < quads.size(); ++i)
-    {
-        const auto& q = layout.quads[i]; auto& poly = quads[i];
-        resources::Require(q.page < found->second.pages.size(), "Font polygon page is not registered");
-        for (float value : {q.left, q.top, q.right, q.bottom, q.u0, q.v0, q.u1, q.v1}) Bound(value);
-        for (float value : {q.u0, q.v0, q.u1, q.v1})
-            resources::Require(value * 1024.f >= -32768.f && value * 1024.f < 32768.f,
-                "Font polygon UV exceeds original signed16 storage");
-        poly.m_pos[0] = {q.left,q.top}; poly.m_pos[1] = {q.left,q.bottom};
-        poly.m_pos[2] = {q.right,q.bottom}; poly.m_pos[3] = {q.right,q.top};
-        poly.m_uv[0] = {q.u0,q.v0}; poly.m_uv[1] = {q.u0,q.v1};
-        poly.m_uv[2] = {q.u1,q.v1}; poly.m_uv[3] = {q.u1,q.v0};
-        poly.depth = 0; poly.SetColour(nlColour{{colour[0],colour[1],colour[2],colour[3]}});
-    }
-    if (quads.empty()) return 0;
+    const auto packets = detail::PrepareFontPackets(layout, model, colour);
+    if (packets.quads.empty()) return 0;
     impl_->busy = true;
     struct Leave { bool& busy; ~Leave() { busy = false; } } leave{impl_->busy};
     impl_->pending = glNativeFrameGeneration(); // Any later allocation can fail.
@@ -237,22 +197,7 @@ unsigned FrontendFontRegistry::Submit(GLView& view, const resources::FontLayout&
         int exceptions = std::uncaught_exceptions();
         ~FailedSubmission() { if (std::uncaught_exceptions() > exceptions) failed = true; }
     } failed_submission{impl_->failed};
-    StateScope state;
-    FontSetTextRasterState();
-    auto matrix = glAllocSetMatrix(model);
-    if (matrix == GL_INVALID_MATRIX) throw std::runtime_error("Font polygon matrix allocation failed");
-    // Consecutive page runs preserve the qualified source page/line order. Do
-    // not sort a multiline layout globally or merge nonadjacent page batches.
-    for (std::size_t begin = 0; begin < quads.size();)
-    {
-        const auto page = layout.quads[begin].page;
-        auto end = begin + 1;
-        while (end < quads.size() && layout.quads[end].page == page) ++end;
-        glSetCurrentTexture(found->second.pages[page].source->id, GLTT_Diffuse);
-        if (!glAttachPoly2(&view, layer, end - begin, quads.data() + begin, &matrix))
-            throw std::runtime_error("Original font polygon attachment failed");
-        begin = end;
-    }
-    return static_cast<unsigned>(quads.size());
+    detail::AttachFontPackets(view, packets, layer);
+    return static_cast<unsigned>(packets.quads.size());
 }
 }

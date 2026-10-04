@@ -124,8 +124,8 @@ It uses separate controls from `--debug-camera`.
 Supported plain text follows the original font measurement, kerning and glyph
 draw order. Font descriptions and texture pages load through staged NL reads;
 failed or cancelled loads leave the current scene intact.
-The text inspector registers font pages in the game's graphics pool and submits
-original polygon packets. The mixed image/text viewer retains its existing path.
+Both frontend viewers register retained textures and submit original polygon
+packets, preserving the authored order of mixed text and images.
 
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`

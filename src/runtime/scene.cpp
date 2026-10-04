@@ -17,7 +17,7 @@
 #include "runtime/frontend_world_files.h"
 #include "runtime/frontend_visuals.h"
 #include "runtime/frontend_font_registry.h"
-#include "runtime/frontend_layout_gx.h"
+#include "runtime/frontend_packets.h"
 #include "runtime/frontend_images.h"
 #include "runtime/frontend_session.h"
 #include "runtime/particle_files.h"
@@ -200,20 +200,16 @@ public:
 
 class FrontendFrameView final : public GLView
 {
-    resources::FrontendLayoutFrame frame_;
+    FrontendPacketRenderer& packets_;
     unsigned rendered_ = 0;
 public:
-    FrontendFrameView(GLViewInterface& interface, resources::FrontendLayoutFrame frame)
-        : GLView(&interface, GLRenderPair{}, GLViewSort_None), frame_(std::move(frame)) {}
+    FrontendFrameView(GLViewInterface& interface, FrontendPacketRenderer& packets)
+        : GLView(&interface, GLRenderPair{}, GLViewSort_None), packets_(packets) {}
     unsigned Rendered() const { return rendered_; }
-    std::size_t TextCount() const { return frame_.TextCount(); }
-    std::size_t ImageCount() const { return frame_.ImageCount(); }
-    void Replace(resources::FrontendLayoutFrame frame) { frame_ = std::move(frame); }
-    void EndRender() override
-    {
-        DrawFrontendLayout(frame_, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
-        ++rendered_;
-    }
+    std::size_t TextCount() const { return packets_.Current()->layout.TextCount(); }
+    std::size_t ImageCount() const { return packets_.Current()->layout.ImageCount(); }
+    void Submit(FrontendSession::Handle frame) { packets_.Submit(*this, std::move(frame)); }
+    void EndRender() override { ++rendered_; }
 };
 
 Bounds Normalize(resources::StaticModel& model, bool preserve_positions)
@@ -784,6 +780,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         ViewMatrices text_matrices;
         std::unique_ptr<FrontendFontRegistry> font_registry;
         FrontendFrameView* frame_view = nullptr;
+        std::unique_ptr<FrontendPacketRenderer> frame_packets;
         std::unique_ptr<FrontendInput> frontend_input;
         std::unique_ptr<FrontendInputSDL> frontend_devices;
         if (frontend_text)
@@ -802,9 +799,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         if (frontend_frame)
         {
-            auto view = std::make_unique<FrontendFrameView>(view_matrices, std::move(*frontend_frame));
+            frame_packets = std::make_unique<FrontendPacketRenderer>(DrainGX);
+            frame_packets->Prepare(frontend_session->Current());
+            glMatrixOrthographic(text_matrices.projection, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
+            auto view = std::make_unique<FrontendFrameView>(text_matrices, *frame_packets);
             view->m_Name = options.frontend_animate ? "Authored frontend animated layout" : "Authored frontend static layout";
             gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
+            log("Mixed frontend text and images use retained registrations and original ordered GL packets.");
         }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
         log("Original camera core supplies the view and position; full gameplay camera selection remains pending.");
@@ -824,6 +825,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         bool preserve_component_time = false;
         std::array<char, 256> frontend_instance_path{};
         std::string frontend_message;
+        FrontendSession::Handle frontend_failed_graphics;
         std::optional<std::chrono::steady_clock::time_point> frontend_deadline;
         const auto frontend_action = [&](auto&& action) {
             try { action(); frontend_message.clear(); }
@@ -856,27 +858,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     for (const auto& controller : snapshot) particle_live += controller.particles;
                     particle_peak = std::max(particle_peak, particle_live);
                 }
-                if (frontend_session && frontend_session->State() == FrontendSessionState::Loading)
-                {
-                    frontend_action([&] {
-                        frontend_session->Service();
-                        if (frontend_session->State() == FrontendSessionState::Loading)
-                        {
-                            if (frontend_deadline && std::chrono::steady_clock::now() > *frontend_deadline)
-                            {
-                                frontend_session->Cancel();
-                                throw std::runtime_error("Frontend reload timed out");
-                            }
-                        }
-                        else
-                        {
-                            frontend_deadline.reset();
-                            frontend_session->Result();
-                            log("Frontend replacement published after all selected resources completed.");
-                        }
-                    });
-                }
-                if (frontend_session && options.frontend_animate)
+                const bool frontend_ready = frontend_session && frame_packets->Current() == frontend_session->Current();
+                if (frontend_ready && options.frontend_animate)
                 {
                     if (animation_reset) { frontend_session->Reset(); animation_reset = false; }
                     else if (!animation_paused)
@@ -886,11 +869,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                         ++animation_updates;
                     }
                 }
-                if (frontend_session && frontend_session->Current() != frontend_published_frame)
-                {
-                    frontend_published_frame = frontend_session->Current();
-                    frame_view->Replace(frontend_published_frame->layout);
-                }
+                if (frontend_ready) frontend_published_frame = frontend_session->Current();
                 if (frontend_input)
                 {
                     const auto& io = ImGui::GetIO();
@@ -1015,6 +994,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (particle_renderer)
                 particle_submissions += particle_renderer->Submit(*particle_view, particles_visible);
             if (text_view) text_view->Submit();
+            if (frame_view) frame_view->Submit(frontend_published_frame);
             // Read actual EFB depth, before the ImGui overlay, to require visible geometry.
             // Aurora returns the latest asynchronous snapshot, and returns zero
             // before one is available. Require perspective depth near our camera
@@ -1051,12 +1031,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             {
                 ImGui::Text("Authored %s layout: %zu text, %zu images", options.frontend_animate ? "animated" : "static",
                     frame_view->TextCount(), frame_view->ImageCount());
+                const bool editable = frame_packets->Current() == frontend_session->Current();
+                ImGui::BeginDisabled(!editable);
                 if (frontend_session && options.frontend_animate)
                 {
-                    ImGui::Text("Frontend time: %.2f s", frontend_session->Current()->graph.presentation_time);
+                    ImGui::Text("Frontend time: %.2f s", frame_packets->Current()->graph.presentation_time);
                     ImGui::Checkbox("Pause frontend", &animation_paused);
                     ImGui::SameLine(); if (ImGui::Button("Reset frontend")) animation_reset = true;
-                    const auto current = frontend_session->Current();
+                    const auto current = frame_packets->Current();
                     const auto& graph = current->graph;
                     const auto slide_name = [&](resources::FrontendReference id) -> const char* {
                         for (const auto& slide : graph.slides) if (id == slide.offset) return slide.name.c_str();
@@ -1099,7 +1081,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 {
                     ImGui::SetNextItemWidth(330);
                     ImGui::InputTextWithHint("Path", "Layer/Item", frontend_instance_path.data(), frontend_instance_path.size());
-                    const auto current = frontend_session->Current();
+                    const auto current = frame_packets->Current();
                     std::optional<resources::FrontendNode> node;
                     std::string lookup_error;
                     try
@@ -1174,6 +1156,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     if (!lookup_error.empty()) ImGui::TextWrapped("%s", lookup_error.c_str());
                     ImGui::TreePop();
                 }
+                ImGui::EndDisabled();
+                if (!editable)
+                {
+                    ImGui::TextUnformatted("Graphics replacement failed; the previous frame remains visible.");
+                    if (ImGui::Button("Retry frontend graphics")) frontend_failed_graphics.reset();
+                }
                 if (frontend_session->State() == FrontendSessionState::Loading)
                 {
                     ImGui::TextUnformatted("Reloading frontend; current scene remains active.");
@@ -1182,7 +1170,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     });
                 }
                 else if (ImGui::Button("Reload frontend")) frontend_action([&] {
-                    frontend_session->Begin(frontend_session->Current()->request);
+                    frontend_session->Begin(frame_packets->Current()->request);
                     frontend_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
                 });
                 if (!frontend_message.empty()) ImGui::TextWrapped("Frontend: %s", frontend_message.c_str());
@@ -1235,6 +1223,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             std::exception_ptr failure;
             try { if (font_registry) font_registry->FinishFrame(); }
             catch (...) { failure = std::current_exception(); }
+            try { if (frame_packets) frame_packets->FinishFrame(); }
+            catch (...) { if (!failure) failure = std::current_exception(); }
             try { if (particle_renderer) particle_renderer->FinishFrame(); }
             catch (...) { if (!failure) failure = std::current_exception(); }
             if (failure) std::rethrow_exception(failure);
@@ -1244,6 +1234,40 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             if (Update()) break;
             nlServiceFileSystem();
+            if (frontend_session && frontend_session->State() == FrontendSessionState::Loading)
+            {
+                frontend_action([&] {
+                    frontend_session->Service();
+                    if (frontend_session->State() == FrontendSessionState::Loading)
+                    {
+                        if (frontend_deadline && std::chrono::steady_clock::now() > *frontend_deadline)
+                        {
+                            frontend_session->Cancel();
+                            throw std::runtime_error("Frontend reload timed out");
+                        }
+                    }
+                    else
+                    {
+                        frontend_deadline.reset();
+                        frontend_session->Result();
+                        log("Frontend replacement published after all selected resources completed.");
+                    }
+                });
+            }
+            if (frontend_session)
+            {
+                const auto next = frontend_session->Current();
+                if (next != frame_packets->Current() && next != frontend_failed_graphics)
+                {
+                    try { frame_packets->Prepare(next); frontend_failed_graphics.reset(); frontend_message.clear(); }
+                    catch (const std::exception& error)
+                    {
+                        frontend_failed_graphics = next; frontend_message = error.what();
+                        log("Frontend graphics replacement failed: " + frontend_message + "; previous frame retained.");
+                    }
+                }
+                frontend_published_frame = frame_packets->Current();
+            }
             if (particles_reset)
             {
                 // The previous frame is drained. Recreate bindings only while
@@ -1316,6 +1340,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (particles)
             log("Original particle preview rendered: " + std::to_string(particle_updates) + " updates, "
                 + std::to_string(particle_submissions) + " submitted quads, " + std::to_string(particle_peak) + " peak live.");
+        frame_packets.reset(); frontend_failed_graphics.reset();
         font_registry.reset();
         particle_renderer.reset(); particle_pool.reset(); particles.reset(); particle_groups.reset();
         debug_input.reset(); debug_camera.reset(); authored_camera.reset(); cameras.Release();
