@@ -722,6 +722,7 @@ int main(int argc, char** argv)
                          "                        [--world /DISC/gameworld.tmp.zlib --model-id HEX]\n"
                          "                        [--world /DISC/gameworld.tmp.zlib --world-res /DISC/gameworld.res.zlib\n"
                          "                         --object-id HEX ...] [--no-world-culling] (selected static objects)\n"
+                         "                        [--frontend-world] (available static frontend objects; no menu)\n"
                          "                        [--camera /DISC/camera.cam | --debug-camera]\n"
                          "                        [--unlit] [--shadow-textures /DISC/PATH.rlt --shadow-id HEX]\n";
 #endif
@@ -730,6 +731,7 @@ int main(int argc, char** argv)
         if (arg == "--smoke-test") options.smoke_test = true;
         else if (arg == "--experimental-startup") options.experimental_startup = true;
         else if (arg == "--experimental-scene") options.experimental_scene = true;
+        else if (arg == "--frontend-world") { options.scene_arguments = true; options.scene.frontend_world = true; }
         else if (arg == "--no-world-culling") { options.scene_arguments = true; options.scene.no_world_culling = true; }
         else if (arg == "--debug-camera") { options.scene_arguments = true; options.scene.debug_camera = true; }
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
@@ -792,6 +794,9 @@ int main(int argc, char** argv)
     { std::cerr << "--debug-camera cannot be combined with --camera or shadow options.\n"; return 2; }
     if (options.scene.shadow_id.has_value() != options.scene.shadow_textures.has_value())
     { std::cerr << "--shadow-textures and --shadow-id must be supplied together.\n"; return 2; }
+    if (options.scene.frontend_world && (options.scene.world || options.scene.world_res || !options.scene.object_ids.empty()
+        || options.scene.model_id || options.scene.shadow_id || options.standalone_assets))
+    { std::cerr << "--frontend-world cannot be combined with explicit model, world or shadow selections.\n"; return 2; }
     if (options.scene.world_res || !options.scene.object_ids.empty())
     {
         if (!options.scene.world || !options.scene.world_res || options.scene.object_ids.empty())
@@ -799,7 +804,7 @@ int main(int argc, char** argv)
         if (options.scene.model_id || options.scene.shadow_id || options.standalone_assets)
         { std::cerr << "World object selection cannot be combined with model or shadow lookup options.\n"; return 2; }
     }
-    if (options.scene.no_world_culling && !options.scene.world_res)
+    if (options.scene.no_world_culling && !options.scene.world_res && !options.scene.frontend_world)
     { std::cerr << "--no-world-culling requires a world object selection.\n"; return 2; }
     if (options.scene.world && !options.scene.model_id && !options.scene.world_res)
     { std::cerr << "--world requires an explicit --model-id.\n"; return 2; }

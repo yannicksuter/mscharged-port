@@ -13,6 +13,7 @@
 #include "resources/world_scene.h"
 #include "runtime/world_objects.h"
 #include "runtime/world_render.h"
+#include "runtime/frontend_world_files.h"
 #include "NL/glx/glxTarget.h"
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
@@ -62,6 +63,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -196,7 +198,7 @@ nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices,
 }
 }
 
-int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_path, const SceneOptions& options)
+int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_path, const SceneOptions& requested)
 {
     std::ofstream logfile;
     auto log = [&](const std::string& message) {
@@ -205,6 +207,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
     };
     try
     {
+        auto options = requested;
+        if (options.frontend_world)
+        {
+            if (options.world || options.world_res || !options.object_ids.empty() || options.model_id || options.shadow_id)
+                throw std::invalid_argument("Frontend world selection cannot be combined with explicit world/model/shadow IDs");
+            if (!options.camera && !options.debug_camera) options.camera = "/Art/fe/environments/cameras/start_idle.cam";
+        }
         const auto file = LoadConfig(config_path);
         const auto disc_path = ResolveDiscPath(file.settings, file.path);
         const auto disc = InspectDisc(disc_path);
@@ -248,16 +257,33 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         InitializeOriginalGraphicsState();
         log("Original GL state and identity matrix initialized; native frame matrix handles and original NL camera math enabled.");
         log("Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
-        const bool world_batch = options.world_res.has_value();
-        if (world_batch && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
+        const bool world_batch = options.world_res.has_value() || options.frontend_world;
+        if (world_batch && !options.frontend_world && (!options.world || options.object_ids.empty() || options.model_id || options.shadow_id))
             throw std::invalid_argument("World objects require resident/temporary files and explicit object IDs only");
         if (options.world && !options.model_id && !world_batch) throw std::invalid_argument("World preview needs an explicit model ID");
         PendingAsset model_data, texture_data, resident_data;
-        model_data.Start(options.world.value_or(options.model));
-        if (!options.world) texture_data.Start(options.textures);
-        if (world_batch) resident_data.Start(*options.world_res);
+        std::shared_ptr<const FrontendWorldFiles> frontend_files;
+        if (options.frontend_world)
+        {
+            FrontendWorldFileLoad load;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (load.State() <= FrontendWorldFileState::Tweaks)
+            {
+                if (Update()) throw std::runtime_error("Frontend world loading cancelled");
+                load.Service();
+                if (std::chrono::steady_clock::now() > deadline) throw std::runtime_error("Frontend world loading timed out");
+                SDL_Delay(1);
+            }
+            frontend_files = load.Result();
+        }
+        else
+        {
+            model_data.Start(options.world.value_or(options.model));
+            if (!options.world) texture_data.Start(options.textures);
+            if (world_batch) resident_data.Start(*options.world_res);
+        }
         const auto load_start = std::chrono::steady_clock::now();
-        while (!model_data.done || (!options.world && !texture_data.done) || (world_batch && !resident_data.done))
+        while (!options.frontend_world && (!model_data.done || (!options.world && !texture_data.done) || (world_batch && !resident_data.done)))
         {
             if (Update()) throw std::runtime_error("Static preview cancelled while loading");
             nlServiceFileSystem();
@@ -272,9 +298,24 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         auto& animations = texture_bundle.animations;
         if (world_batch)
         {
-            auto resident = resources::InflateAsset(resident_data.Bytes());
-            auto temporary = resources::InflateAsset(model_data.Bytes());
-            auto scene = resources::ReadStaticWorldScene(resident, temporary, options.object_ids);
+            resources::StaticWorldScene scene;
+            if (frontend_files)
+            {
+                auto available = resources::ReadAvailableWorldScene(frontend_files->resident, frontend_files->temporary);
+                log("Frontend world coverage: " + std::to_string(available.scene.objects.size()) + " supported objects, "
+                    + std::to_string(available.unavailable.size()) + " unavailable, " + std::to_string(available.parent_records)
+                    + " parent records. Animation, effects, tweak application and menu state remain pending.");
+                std::map<std::string, unsigned> missing;
+                for (const auto& object : available.unavailable) ++missing[object.reason];
+                for (const auto& [reason, count] : missing) log("Unavailable world objects (" + std::to_string(count) + "): " + reason);
+                scene = std::move(available.scene); frontend_files.reset();
+            }
+            else
+            {
+                auto resident = resources::InflateAsset(resident_data.Bytes());
+                auto temporary = resources::InflateAsset(model_data.Bytes());
+                scene = resources::ReadStaticWorldScene(resident, temporary, options.object_ids);
+            }
             models = std::move(scene.models); world_objects = std::move(scene.objects);
             texture_bundle = std::move(scene.textures); bounds = scene.bounds;
             log("Selected static world objects: " + std::to_string(world_objects.size()) + " instances, "
