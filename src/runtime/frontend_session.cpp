@@ -207,6 +207,8 @@ FrontendSession::Handle FrontendSession::Result() const
 }
 void FrontendSession::Advance(float delta)
 { impl_->Mutate([&](auto& playback) { playback.Advance(delta); return true; }); }
+bool FrontendSession::AdvanceLoadingNotification(float delta,std::uint32_t id)
+{ return impl_->Mutate([&](auto& playback) { return playback.AdvanceLoadingNotification(delta,id); }); }
 void FrontendSession::Reset()
 { impl_->Mutate([](auto& playback) { playback.Reset(); return true; }); }
 bool FrontendSession::SelectPresentation(std::string_view name, bool reset)

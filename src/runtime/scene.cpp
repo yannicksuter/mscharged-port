@@ -20,6 +20,7 @@
 #include "runtime/frontend_packets.h"
 #include "runtime/frontend_images.h"
 #include "runtime/frontend_session.h"
+#include "runtime/frontend_handler.h"
 #include "runtime/particle_files.h"
 #include "runtime/particle_controller.h"
 #include "runtime/particle_controller_render.h"
@@ -345,7 +346,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::optional<resources::FrontendTextCatalog> frontend_text;
         std::vector<std::shared_ptr<const resources::FrontendFont>> inspector_fonts;
         std::optional<resources::FrontendLayoutFrame> frontend_frame;
-        std::unique_ptr<FrontendSession> frontend_session;
+        std::shared_ptr<FrontendSession> frontend_session;
         FrontendSession::Handle frontend_published_frame;
         EffectsRegistry::Handle particle_groups;
         std::unique_ptr<ParticleControllers> particles;
@@ -384,7 +385,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
         if (options.frontend_frame)
         {
-            frontend_session = std::make_unique<FrontendSession>();
+            frontend_session = std::make_shared<FrontendSession>();
             frontend_session->Begin({*options.frontend_frame, frontend_language,
                 options.frontend_images.value_or("main") == "ingame" ? FrontendImageProfile::InGame : FrontendImageProfile::Main,
                 options.frontend_slide.value_or(""), options.frontend_animate});
@@ -783,6 +784,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::unique_ptr<FrontendPacketRenderer> frame_packets;
         std::unique_ptr<FrontendInput> frontend_input;
         std::unique_ptr<FrontendInputSDL> frontend_devices;
+        std::unique_ptr<FrontendHandler> frontend_handler;
         if (frontend_text)
         {
             font_registry = std::make_unique<FrontendFontRegistry>(*glGetCurrentResourcePool(), inspector_fonts, DrainGX);
@@ -801,6 +803,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             frame_packets = std::make_unique<FrontendPacketRenderer>(DrainGX);
             frame_packets->Prepare(frontend_session->Current());
+            frontend_input = std::make_unique<FrontendInput>();
+            frontend_devices = std::make_unique<FrontendInputSDL>();
+            frontend_input->EnableAnalogDirections(true);
+            for (const auto action : {FrontendAction::Left, FrontendAction::Right})
+                frontend_input->SetRepeat(action, .35f, .12f);
+            frontend_handler = std::make_unique<FrontendHandler>(frontend_session, *frontend_input);
             glMatrixOrthographic(text_matrices.projection, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
             auto view = std::make_unique<FrontendFrameView>(text_matrices, *frame_packets);
             view->m_Name = options.frontend_animate ? "Authored frontend animated layout" : "Authored frontend static layout";
@@ -858,6 +866,20 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     for (const auto& controller : snapshot) particle_live += controller.particles;
                     particle_peak = std::max(particle_peak, particle_live);
                 }
+                if (frontend_input)
+                {
+                    const auto& io = ImGui::GetIO();
+                    frontend_devices->Poll(*frontend_input, info.window, std::clamp(delta, 0.f, .1f),
+                        io.WantCaptureKeyboard, io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad));
+                    if (text_view)
+                    {
+                        const auto previous = text_view->Index();
+                        if (frontend_input->Button(FrontendAction::Up, FrontendButtonQuery::Repeat)) text_view->Step(true);
+                        else if (frontend_input->Button(FrontendAction::Down, FrontendButtonQuery::Repeat)) text_view->Step(false);
+                        if (previous != text_view->Index())
+                            log("Original FE input selected text component " + std::to_string(text_view->Index() + 1) + ".");
+                    }
+                }
                 const bool frontend_ready = frontend_session && frame_packets->Current() == frontend_session->Current();
                 if (frontend_ready && options.frontend_animate)
                 {
@@ -865,22 +887,31 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     else if (!animation_paused)
                     {
                         const float step = frames ? (options.frames ? 1.f / 60 : std::clamp(delta, 0.f, .1f)) : 0.f;
-                        frontend_session->Advance(step);
+                        frontend_handler->Update(frame_packets->Current(), step);
                         ++animation_updates;
+                    }
+                    // Diagnostic authored-slide selection, never a concrete
+                    // game's menu action. DebugCam owns arrow/stick controls.
+                    if (!debug_camera)
+                    {
+                        const auto current = frontend_handler->Current();
+                        const bool previous = frontend_handler->Button(current, FrontendAction::Left, FrontendButtonQuery::Repeat);
+                        const bool next = frontend_handler->Button(current, FrontendAction::Right, FrontendButtonQuery::Repeat);
+                        const auto& slides = current->graph.presentation_slides;
+                        if ((previous || next) && !slides.empty()) frontend_action([&] {
+                            const auto active = std::find(slides.begin(), slides.end(), current->graph.active_slide);
+                            const std::size_t index = active == slides.end() ? 0 : std::size_t(active - slides.begin());
+                            const auto selected = slides[(index + (previous ? slides.size() - 1 : 1)) % slides.size()];
+                            const auto slide = std::find_if(current->graph.slides.begin(), current->graph.slides.end(),
+                                [&](const auto& value) { return value.offset == selected; });
+                            if (slide == current->graph.slides.end()) throw std::logic_error("Authored presentation slide is missing");
+                            frontend_session->SelectPresentation(slide->name);
+                            log("Original FE input selected presentation slide: " + slide->name + ".");
+                        });
                     }
                 }
                 if (frontend_ready) frontend_published_frame = frontend_session->Current();
-                if (frontend_input)
-                {
-                    const auto& io = ImGui::GetIO();
-                    frontend_devices->Poll(*frontend_input, info.window, std::clamp(delta, 0.f, .1f),
-                        io.WantCaptureKeyboard, io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad));
-                    const auto previous = text_view->Index();
-                    if (frontend_input->Button(FrontendAction::Up, FrontendButtonQuery::Repeat)) text_view->Step(true);
-                    else if (frontend_input->Button(FrontendAction::Down, FrontendButtonQuery::Repeat)) text_view->Step(false);
-                    if (previous != text_view->Index())
-                        log("Original FE input selected text component " + std::to_string(text_view->Index() + 1) + ".");
-                }
+
             },
             [&](float) {
             auto frame_lighting = lighting;
@@ -1074,7 +1105,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                         ImGui::EndChild();
                         ImGui::TreePop();
                     }
-                    ImGui::TextUnformatted("Authored timeline only; scene handlers and menu actions pending.");
+                    ImGui::TextUnformatted("Original base update; game menus and transitions pending.");
+                    ImGui::TextUnformatted(debug_camera ? "Slide shortcuts disabled while DebugCam controls are active."
+                        : "Left/Right or pad: inspect authored presentation slides.");
                 }
                 else ImGui::TextUnformatted("Stored frame only; use --frontend-animate for a timeline.");
                 if (ImGui::TreeNode("Instance inspection"))
@@ -1334,7 +1367,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");
             log("Frontend text inspection rendered: " + std::to_string(text_view->Rendered()) + " frames through the original view graph.");
         }
-        frontend_devices.reset(); frontend_input.reset();
+        frontend_handler.reset(); frontend_devices.reset(); frontend_input.reset();
         frontend_session.reset(); // Drain pending reloads before NL services/arenas shut down.
         frontend_published_frame.reset();
         if (particles)

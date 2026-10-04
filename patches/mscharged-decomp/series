@@ -84,3 +84,4 @@
 0083-share-original-emission-controller-steps.patch
 0084-select-native-pose-accumulator.patch
 0085-select-original-frontend-image-packets.patch
+0086-share-original-frontend-handler-steps.patch

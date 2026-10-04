@@ -133,13 +133,16 @@ instead. This loads the original in-game image bundles and renders supported
 static components in their authored order. Add `--frontend-animate` to play
 supported authored animation tracks, with pause/reset controls in the preview.
 Animated previews also offer original presentation/component slide selection.
+Left/Right or a controller selects presentation slides through the original
+frontend input code, unless the debug camera is active. The bounded native
+handler uses original base update rules; game menu actions remain pending.
 Instance inspection finds named component paths such as `Layer/Item` and changes
 visibility, position and colour through the original setter rules. These edits
 affect only the preview; animation can update them and Reload restores the file.
 Reload keeps the current scene active until all replacement resources are ready;
 pending reloads can be cancelled. Bounded runs use a fixed 60 Hz timeline.
 Other frontend layouts default to the
-`main` image bundle context; missing textures report an error. Scene handlers,
+`main` image bundle context; missing textures report an error. Concrete game handlers,
 menu actions, movies, clipping and unsupported text formats remain pending.
 
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,

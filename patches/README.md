@@ -179,6 +179,11 @@ Patch `0085-select-original-frontend-image-packets.patch` selects original image
 quad packets and shares their raster setup. Mixed frontend frames retain image
 and font registrations through submission, cancellation and transactional reload.
 
+Patch `0086-share-original-frontend-handler-steps.patch` shares base update,
+activation, screen-ring and loading-notification rules. Native scene ownership
+uses real frontend input; the original manager's state-6 gate and unavailable
+concrete handlers and HOME services remain explicit boundaries.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

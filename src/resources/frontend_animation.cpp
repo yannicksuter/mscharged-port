@@ -2,6 +2,7 @@
 #include "Game/FE/FrontendAnimationSteps.h"
 #include "Game/FE/FrontendSelectionSteps.h"
 #include "Game/FE/FrontendInstanceSteps.h"
+#include "Game/FE/FrontendHandlerSteps.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -163,6 +164,23 @@ struct FrontendAnimationPlayback::Impl
         Require(std::isfinite(delta)&&delta>=0&&delta<=60,"Frontend timeline delta exceeds its bounded profile");
         auto next=current;Step step{next,index};step.Run(delta);current=std::move(next);channels=step.channels;
     }
+    bool AdvanceLoadingNotification(float delta,std::uint32_t id)
+    {
+        auto next=std::make_unique<Impl>(*this);
+        next->Advance(delta); // BaseSceneHandler::Update precedes the clock test.
+        Require(next->index.instances.contains(id),"Loading notification instance is absent");
+        auto& instance=next->current.instances[next->index.instances.at(id)];
+        Require(instance.type==4&&instance.library&&next->index.library.contains(*instance.library),
+            "Loading notification instance is not a checked component");
+        const auto& library=next->current.library[next->index.library.at(*instance.library)];
+        Require(library.type==3&&library.active_slide&&next->index.slides.contains(*library.active_slide),
+            "Loading notification has no active authored slide");
+        const auto& slide=next->current.slides[next->index.slides.at(*library.active_slide)];
+        struct Slide { float m_duration,m_start,m_time; } clock{slide.duration,slide.start,slide.time};
+        struct Component { Slide* slide;bool& m_bVisible;Slide* GetActiveSlide(){return slide;} } component{&clock,instance.visible};
+        bool active=true;FrontendLoadingNotificationStep<Component,Slide>(active,&component);
+        *this=std::move(*next);return active;
+    }
     FrontendReference Find(const std::vector<std::uint32_t>& ring,std::string_view name) const
     {
         const auto hash=FrontendLowerHash(name);
@@ -234,6 +252,8 @@ FrontendAnimationPlayback::FrontendAnimationPlayback(const FrontendScene& scene,
 FrontendAnimationPlayback::FrontendAnimationPlayback(std::unique_ptr<Impl> impl):impl_(std::move(impl)){}
 FrontendAnimationPlayback::~FrontendAnimationPlayback()=default;
 void FrontendAnimationPlayback::Advance(float delta){impl_->Advance(delta);}
+bool FrontendAnimationPlayback::AdvanceLoadingNotification(float delta,std::uint32_t id)
+{return impl_->AdvanceLoadingNotification(delta,id);}
 void FrontendAnimationPlayback::Reset(){impl_->Reset();}
 std::unique_ptr<FrontendAnimationPlayback> FrontendAnimationPlayback::Clone() const
 {return std::unique_ptr<FrontendAnimationPlayback>(new FrontendAnimationPlayback(std::make_unique<Impl>(*impl_)));}
