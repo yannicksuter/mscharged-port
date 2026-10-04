@@ -96,6 +96,7 @@ def fingerprint(file):
         name(at + 0x18); words([u32(at + 0x10), u32(at + 0x14), data[at + 0x8E]])
         attributes(at + 0x3C); word(pointer(at + 12))
         word(pointer(at + 0x90) if kind == 2 else null); refs(ring(pointer(at + 8)))
+        word(u32(at + 0x94) if kind == 2 else 0)
         words([u32(at + 0x90), u32(at + 0xA0), u32(at + 0x100)] if kind == 3 else [0] * 3)
         words([u32(at + 0x98), u32(at + 0x9C)] if kind == 3 else [0] * 2)
         words(data[at + 0x94:at + 0x98] if kind == 3 else [0] * 4)

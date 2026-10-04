@@ -725,7 +725,8 @@ int main(int argc, char** argv)
                          "                         --object-id HEX ...] [--no-world-culling] (selected static objects)\n"
                          "                        [--frontend-world] (available static frontend objects; no menu)\n"
                          "                        [--frontend-layout /Art/fe/SCENE.fen] (stored text inspection)\n"
-                         "                        [--frontend-frame /Art/fe/SCENE.fen [--frontend-slide NAME]] (static text layout)\n"
+                         "                        [--frontend-frame /Art/fe/SCENE.fen [--frontend-slide NAME]] (static image/text layout)\n"
+                         "                        [--frontend-images main|ingame] (image bundle context; default main)\n"
                          "                        [--camera /DISC/camera.cam | --debug-camera]\n"
                          "                        [--nis-primary /DISC/primary.nis --nis-secondary /DISC/secondary.nis]\n"
                          "                        [--pip-expand SECONDS] (camera-only PIP; no NIS actors)\n"
@@ -743,7 +744,7 @@ int main(int argc, char** argv)
         else if ((arg == "--frames" || arg == "--model" || arg == "--textures" || arg == "--model-id"
                   || arg == "--world" || arg == "--world-res" || arg == "--object-id"
                   || arg == "--nis-primary" || arg == "--nis-secondary" || arg == "--pip-expand"
-                  || arg == "--frontend-frame" || arg == "--frontend-slide"
+                  || arg == "--frontend-frame" || arg == "--frontend-slide" || arg == "--frontend-images"
                   || arg == "--camera" || arg == "--frontend-layout" || arg == "--shadow-textures" || arg == "--shadow-id") && i + 1 < argc)
         {
             options.scene_arguments = true;
@@ -766,6 +767,7 @@ int main(int argc, char** argv)
             else if (arg == "--frontend-layout") options.scene.frontend_layout = value;
             else if (arg == "--frontend-frame") options.scene.frontend_frame = value;
             else if (arg == "--frontend-slide") options.scene.frontend_slide = value;
+            else if (arg == "--frontend-images") options.scene.frontend_images = value;
             else if (arg == "--model") options.scene.model = value;
             else if (arg == "--textures") options.scene.textures = value;
             else if (arg == "--shadow-textures") options.scene.shadow_textures = value;
@@ -820,6 +822,9 @@ int main(int argc, char** argv)
     { std::cerr << "--frontend-layout cannot be combined with --debug-camera; they use separate controls.\n"; return 2; }
     if ((options.scene.frontend_frame && options.scene.frontend_layout) || (options.scene.frontend_slide && !options.scene.frontend_frame))
     { std::cerr << "Select --frontend-frame or --frontend-layout; --frontend-slide requires --frontend-frame.\n"; return 2; }
+    if (options.scene.frontend_images && (!options.scene.frontend_frame
+        || (*options.scene.frontend_images != "main" && *options.scene.frontend_images != "ingame")))
+    { std::cerr << "--frontend-images requires --frontend-frame and either main or ingame.\n"; return 2; }
     if (options.scene.debug_camera && (options.scene.camera || options.scene.shadow_id || options.scene.shadow_textures))
     { std::cerr << "--debug-camera cannot be combined with --camera or shadow options.\n"; return 2; }
     if (options.scene.shadow_id.has_value() != options.scene.shadow_textures.has_value())

@@ -110,11 +110,13 @@ or a controller selects text through the original frontend input code. This is
 a text asset viewer; animation and menu actions are still pending.
 It uses separate controls from `--debug-camera`.
 
-For multiple text components in their stored layout, use
-`--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1` instead.
-This renders the supported static text with inherited transforms, colors and
-original draw order. Unsupported images, animation, clipping and text formats
-are reported and omitted; this does not run the menu.
+For a stored image/text layout, use
+`--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`
+instead. This loads the original in-game image bundles and renders supported
+static components in their authored order. Other frontend layouts default to
+the `main` image bundle context; missing textures report an error. Animation,
+handler-driven images, movies, clipping and unsupported text formats remain
+pending; this does not run the menu.
 
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running

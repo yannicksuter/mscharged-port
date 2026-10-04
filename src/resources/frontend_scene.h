@@ -39,6 +39,7 @@ struct FrontendInstance
     FrontendAttributes attributes;
     FrontendReference library, resource;
     std::vector<std::uint32_t> children;
+    std::uint32_t image_blend = 0; // Original image field_0x94; qualified by the renderer.
     std::uint32_t localization_hash = 0, text_overload_flags = 0, draw_options = 0;
     std::array<float,2> text_box{};
     std::array<std::uint8_t,4> text_effect_colour{};

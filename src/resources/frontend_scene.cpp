@@ -126,7 +126,7 @@ class Reader
         value.attributes=Attributes(at+0x3c);value.overload_flags=Word(at+0x84);value.priority=(Value(at+0x8c,2), U16(data_,at+0x8c));value.visible=Bool(at+0x8e);
         value.library=Pointer(at+12);Require(value.library.has_value(),"FEN instance has no library object");
         value.children=Ring(Pointer(at+8));for(auto child:value.children)Instance(child,depth+1);
-        if(type==2)value.resource=Pointer(at+0x90);
+        if(type==2){value.resource=Pointer(at+0x90);value.image_blend=Word(at+0x94);}
         if(type==3)
         {
             value.localization_hash=Word(at+0x90);std::copy_n(Value(at+0x94,4).begin(),4,value.text_effect_colour.begin());

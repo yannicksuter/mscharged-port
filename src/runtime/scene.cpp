@@ -18,6 +18,7 @@
 #include "runtime/frontend_visuals.h"
 #include "runtime/frontend_text_gx.h"
 #include "runtime/frontend_layout_gx.h"
+#include "runtime/frontend_images.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
 #include "NL/glx/glxTarget.h"
@@ -195,7 +196,8 @@ public:
     FrontendFrameView(GLViewInterface& interface, resources::FrontendLayoutFrame frame)
         : GLView(&interface, GLRenderPair{}, GLViewSort_None), frame_(std::move(frame)) {}
     unsigned Rendered() const { return rendered_; }
-    std::size_t Count() const { return frame_.text.size(); }
+    std::size_t TextCount() const { return frame_.TextCount(); }
+    std::size_t ImageCount() const { return frame_.ImageCount(); }
     void EndRender() override
     {
         DrawFrontendLayout(frame_, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
@@ -275,6 +277,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::invalid_argument("PIP requires two NIS paths and no other camera, shadow or text selection");
         if ((options.frontend_frame && options.frontend_layout) || (options.frontend_slide && !options.frontend_frame))
             throw std::invalid_argument("Select one frontend text mode; slide selection requires an authored frame");
+        if (options.frontend_images && (!options.frontend_frame
+            || (*options.frontend_images != "main" && *options.frontend_images != "ingame")))
+            throw std::invalid_argument("Frontend images require an authored frame and main or ingame context");
         if (options.frontend_layout && options.debug_camera)
             throw std::invalid_argument("Frontend text inspection and debug camera use separate controls");
         if (options.frontend_world)
@@ -359,12 +364,30 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                         }
                     if (!slide_id) throw std::invalid_argument("Frontend presentation slide name is absent");
                 }
-                frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id);
-                log("Authored frontend static frame: " + std::to_string(frontend_frame->text.size())
-                    + " text components; " + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
+                const auto profile = options.frontend_images.value_or("main") == "ingame"
+                    ? FrontendImageProfile::InGame : FrontendImageProfile::Main;
+                FrontendImageLoad images;
+                images.Begin(graph, profile);
+                const auto image_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+                while (images.State() == FrontendImageState::Loading)
+                {
+                    if (Update()) throw std::runtime_error("Frontend image loading cancelled");
+                    nlServiceFileSystem(); images.Poll();
+                    if (std::chrono::steady_clock::now() > image_deadline)
+                        throw std::runtime_error("Frontend image loading timed out");
+                    SDL_Delay(1);
+                }
+                const auto catalog = images.Result();
+                log("Frontend image context: " + options.frontend_images.value_or("main") + "; "
+                    + std::to_string(catalog->textures.size()) + " retained textures from "
+                    + std::to_string(images.CompletedFiles()) + " original bundle reads.");
+                frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id, *catalog);
+                log("Authored frontend static frame: " + std::to_string(frontend_frame->TextCount())
+                    + " text components, " + std::to_string(frontend_frame->ImageCount())
+                    + " image components; " + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
                 for (const auto& [reason, count] : frontend_frame->unavailable)
                     log("Unavailable frontend frame components (" + std::to_string(count) + "): " + reason);
-                if (frontend_frame->text.empty()) throw std::runtime_error("Selected frontend frame has no supported static text");
+                if (frontend_frame->entries.empty()) throw std::runtime_error("Selected frontend frame has no supported static components");
                 log("Original stored transforms, text-box rows and Anark draw order; missing font effects, timelines and menu actions remain pending.");
             }
             else
@@ -716,7 +739,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (frontend_frame)
         {
             auto view = std::make_unique<FrontendFrameView>(view_matrices, std::move(*frontend_frame));
-            view->m_Name = "Authored frontend static text";
+            view->m_Name = "Authored frontend static layout";
             gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
         }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
@@ -887,7 +910,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
             if (frame_view)
             {
-                ImGui::Text("Authored static text: %zu components", frame_view->Count());
+                ImGui::Text("Authored static layout: %zu text, %zu images", frame_view->TextCount(), frame_view->ImageCount());
                 ImGui::TextUnformatted("Stored frame only; timelines and menu actions pending.");
             }
             if (world)
@@ -977,7 +1000,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         {
             if (frame_view->Rendered() != frames) throw std::runtime_error("Frontend static frame missed a render pass");
             log("Authored frontend frame rendered: " + std::to_string(frames) + " frames, "
-                + std::to_string(frame_view->Count()) + " text components per frame.");
+                + std::to_string(frame_view->TextCount()) + " text components, "
+                + std::to_string(frame_view->ImageCount()) + " image components per frame.");
         }
         if (text_view)
         {
