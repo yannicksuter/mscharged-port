@@ -19,13 +19,15 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `9ca59d250587adc0436d08176bec3898aa790fa0`, adopted from
+The current base is `c9202e44852ad88d1f5b08ef37a382499d61a4a4`, adopted from
 published upstream main. It remains an incomplete development snapshot, not a
-complete decompilation release. This adoption adds source-linked StadiumLoading
-and SoundInstance, with named stadium finalization and typed audio ownership.
-These full units are not automatically selected for native linking. All 66
-existing patches apply without body changes; their base declarations follow the
-new pin. Native resource, physics, effects and audio services remain separate work.
+complete decompilation release. This adoption adds source-linked ParticleSystem,
+EffectsBundleData, InputRouter, ImpostorSprite and Audio/Delay. EmissionManager
+has additional reconstructed methods but remains marked NonMatching upstream.
+Patches 0026 and 0038 follow renamed drawing functions and updated event header
+layout; the other existing patch bodies apply unchanged. Native source selection
+and verification remain explicit; upstream matching does not enable whole-game
+linking automatically.
 
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
