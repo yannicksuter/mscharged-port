@@ -39,6 +39,7 @@ include(cmake/SAnimAssets.cmake)
 include(cmake/AnimationBundle.cmake)
 include(cmake/PoseAccumulator.cmake)
 include(cmake/AnimationPose.cmake)
+include(cmake/SkinPose.cmake)
 include(cmake/AudioCatalog.cmake)
 include(cmake/NisPip.cmake)
 
