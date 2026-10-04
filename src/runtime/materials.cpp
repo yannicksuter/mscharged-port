@@ -1,6 +1,7 @@
 #include "runtime/materials.h"
 #include "runtime/material_environment.h"
 #include "runtime/lighting_state.h"
+#include "runtime/skin_material.h"
 #include "NL/gl/glMaterialProgram.h"
 #include "NL/gl/glTextureManager.h"
 #include "NL/gl/glState.h"
@@ -21,6 +22,7 @@
 #include "NL/glx/GXMaskedDetailBlendMaterialProgram.h"
 #include "NL/glx/GXScrollingMaskedDetailBlendMaterialProgram.h"
 #include "NL/glx/GXScrollingCameraOverlayMaterialProgram.h"
+#include "NL/glx/GXCharacterSkinCustomMaterialProgram.h"
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 #include <algorithm>
@@ -29,6 +31,7 @@
 
 namespace mscharged
 {
+void RestoreMaterialSavedStates();
 namespace
 {
 bool programs_live = false, preview_live = false;
@@ -44,6 +47,7 @@ constexpr std::uint32_t camera_overlay = 0x32bc21e8;
 constexpr std::uint32_t masked_detail = 0x09609a35;
 constexpr std::uint32_t scrolling_masked_detail = 0xf2d57ac6;
 constexpr std::uint32_t scrolling_camera_overlay = 0x845cad59;
+constexpr std::uint32_t character_skin = 0x041c3281;
 glTextureBinding Binding(const resources::MaterialBinding &input)
 {
     if (input.flags & ~3u)
@@ -89,10 +93,7 @@ void Raster(u32 state)
     const GXBlendFactor dest[] = {GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_BL_ONE,  GX_BL_ONE,
                                   GX_BL_ZERO, GX_BL_ONE,         GX_BL_ZERO, GX_BL_ZERO};
     const auto blend = glGetRasterState(state, GLS_AlphaBlend);
-    GXSetBlendMode(blend == 0   ? GX_BM_NONE
-                   : blend == 7 ? GX_BM_SUBTRACT
-                                : GX_BM_BLEND,
-                   source[blend], dest[blend], GX_LO_CLEAR);
+    gxSetBlendMode(blend != 0, source[blend], dest[blend], blend == 7);
     gxSetColourUpdate(colour & 1);
     gxSetAlphaUpdate((colour >> 1) & 1);
 }
@@ -110,6 +111,7 @@ struct MaterialPrograms::Impl
     GXMaskedDetailBlendMaterialProgram masked_detail_blend;
     GXScrollingMaskedDetailBlendMaterialProgram scrolling_masked_detail_blend;
     GXScrollingCameraOverlayMaterialProgram scrolling_overlay;
+    GXCharacterSkinCustomMaterialProgram skin;
     Impl()
     {
         unlit.Initialize();
@@ -123,6 +125,7 @@ struct MaterialPrograms::Impl
         masked_detail_blend.Initialize();
         scrolling_masked_detail_blend.Initialize();
         scrolling_overlay.Initialize();
+        skin.Initialize();
     }
 };
 MaterialPrograms::MaterialPrograms()
@@ -131,7 +134,8 @@ MaterialPrograms::MaterialPrograms()
         glGetMaterialProgram(scrolling) || glGetMaterialProgram(masked) || glGetMaterialProgram(shadow_volume)
         || glGetMaterialProgram(detail_blend) || glGetMaterialProgram(scrolling_specular)
         || glGetMaterialProgram(camera_overlay) || glGetMaterialProgram(masked_detail)
-        || glGetMaterialProgram(scrolling_masked_detail) || glGetMaterialProgram(scrolling_camera_overlay))
+        || glGetMaterialProgram(scrolling_masked_detail) || glGetMaterialProgram(scrolling_camera_overlay)
+        || glGetMaterialProgram(character_skin))
         throw std::logic_error("Material registry already initialized");
     try
     {
@@ -409,6 +413,7 @@ void DrawMaterial(const glModelPacket &packet, GLView* view)
                 if (packet.indexBuffer[i] >= packet.numUniqueVertices)
                     throw std::out_of_range("Shadow index exceeds its vertex arrays");
     }
+    if (program->programHash == character_skin) ValidateNativeSkinPacket(packet);
     Baseline();
     Raster(packet.rasterState);
     // Original glx_SwitchRaster always permits alpha-only writes. The view's
@@ -436,6 +441,7 @@ void DrawMaterial(const glModelPacket &packet, GLView* view)
     }
     catch (...)
     {
+        RestoreMaterialSavedStates();
         program->Deactivate();
         throw;
     }

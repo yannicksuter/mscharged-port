@@ -103,8 +103,9 @@ be selected; missing or unsupported objects report an error. Original sphere/box
 culling follows the active camera, with opaque and transparent packets in separate
 passes. Use `--no-world-culling` or the preview toggle for comparison. Full scene
 loading, visibility hierarchies and character animation remain in development.
-Original bone animation can be sampled into native poses; skinned character
-rendering and the complete animation controller remain in development.
+Use `--experimental-scene --character-shock` to preview Bowser's shock mesh
+with original bone animation and skin materials. Multiple-weight skinning,
+morphs and the complete character controller remain in development.
 
 To preview the supported static objects in the frontend environment:
 

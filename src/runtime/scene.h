@@ -27,6 +27,7 @@ struct SceneOptions
     std::optional<std::string> frontend_images; // Explicit Main/InGame/BootLoading context; defaults to Main.
     bool frontend_animate = false; // Checked authored timeline; no scene handlers or menu transitions.
     bool frontend_boot = false; // Retail boot handler through its qualified service boundary.
+    bool character_shock = false; // Authored Bowser shock mesh and FE bone animation diagnostic.
     bool particles = false; // Qualified authored controller groups; no complete effects manager.
     bool debug_camera = false; // Original DebugCam with diagnostic desktop controls.
     bool no_world_culling = false; // Diagnostic reference: submit every selected world object.
