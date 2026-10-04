@@ -159,6 +159,11 @@ Patch `0081-drain-failed-native-raw-reads.patch` removes failed raw NL requests
 and paired tails before optional whole-file cleanup. Workers are joined,
 unrelated reads survive, and the original I/O failure remains visible.
 
+Patch `0082-select-native-font-polygons.patch` selects original textured `glPoly2`
+packets and shares font raster setup. Native font pages retain real pool/index
+bindings through frame completion; matrix state is restored on failed submission.
+Formatted, effect and scissored text remain unselected.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

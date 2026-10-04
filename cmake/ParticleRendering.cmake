@@ -1,9 +1,9 @@
 include_guard(GLOBAL)
 include(cmake/ParticleSimulation.cmake)
-add_library(charged_particle_render STATIC src/runtime/particle_render.cpp
-    "${MSCHARGED_PREPARED}/src/Game/GL/GLTexturedColourMeshWriter.cpp")
+include(cmake/ColourMesh.cmake)
+add_library(charged_particle_render STATIC src/runtime/particle_render.cpp)
 add_dependencies(charged_particle_render verify_prepared)
-target_link_libraries(charged_particle_render PUBLIC charged_particle_simulation charged_shadows charged_frames)
+target_link_libraries(charged_particle_render PUBLIC charged_particle_simulation charged_colour_mesh charged_frames)
 target_compile_features(charged_particle_render PUBLIC cxx_std_20)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(charged_particle_render PRIVATE -ffp-contract=off)
