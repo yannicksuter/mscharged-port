@@ -103,8 +103,8 @@ be selected; missing or unsupported objects report an error. Original sphere/box
 culling follows the active camera, with opaque and transparent packets in separate
 passes. Use `--no-world-culling` or the preview toggle for comparison. Full scene
 loading, visibility hierarchies and character animation remain in development.
-The provisional original pose accumulator also runs in CPU checks against checked
-hierarchies; animation playback and skinned character rendering remain pending.
+Original bone animation can be sampled into native poses; skinned character
+rendering and the complete animation controller remain in development.
 
 To preview the supported static objects in the frontend environment:
 
@@ -152,8 +152,9 @@ Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 To exercise the retail boot screen, use `--experimental-scene --frontend-boot`.
 It loads the original startup assets and runs the boot handler's timing and
 input. Enter or controller A dismisses the strap after its minimum delay.
-Some text is still unsupported, and the diagnostic stops at the logo sound
-request. Complete startup and the main menu remain in progress. Bounded boot
+The strap, Nunchuk and ESRB screens render their authored text and images.
+The diagnostic stops at the logo sound request. Complete startup and the main
+menu remain in progress. Bounded boot
 runs (`--frames N`) use neutral input to exercise automatic dismissal.
 
 For a camera-only NIS picture-in-picture preview, add `--nis-primary /DISC/first.nis`

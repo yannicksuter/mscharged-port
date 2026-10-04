@@ -54,8 +54,10 @@ void Generated()
  Check(Find(full,"strap","strap_us").attributes.colour[3]==255,"Fade mutated retained prior graph");
  boot.Update(boot.Current(),.125f);Near(boot.Status().strap_alpha,127.5f);boot.Update(boot.Current(),.25f);
  Check(boot.Status().phase==2&&Active(boot.Current())=="nunchuk"&&boot.Status().strap_alpha==0,"Half-second fade did not enter nunchuk");
+ Check(boot.Current()->layout.TextCount()==1&&boot.Current()->layout.font_fallbacks.size()==1&&boot.Current()->layout.unavailable.empty(),"Generated nunchuk lost original font fallback");
  boot.Update(boot.Current(),.25f);Check(boot.Status().phase==0&&Active(boot.Current())=="ESRB","Source USA region branch did not select ESRB");
  boot.Update(boot.Current(),.25f);Check(boot.Status().phase==0,"ESRB completed before start plus duration");
+ Check(boot.Current()->layout.TextCount()==1&&boot.Current()->layout.unavailable.empty(),"Generated ESRB paragraph is absent");
  boot.Update(boot.Current(),.25f);Check(boot.Status().phase==3&&Active(boot.Current())=="NLG"&&boot.Status().boundary==FrontendBootBoundary::PlayLogoSound,"Boot did not stop at actual logo sound request");
  auto blocked=boot.Current();boot.Update(blocked,60);Check(boot.Current()==blocked,"Blocked audio service advanced scene state");Reject([&]{boot.Update(full,0);});Reject([&]{boot.Update(blocked,-1);});
  // Explicit replay restores the source constructor state, authored resources and setup.
@@ -95,8 +97,34 @@ void Owned()
   for(const auto& [reason,count]:retained->layout.unavailable)std::cout<<"  unavailable "<<reason<<": "<<count<<"\n";
   Check(Active(retained)=="strap"&&retained->image_completed_files==1,"Owned strap/minibundle setup differs");
   boot.Update(boot.Current(),0);auto first=boot.Current();Check(first->layout.ImageCount()==1,"Owned first updated strap frame has no single image");
-  unsigned frames=0;
-  while(boot.Status().boundary==FrontendBootBoundary::None&&frames<2400){boot.Update(boot.Current(),1.f/60);++frames;}
+  unsigned frames=0,nunchuk_text_frames=0,esrb_text_frames=0;
+  while(boot.Status().boundary==FrontendBootBoundary::None&&frames<2400)
+  {
+   boot.Update(boot.Current(),1.f/60);++frames;
+   const auto frame=boot.Current();
+   const auto slide=std::find_if(frame->graph.slides.begin(),frame->graph.slides.end(),[&](const auto& s){return s.offset==frame->graph.active_slide;});
+   if((boot.Status().phase==2||boot.Status().phase==0)&&slide->time>.5f&&slide->time<2.f)
+   {
+    Check(frame->layout.TextCount()==1&&frame->layout.unavailable.empty(),"Owned boot text is missing during its authored visible interval");
+    const auto entry=std::find_if(frame->layout.entries.begin(),frame->layout.entries.end(),[](const auto& e){return std::holds_alternative<FrontendLayoutText>(e);});
+    const auto& text=std::get<FrontendLayoutText>(*entry);Check(!text.layout.quads.empty(),"Owned boot text produced no glyphs");
+    if(boot.Status().phase==2)
+    {
+     ++nunchuk_text_frames;
+     Check(frame->layout.ImageCount()==1&&frame->layout.font_fallbacks.at(0x501e5791)==frame->visuals->font_registration_order.front()->alias,
+        "Owned nunchuk did not use actual first registered font");
+    }
+    else
+    {
+     ++esrb_text_frames;Check(frame->layout.font_fallbacks.empty(),"Owned ESRB failed its exact font alias");
+     Check(text.text.find(u"{p}")!=std::u16string::npos,"Owned ESRB lost retained paragraph token");
+     Check(std::any_of(text.layout.quads.begin(),text.layout.quads.end(),[&](const auto& q){return std::abs(q.top-text.layout.quads.front().top)>text.layout.font->height*.5f;}),
+        "Owned ESRB paragraph did not produce distinct original rows");
+    }
+   }
+  }
+  Check(nunchuk_text_frames>30&&esrb_text_frames>30,"Owned boot visual audit missed supported authored intervals");
+  std::cout<<"Owned visible text frames: nunchuk "<<nunchuk_text_frames<<", ESRB "<<esrb_text_frames<<", font registration first "<<std::hex<<retained->visuals->font_registration_order.front()->alias<<std::dec<<"\n";
   Check(boot.Status().boundary==FrontendBootBoundary::PlayLogoSound&&boot.Status().phase==3&&Active(boot.Current())=="NLG","Owned original retail prefix did not reach explicit audio stop");
   Check(Active(retained)=="strap"&&first->layout.ImageCount()==1,"Owned retained initial frame was mutated");
   std::cout<<"Owned retail boot language "<<int(language)<<": "<<frames<<" frames, "<<retained->images->textures.size()<<" textures, audio boundary 23/de83984e\n";
