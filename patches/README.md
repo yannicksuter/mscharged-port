@@ -117,6 +117,11 @@ resolution, persistence and cleanup on retained native records. Exact authored
 colour counts and resource IDs are preserved; user-effect factories, geometry
 registration and particle simulation remain separate services.
 
+Patch `0073-share-original-frontend-animation-steps.patch` shares original key
+sampling, Bezier interpolation and presentation/slide timing with a checked
+native owner. Authored animation runs in the scene preview; full frontend scene
+handlers and menu transitions remain unlinked.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

@@ -271,7 +271,7 @@ class Builder
     {
         Enter(id,depth);Require(slides_.contains(id),"Frontend active slide is absent");const auto& slide=*slides_.at(id);
         Scalar(slide.time);
-        if(slide.animated)++result_.unavailable["animated slide branch"];
+        if(slide.animated&&!slide.animation_evaluated)++result_.unavailable["animated slide branch"];
         else for(auto child:slide.children)Instance(child,slide.time,matrix,colour,depth+1);
         active_.erase(id);
     }

@@ -19,6 +19,7 @@
 #include "runtime/frontend_text_gx.h"
 #include "runtime/frontend_layout_gx.h"
 #include "runtime/frontend_images.h"
+#include "resources/frontend_animation.h"
 #include "runtime/frontend_input_sdl.h"
 #include "resources/frontend_text_catalog.h"
 #include "NL/glx/glxTarget.h"
@@ -198,10 +199,27 @@ public:
     unsigned Rendered() const { return rendered_; }
     std::size_t TextCount() const { return frame_.TextCount(); }
     std::size_t ImageCount() const { return frame_.ImageCount(); }
+    void Replace(resources::FrontendLayoutFrame frame) { frame_ = std::move(frame); }
     void EndRender() override
     {
         DrawFrontendLayout(frame_, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
         ++rendered_;
+    }
+};
+
+struct AnimatedFrontendFrame
+{
+    std::shared_ptr<const FrontendVisualAssets> visuals;
+    resources::FrontendImageCatalog::Handle images;
+    resources::FrontendReference slide;
+    resources::FrontendAnimationPlayback playback;
+    AnimatedFrontendFrame(const resources::FrontendScene& scene, resources::FrontendReference selected,
+        std::shared_ptr<const FrontendVisualAssets> assets, resources::FrontendImageCatalog::Handle catalog)
+        : visuals(std::move(assets)), images(std::move(catalog)), slide(selected), playback(scene, selected) {}
+    resources::FrontendLayoutFrame Frame() const
+    {
+        const std::array fonts{visuals->text, visuals->heading};
+        return resources::BuildFrontendLayout(playback.Scene(), *visuals->localization, fonts, slide, *images);
     }
 };
 
@@ -280,6 +298,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (options.frontend_images && (!options.frontend_frame
             || (*options.frontend_images != "main" && *options.frontend_images != "ingame")))
             throw std::invalid_argument("Frontend images require an authored frame and main or ingame context");
+        if (options.frontend_animate && !options.frontend_frame)
+            throw std::invalid_argument("Frontend animation requires an authored frame");
         if (options.frontend_layout && options.debug_camera)
             throw std::invalid_argument("Frontend text inspection and debug camera use separate controls");
         if (options.frontend_world)
@@ -333,6 +353,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         const bool world_batch = options.world_res.has_value() || options.frontend_world;
         std::optional<resources::FrontendTextCatalog> frontend_text;
         std::optional<resources::FrontendLayoutFrame> frontend_frame;
+        std::unique_ptr<AnimatedFrontendFrame> frontend_animation;
         if (options.frontend_layout || options.frontend_frame)
         {
             const auto language = file.settings.language == "french" ? FrontendLanguage::NAFrench
@@ -381,14 +402,21 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 log("Frontend image context: " + options.frontend_images.value_or("main") + "; "
                     + std::to_string(catalog->textures.size()) + " retained textures from "
                     + std::to_string(images.CompletedFiles()) + " original bundle reads.");
-                frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id, *catalog);
-                log("Authored frontend static frame: " + std::to_string(frontend_frame->TextCount())
+                if (options.frontend_animate)
+                {
+                    frontend_animation = std::make_unique<AnimatedFrontendFrame>(graph, slide_id, assets, catalog);
+                    frontend_frame = frontend_animation->Frame();
+                    log("Original frontend timeline selected; bounded runs advance at 60 Hz. Scene handlers and menu transitions remain pending.");
+                }
+                else frontend_frame = resources::BuildFrontendLayout(graph, *assets->localization, fonts, slide_id, *catalog);
+                log(std::string(options.frontend_animate ? "Authored frontend animated frame: " : "Authored frontend static frame: ") + std::to_string(frontend_frame->TextCount())
                     + " text components, " + std::to_string(frontend_frame->ImageCount())
                     + " image components; " + std::to_string(frontend_frame->hidden) + " hidden or inactive instances.");
                 for (const auto& [reason, count] : frontend_frame->unavailable)
                     log("Unavailable frontend frame components (" + std::to_string(count) + "): " + reason);
-                if (frontend_frame->entries.empty()) throw std::runtime_error("Selected frontend frame has no supported static components");
-                log("Original stored transforms, text-box rows and Anark draw order; missing font effects, timelines and menu actions remain pending.");
+                if (frontend_frame->entries.empty() && !frontend_animation)
+                    throw std::runtime_error("Selected frontend frame has no supported static components");
+                log("Original transforms, text-box rows and Anark draw order; missing font effects and menu actions remain pending.");
             }
             else
             {
@@ -739,7 +767,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (frontend_frame)
         {
             auto view = std::make_unique<FrontendFrameView>(view_matrices, std::move(*frontend_frame));
-            view->m_Name = "Authored frontend static layout";
+            view->m_Name = frontend_animation ? "Authored frontend animated layout" : "Authored frontend static layout";
             gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
         }
         log("Original graphics begin/end/send lifecycle connected; host work drains before frame memory reuse.");
@@ -752,6 +780,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         world_objects.clear(); world_objects.shrink_to_fit();
         unsigned frames = 0, draws = 0, depth_hits = 0, colour_hits = 0, shadow_hits = 0;
         bool world_culling = !options.no_world_culling;
+        bool animation_paused = false, animation_reset = false;
+        unsigned animation_updates = 0;
         StaticWorldSubmission world_submission;
         std::size_t world_considered = 0, world_visible = 0, world_packets = 0;
         std::size_t pip_objects = 0, pip_packets = 0;
@@ -763,6 +793,17 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
                 delta = scheduler_delta;
                 glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
+                if (frontend_animation)
+                {
+                    if (animation_reset) { frontend_animation->playback.Reset(); animation_reset = false; }
+                    else if (!animation_paused)
+                    {
+                        const float step = frames ? (options.frames ? 1.f / 60 : std::clamp(delta, 0.f, .1f)) : 0.f;
+                        frontend_animation->playback.Advance(step);
+                        ++animation_updates;
+                    }
+                    frame_view->Replace(frontend_animation->Frame());
+                }
                 if (frontend_input)
                 {
                     const auto& io = ImGui::GetIO();
@@ -910,8 +951,16 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             }
             if (frame_view)
             {
-                ImGui::Text("Authored static layout: %zu text, %zu images", frame_view->TextCount(), frame_view->ImageCount());
-                ImGui::TextUnformatted("Stored frame only; timelines and menu actions pending.");
+                ImGui::Text("Authored %s layout: %zu text, %zu images", frontend_animation ? "animated" : "static",
+                    frame_view->TextCount(), frame_view->ImageCount());
+                if (frontend_animation)
+                {
+                    ImGui::Text("Frontend time: %.2f s", frontend_animation->playback.PresentationTime());
+                    ImGui::Checkbox("Pause frontend", &animation_paused);
+                    ImGui::SameLine(); if (ImGui::Button("Reset frontend")) animation_reset = true;
+                    ImGui::TextUnformatted("Authored timeline only; scene handlers and menu actions pending.");
+                }
+                else ImGui::TextUnformatted("Stored frame only; use --frontend-animate for a timeline.");
             }
             if (world)
             {
@@ -998,10 +1047,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         for (auto& binding : nis_bindings) binding.reset();
         if (frame_view)
         {
-            if (frame_view->Rendered() != frames) throw std::runtime_error("Frontend static frame missed a render pass");
+            if (frame_view->Rendered() != frames) throw std::runtime_error("Frontend frame missed a render pass");
             log("Authored frontend frame rendered: " + std::to_string(frames) + " frames, "
                 + std::to_string(frame_view->TextCount()) + " text components, "
-                + std::to_string(frame_view->ImageCount()) + " image components per frame.");
+                + std::to_string(frame_view->ImageCount())
+                + (frontend_animation ? " image components in the last frame." : " image components per frame."));
+            if (frontend_animation) log("Original frontend timeline advanced: " + std::to_string(animation_updates)
+                + " updates; presentation time " + std::to_string(frontend_animation->playback.PresentationTime()) + " seconds.");
         }
         if (text_view)
         {

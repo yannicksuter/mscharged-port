@@ -1,6 +1,7 @@
 """Static authored image/text selection through FEN reads, scheduled views and Vulkan."""
 from pathlib import Path
 import struct
+import re
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from camera_fixture import camera_fixture
 from world_scene_fixture import world_scene_fixture
 from frontend_visual_fixture import files, name_hash
 from frontend_layout_fixture import layout
+from frontend_animation_fixture import animation
 
 
 def frame(with_image=False):
@@ -107,6 +109,7 @@ with tempfile.TemporaryDirectory(prefix="mscharged-fe-frame-") as folder:
         if expected == 0:
             assert "shutdown recovered both game arenas" in output, output
         print(message)
+        return output
 
     write_disc(disc, files=payloads, fst_capacity=0x800)
     run()
@@ -117,6 +120,9 @@ with tempfile.TemporaryDirectory(prefix="mscharged-fe-frame-") as folder:
     no_frame = subprocess.run([executable, "--experimental-scene", "--frontend-images", "main"],
                               capture_output=True, text=True, timeout=10)
     assert no_frame.returncode == 2 and "requires --frontend-frame" in no_frame.stderr
+    no_frame = subprocess.run([executable, "--experimental-scene", "--frontend-animate"],
+                              capture_output=True, text=True, timeout=10)
+    assert no_frame.returncode == 2 and "--frontend-animate requires --frontend-frame" in no_frame.stderr
     payloads["Art/fe/test.fen"] = frame(with_image=True)
     payloads["Art/fe/MainUI.Dmn"] = image_bundle()
     payloads["Art/fe/InGameUI.Res"] = struct.pack(">4I", 32, 0, 1, 1)
@@ -125,6 +131,14 @@ with tempfile.TemporaryDirectory(prefix="mscharged-fe-frame-") as folder:
     mixed = "Authored frontend frame rendered: 30 frames, 2 text components, 1 image components per frame."
     run(message=mixed)
     run(message=mixed, extra=("--frontend-images", "ingame"))
+    payloads["Art/fe/test.fen"] = animation()
+    write_disc(disc, files=payloads, fst_capacity=0x800)
+    animated = run(message="Original frontend timeline advanced: 30 updates; presentation time",
+                   extra=("--frontend-animate",))
+    time = float(re.search(r"presentation time ([0-9.]+) seconds", animated).group(1))
+    assert abs(time - 29 / 60) < 1e-5, animated
+    assert "0 text components, 1 image components in the last frame" in animated, animated
+    payloads["Art/fe/test.fen"] = frame(with_image=True)
     payloads["Art/fe/MainUI.Dmn"] = struct.pack(">4I", 32, 0, 1, 1)
     write_disc(disc, files=payloads, fst_capacity=0x800)
     run(1, "is absent from the selected bundle profile")

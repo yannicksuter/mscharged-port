@@ -26,16 +26,16 @@ def fingerprint(file):
             return null
         return u32(at)
 
-    def ring(tail):
+    def ring(tail, links=0):
         if tail == null:
             return []
-        result, current = [], pointer(tail)
+        result, current = [], pointer(tail + links)
         while current not in result:
             result.append(current)
             if current == tail:
-                assert pointer(current) == result[0]
+                assert pointer(current + links) == result[0]
                 return result
-            current = pointer(current)
+            current = pointer(current + links)
         raise AssertionError('Invalid oracle ring')
 
     libraries = ring(pointer(12))
@@ -111,6 +111,18 @@ def fingerprint(file):
         words([at, u32(at + 0x40), u32(at + 0x1C)]); name(at + 0x20)
         words([u32(at + 0x10), u32(at + 0x14), u32(at + 0x18), data[at + 0x44], int(pointer(at + 12) != null)])
         refs(ring(pointer(at + 8)))
+        refs(ring(pointer(at + 12), 4))
+    animations = sorted(a for slide in slides for a in ring(pointer(slide + 12), 4))
+    word(len(animations))
+    for at in animations:
+        cast = u16(at + 16)
+        words([at, pointer(at + 12), u32(at + 20), cast])
+        keys = ring(pointer(at + 24), 48 if cast else 16)
+        word(len(keys))
+        for key in keys:
+            word(key)
+            words(u32(key + i*4) for i in range(12 if cast else 4))
+            if not cast: words([0]*8)
     hash_value = 14695981039346656037
     for byte in output:
         hash_value = ((hash_value ^ byte) * 1099511628211) & ((1 << 64) - 1)

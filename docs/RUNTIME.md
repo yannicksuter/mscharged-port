@@ -114,10 +114,11 @@ It uses separate controls from `--debug-camera`.
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`
 instead. This loads the original in-game image bundles and renders supported
-static components in their authored order. Other frontend layouts default to
-the `main` image bundle context; missing textures report an error. Animation,
-handler-driven images, movies, clipping and unsupported text formats remain
-pending; this does not run the menu.
+static components in their authored order. Add `--frontend-animate` to play
+supported authored animation tracks, with pause/reset controls in the preview.
+Bounded runs use a fixed 60 Hz timeline. Other frontend layouts default to the
+`main` image bundle context; missing textures report an error. Scene handlers,
+menu actions, movies, clipping and unsupported text formats remain pending.
 
 Press Escape or close the window to exit. Add `--frames 180` for a bounded run,
 `--unlit` to compare lighting, or use `--help` for other preview options. Running
