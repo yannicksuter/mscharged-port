@@ -19,14 +19,13 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `4099ae94235b61f282b5770f7533020fc28e2d3b`, adopted from
+The current base is `9ca59d250587adc0436d08176bec3898aa790fa0`, adopted from
 published upstream main. It remains an incomplete development snapshot, not a
-complete decompilation release. This adoption includes source-linked character
-loading, NIS overlays, object blur, lighting, field geometry, Mii management,
-two AI units and basic sockets. Those units are not automatically selected for
-native linking. Patches 0026, 0031 and 0041 follow the lighting names, linkage
-and source-defined defaults; 0036 and 0047 adapt the shared tweak templates,
-preserving native allocation ownership and checked parsing.
+complete decompilation release. This adoption adds source-linked StadiumLoading
+and SoundInstance, with named stadium finalization and typed audio ownership.
+These full units are not automatically selected for native linking. All 66
+existing patches apply without body changes; their base declarations follow the
+new pin. Native resource, physics, effects and audio services remain separate work.
 
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
