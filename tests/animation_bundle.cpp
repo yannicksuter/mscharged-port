@@ -3,6 +3,7 @@
 #include "runtime/startup_files.h"
 #include "Game/SHierarchy.h"
 #include "Game/SAnim.h"
+#include "Game/SAnim/AnimRetargeter.h"
 #include "NL/MemAlloc.h"
 #include "NL/nlFile.h"
 #include "NL/nlFileGC.h"
@@ -18,6 +19,7 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <source_location>
 #include <string_view>
 #include <thread>
 
@@ -27,8 +29,9 @@ namespace
 unsigned checks = 0;
 void Check(bool condition, const char* message)
 { ++checks; if (!condition) throw std::runtime_error(message); }
-template<class F> void Reject(F action)
-{ ++checks; try { action(); } catch (const std::exception&) { return; } throw std::runtime_error("Invalid bundle operation accepted"); }
+template<class F> void Reject(F action, std::source_location at = std::source_location::current())
+{ ++checks; try { action(); } catch (const std::exception&) { return; }
+  throw std::runtime_error("Invalid bundle operation accepted at test line " + std::to_string(at.line())); }
 std::vector<std::uint8_t> Read(const std::filesystem::path& path)
 {
     std::ifstream input(path, std::ios::binary);
@@ -262,6 +265,83 @@ void Failures()
     load.Begin(Request()); Pump(load);
     Check(callback.ran, "Reentrant NL callback was not exercised");
 }
+void CharacterData(const AnimationBundle::Handle& bundle, bool synthetic)
+{
+    Check(bundle && bundle->Retargets() && bundle->Size() > 0, "Character bundle omitted native owners");
+    Reject([&] { bundle->AnimationNode(0); });
+    for (unsigned track = 0; track < bundle->Size(); ++track)
+    {
+        const auto& data = bundle->At(track)->Data();
+        for (int node = 0; node < bundle->Hierarchy()->Data().GetNumNodes(); ++node)
+            for (bool mirror : {false, true})
+            {
+                const auto source = bundle->MappedNode(track, node, mirror);
+                Check(!source || *source < data.m_nNumNodes, "Character map exceeds the source animation");
+                if (source) bundle->At(track)->Weight(*source, .5f);
+            }
+    }
+    if (synthetic)
+    {
+        Check(bundle->Size() == 2 && bundle->Retarget(0) && bundle->Retarget(1), "Character did not select both map signatures");
+        Check(!bundle->MappedNode(0, 0) && bundle->MappedNode(0, 1) == 2
+            && bundle->MappedNode(0, 0, true) == 2 && !bundle->MappedNode(0, 1, true),
+            "Target mirror order or the unmapped sentinel changed");
+        Check(bundle->MappedNode(1, 0) == 0 && !bundle->MappedNode(1, 1), "Second track used the first track's map");
+        Check(bundle->Retarget(0)->m_NumBones == 0 && bundle->Retarget(0)->m_Unknown08 == 2,
+            "Serialized metadata was mistaken for the target map length");
+    }
+}
+void Characters(bool bad)
+{
+    AnimationBundleLoad load; load.Begin(Request()); Pump(load); auto previous = load.Result();
+    if (bad)
+    {
+        try { load.BeginCharacter(0); Pump(load); } catch (const std::runtime_error&) { load.Poll(); }
+        Check(load.State() == AnimationBundleState::Failed && load.Current() == previous,
+            "Invalid or missing character input replaced the active world bundle");
+        Reject([&] { load.Result(); }); Check(!nlAsyncReadsPending(nullptr), "Character failure retained a read");
+        return;
+    }
+    Reject([&] { load.BeginCharacter(20); }); Check(load.Current() == previous, "Invalid character index changed publication");
+    load.BeginCharacter(0); Check(load.Current() == previous, "Character published before three reads validated"); Pump(load);
+    previous = load.Result(); CharacterData(previous, true);
+    Check(load.CompletedFiles() == 3, "Character transaction omitted a required read");
+    load.BeginCharacter(4); load.Cancel(); Check(load.Current() == previous, "Character cancellation discarded the current bundle");
+    load.BeginCharacter(0); load.BeginCharacter(4); Pump(load, true); CharacterData(load.Result(), true);
+    Check(load.Current() != previous && std::string_view(load.Current()->Hierarchy()->Data().m_szName) == "luigi",
+        "Pending character replacement published the stale identity");
+    CharacterData(previous, true); previous = load.Current();
+    for (const auto path : {CharacterAnimation(0).hierarchy_path, CharacterAnimation(0).animation_path,
+                           CharacterAnimation(0).retarget_path})
+    {
+        const std::string absolute = "/" + std::string(path);
+        FaultFile fault(FaultFile::Error, absolute.c_str()); load.BeginCharacter(0); Pump(load, false, true);
+        Check(load.State() == AnimationBundleState::Failed && load.Current() == previous && !fault.handles,
+            "A character read failure changed publication or retained a worker");
+    }
+    {
+        const std::string path = "/" + std::string(CharacterAnimation(0).retarget_path);
+        FaultFile fault(FaultFile::Blocked, path.c_str()); load.BeginCharacter(0); fault.Wait();
+        std::jthread release([&] { SDL_Delay(15); { std::lock_guard lock(fault.mutex); fault.released = true; } fault.gate.notify_all(); });
+        load.Cancel(); Check(fault.finished && !fault.handles && load.Current() == previous,
+            "Character cancellation did not drain its active third read");
+    }
+    // Whole-file loading supplies a padded allocation/capacity, so even a
+    // nonaligned logical size consumes one raw read (no scratch-tail split).
+    // Leave two slots: third submission must fail and roll back the first two.
+    {
+        std::unique_ptr<nlFile> file(nlOpen("/world.res"));
+        alignas(32) std::array<std::array<std::uint8_t, 32>, 64> buffers{};
+        for (unsigned i = 0; i < 62; ++i)
+        { nlSeek(file.get(), 0, 0); nlReadAsync(file.get(), buffers[i].data(), 32, nullptr, 0, 32); }
+        Reject([&] { load.BeginCharacter(0); });
+        Check(load.State() == AnimationBundleState::Failed && load.Current() == previous, "Third submission failure changed the current character");
+        nlCancelPendingAsyncReads(file.get(), nullptr); Check(!nlAsyncReadsPending(nullptr), "Partial character submission leaked a read");
+    }
+    load.BeginCharacter(0); nlShutdownFileSystem(); load.Poll();
+    Check(load.State() == AnimationBundleState::Failed && load.Current() == previous, "File shutdown invalidated retained character data");
+    nlInitFileSystem(); load.Unload(); CharacterData(previous, true);
+}
 struct Session
 {
     bool live = false, disc = false;
@@ -274,8 +354,8 @@ int main(int argc, char** argv)
     try
     {
         Check(argc == 4, "Supply image, data directory and synthetic/owned mode");
-        const bool owned = std::string_view(argv[3]) == "owned";
-        if (!owned) Decoder(argv[2]);
+        const bool owned = std::string_view(argv[3]) == "owned", bad = std::string_view(argv[3]) == "bad-character";
+        if (!owned && !bad) Decoder(argv[2]);
         { AnimationBundleLoad load; Reject([&] { load.Begin(Request()); }); }
         const auto folder = (std::filesystem::path(argv[2]) / "animation-bundle-data").string();
         std::filesystem::create_directories(folder);
@@ -287,10 +367,18 @@ int main(int argc, char** argv)
         Check(host.window, "Aurora initialization failed"); InitializeStartupOS(); nlInitMemory();
         Check(aurora_dvd_open(argv[1]), "Cannot open animation disc"); session.disc = true; nlInitFileSystem();
         AnimationBundle::Handle retained;
+        AnimationBundle::Handle retained_character;
         for (unsigned repeat = 0; repeat < 3; ++repeat)
         {
             const auto a = StandardAllocator.TotalFreeMemory(), b = VirtualAllocator.TotalFreeMemory();
-            if (!owned) { Transactions(); Failures(); }
+            if (!owned && !bad) { Transactions(); Failures(); }
+            if (!owned) Characters(bad);
+            else
+            {
+                AnimationBundleLoad characters;
+                for (unsigned index = 0; index < 20; ++index)
+                { characters.BeginCharacter(index); Pump(characters, repeat % 2); retained_character = characters.Result(); CharacterData(retained_character, false); }
+            }
             {
                 AnimationBundleLoad load;
                 for (const auto identity : owned ? std::array{0x04fb2f26u, 0xd625cf79u} : std::array{0xaaaau, 0xbbbbu})
@@ -308,6 +396,7 @@ int main(int argc, char** argv)
         }
         nlShutdownFileSystem(); ResetStartupMemory();
         Inspect(retained, owned ? 0xd625cf79 : 0xbbbb, 2);
+        if (retained_character) CharacterData(retained_character, false);
         std::cout << checks << " animation bundle checks passed; retained direct-index rigs survive unload and arena shutdown\n";
     }
     catch (const std::exception& e) { std::cerr << "FAILED: " << e.what() << " (check " << checks << ")\n"; return 1; }

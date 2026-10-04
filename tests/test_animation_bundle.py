@@ -8,6 +8,7 @@ import sys
 import tempfile
 import zlib
 from disc_fixture import write_disc
+from animation_retarget_fixture import retarget_fixture
 
 
 def words(values):
@@ -36,12 +37,14 @@ class World:
         self.data.extend(payload)
         self.end(at)
 
-    def hierarchy(self, identity, parent_error=False):
+    def hierarchy(self, identity, parent_error=False, name="rig"):
         at = self.start(0x80018000)
         header = [0xf0abcdef] * 13
         header[1], header[2], header[9], header[10] = identity, 2, -1, -1
+        encoded_name = name.encode() + b"\0"
+        encoded_name += bytes(-len(encoded_name) % 4)
         for kind, payload in (
-            (0x18001, words(header)), (0x18002, b"rig\0"),
+            (0x18001, words(header)), (0x18002, encoded_name),
             (0x18003, words((0x7ffffff0, 0x80000001))),
             (0x18009, words((-1, 1 if parent_error else 0))),
             (0x18004, words((1, 0))), (0x18005, words((0xfefefefe, 0xdddddddd))),
@@ -115,6 +118,27 @@ def compressed(data):
     return words((len(data),)) + zlib.compress(data)
 
 
+def character_files(name="mario", mode="valid"):
+    identity = 0xffffffff
+    for byte in name.encode():
+        identity = (identity * 33 + byte) & 0xffffffff
+    hierarchy = World(15)
+    hierarchy.data.clear()
+    hierarchy.hierarchy(identity, name="wrong" if mode == "identity" else name)
+    animations = World(17)
+    animations.data.clear()
+    animations.animation(0x10, 0x1111, 8, nodes=3)
+    animations.animation(0x20, 0x9999 if mode == "missing-map" else 0x2222, 16, nodes=1)
+    maps = [(0x1111, 0, [-1, 3 if mode == "source-node" else 2]), (0x2222, 1, [0, -1])]
+    if mode == "map-count":
+        maps[0] = (0x1111, 0, [0])
+    if mode == "empty-list":
+        maps = []
+    return {f"art/animation/{name}.shier": bytes(hierarchy.data),
+            f"art/animation/{name}fe.sanim": bytes(animations.data),
+            f"art/animation/{name}/animretarget/{name}.bin": retarget_fixture(6, [maps])}
+
+
 def main():
     executable = str(Path(sys.argv[1]).resolve())
     with tempfile.TemporaryDirectory(prefix="mscharged-animation-bundle-") as folder:
@@ -135,9 +159,22 @@ def main():
                  "bad.res": bad, "empty.res": b"", "compressed.res.zlib": compressed(a),
                  "compressed.tmp.zlib": compressed(b), "broken.res.zlib": compressed(a)[:-1],
                  "oversize.res.zlib": words((0x1000001,)) + zlib.compress(a)}
+        files.update(character_files())
+        files.update(character_files("luigi"))
         write_disc(root / "animation.iso", files=files, fst_capacity=0x400)
         result = subprocess.run([executable, str(root / "animation.iso"), str(root), "synthetic"], timeout=45)
-        return result.returncode
+        if result.returncode:
+            return result.returncode
+        for mode in ("identity", "missing-map", "source-node", "map-count", "empty-list", "missing-0", "missing-1", "missing-2"):
+            malformed = dict(files)
+            malformed.update(character_files(mode=mode))
+            if mode in ("missing-0", "missing-1", "missing-2"):
+                del malformed[list(character_files())[int(mode[-1])]]
+            write_disc(root / "malformed.iso", files=malformed, fst_capacity=0x400)
+            result = subprocess.run([executable, str(root / "malformed.iso"), str(root), "bad-character"], timeout=15)
+            if result.returncode:
+                return result.returncode
+        return 0
 
 
 if __name__ == "__main__":
