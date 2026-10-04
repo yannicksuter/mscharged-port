@@ -728,6 +728,7 @@ int main(int argc, char** argv)
                          "                        [--frontend-frame /Art/fe/SCENE.fen [--frontend-slide NAME]] (static image/text layout)\n"
                          "                        [--frontend-images main|ingame] (image bundle context; default main)\n"
                          "                        [--frontend-animate] (authored timeline; pause/reset in preview)\n"
+                         "                        [--particles] (one authored billboard emitter; pause/reset in preview)\n"
                          "                        [--camera /DISC/camera.cam | --debug-camera]\n"
                          "                        [--nis-primary /DISC/primary.nis --nis-secondary /DISC/secondary.nis]\n"
                          "                        [--pip-expand SECONDS] (camera-only PIP; no NIS actors)\n"
@@ -740,6 +741,7 @@ int main(int argc, char** argv)
         else if (arg == "--experimental-scene") options.experimental_scene = true;
         else if (arg == "--frontend-world") { options.scene_arguments = true; options.scene.frontend_world = true; }
         else if (arg == "--frontend-animate") { options.scene_arguments = true; options.scene.frontend_animate = true; }
+        else if (arg == "--particles") { options.scene_arguments = true; options.scene.particles = true; }
         else if (arg == "--no-world-culling") { options.scene_arguments = true; options.scene.no_world_culling = true; }
         else if (arg == "--debug-camera") { options.scene_arguments = true; options.scene.debug_camera = true; }
         else if (arg == "--unlit") { options.scene_arguments = true; options.scene.unlit = true; }
@@ -829,6 +831,8 @@ int main(int argc, char** argv)
     { std::cerr << "--frontend-images requires --frontend-frame and either main or ingame.\n"; return 2; }
     if (options.scene.frontend_animate && !options.scene.frontend_frame)
     { std::cerr << "--frontend-animate requires --frontend-frame.\n"; return 2; }
+    if (options.scene.particles && (options.scene.nis_primary || options.scene.shadow_id || options.scene.shadow_textures))
+    { std::cerr << "--particles cannot be combined with PIP or shadow options.\n"; return 2; }
     if (options.scene.debug_camera && (options.scene.camera || options.scene.shadow_id || options.scene.shadow_textures))
     { std::cerr << "--debug-camera cannot be combined with --camera or shadow options.\n"; return 2; }
     if (options.scene.shadow_id.has_value() != options.scene.shadow_textures.has_value())

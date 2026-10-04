@@ -132,6 +132,11 @@ presentation/component clock reset predicates. The native scene session owns
 actual FEN/font/image loading and retained frames; it does not supply the original
 scene-manager stack, handler callbacks or menu readiness.
 
+Patch `0076-select-original-particle-billboards.patch` shares original billboard
+raster and quad writing, selects the textured-colour mesh writer and handles its
+signed short UV streams on the native vertex-colour material path. Real texture
+bindings and original frame storage are owned by the bounded renderer.
+
 Patch `0078-include-tweak-pool-destruction.patch` exposes the original inline
 slot-pool destructors to native tweak-registry exception cleanup. Optimized
 builds must not depend on another translation unit emitting those definitions.

@@ -35,7 +35,8 @@ the complete game frame loop remain in development. Particle files and textures
 can be read and retained, with supported effect groups resolved through original
 code. One authored billboard emitter now runs the original CPU simulation and
 quad sampling, with bounded shutdown and allocator checks. Geometry registration
-and particle rendering are still pending.
+and the complete effects manager are still pending. The scene preview below
+adds rendering for the selected billboard emitter.
 
 For the host check alone, use `cmake --workflow --preset aurora`, then run
 `./build/aurora/mscharged-aurora-check --window`.
@@ -76,6 +77,11 @@ With the graphics dependencies above and your disc configured:
 CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
 ./build/scene/mscharged --experimental-scene --config ./mscharged.ini
 ```
+
+Add `--particles` to render one authored billboard emitter at the world origin,
+with pause, visibility and reset controls. It uses the original simulation,
+mesh writer and blend/depth rules. This bounded preview does not start the
+complete effects manager and cannot be combined with PIP or shadow previews.
 
 The preview loads the ball from a USA `R4QE01` revision 1 image and renders it
 through Aurora/Vulkan with selected original materials, lighting and texture

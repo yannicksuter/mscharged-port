@@ -154,6 +154,12 @@ void ParticleSimulation::Release() { if (Active()) impl_->Cleanup(); }
 float ParticleSimulation::Elapsed() const { impl_->Check(); return impl_->system->m_fElapsedTime; }
 std::uint32_t ParticleSimulation::Seed() const { impl_->Check(true); return impl_->seed; }
 std::shared_ptr<const resources::Texture> ParticleSimulation::Texture() const { impl_->Check(); return impl_->texture; }
+ParticleRenderProfile ParticleSimulation::RenderProfile() const
+{
+    impl_->Check();
+    return {static_cast<std::uint32_t>(impl_->spec.m_uLayer), impl_->spec.m_pTemplate->m_eBlend,
+        impl_->spec.m_pTemplate->IsInFront() || impl_->spec.m_bInFront != 0};
+}
 bool ParticleSimulation::Advance(float dt)
 {
     impl_->Check();
@@ -195,7 +201,7 @@ std::vector<ParticleSnapshot> ParticleSimulation::Snapshot() const
 std::vector<ParticleQuad> ParticleSimulation::Sample(std::array<float, 3> right, std::array<float, 3> up)
 {
     impl_->Check();
-    for (float value : right) Bound(value, 1, "view right");
+    for (float value : right) Bound(value, 16, "view right");
     for (float value : up) Bound(value, 1, "view up");
     const nlVector3 r{right[0], right[1], right[2]}, u{up[0], up[1], up[2]};
     std::vector<ParticleQuad> result; result.reserve(impl_->system->m_NumParticles);
