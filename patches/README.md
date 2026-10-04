@@ -145,6 +145,11 @@ Patch `0078-include-tweak-pool-destruction.patch` exposes the original inline
 slot-pool destructors to native tweak-registry exception cleanup. Optimized
 builds must not depend on another translation unit emitting those definitions.
 
+Patch `0079-share-original-font-text-steps.patch` shares original string metrics
+and page-ordered glyph generation with bounded native font adapters. Plain
+colour text retains fractional draw advances and original short UVs; formatted
+effects and scissored text remain separate work.
+
 Patch `0081-drain-failed-native-raw-reads.patch` removes failed raw NL requests
 and paired tails before optional whole-file cleanup. Workers are joined,
 unrelated reads survive, and the original I/O failure remains visible.
