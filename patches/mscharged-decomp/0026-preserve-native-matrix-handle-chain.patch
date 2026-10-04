@@ -1,6 +1,6 @@
 Subject: Keep the complete matrix-handle chain pointer-sized on native hosts
 
-Upstream-base: c9202e44852ad88d1f5b08ef37a382499d61a4a4
+Upstream-base: 389ec8223cba8dda09934884b1a2967704bec363
 
 Matrix handles address live GL matrix storage. Preserve their width through
 allocation, global state, model packets, draw/text callers, render caches and
@@ -254,8 +254,8 @@ index 60c6d5e..db8ad4f 100644
      unsigned short GetExtendedFontChar(unsigned short Character) const;
      void DisableScissorBox() const;
      void SetScissorBox(const ScissorBox& other) const;
--    void DrawString(eGLView View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, unsigned long* pMatrix, nlColour* pOverrideColour) const;
-+    void DrawString(eGLView View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, glMatrixHandle* pMatrix, nlColour* pOverrideColour) const;
+-    void DrawString(GLView* View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, unsigned long* pMatrix, nlColour* pOverrideColour) const;
++    void DrawString(GLView* View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, glMatrixHandle* pMatrix, nlColour* pOverrideColour) const;
      unsigned char Load(const char* szFontName, char* pFontDescData, unsigned long HashId);
  
      ~nlFont();

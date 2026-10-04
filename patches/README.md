@@ -19,14 +19,13 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `c9202e44852ad88d1f5b08ef37a382499d61a4a4`, adopted from
+The current base is `389ec8223cba8dda09934884b1a2967704bec363`, adopted from
 published upstream main. It remains an incomplete development snapshot, not a
-complete decompilation release. This adoption adds source-linked ParticleSystem,
-EffectsBundleData, InputRouter, ImpostorSprite and Audio/Delay. EmissionManager
-has additional reconstructed methods but remains marked NonMatching upstream.
-Patches 0026 and 0038 follow renamed drawing functions and updated event header
-layout; the other existing patch bodies apply unchanged. Native source selection
-and verification remain explicit; upstream matching does not enable whole-game
+complete decompilation release. This adoption adds source-linked font drawing,
+measurement, asynchronous font loading and replay choreography. Patches 0026
+and 0070 follow the original text renderer's corrected GLView pointer type;
+the other existing patch bodies apply unchanged. Native source selection and
+verification remain explicit; upstream matching does not enable whole-game
 linking automatically.
 
 The selected camera sources include original authored playback (0056) and
