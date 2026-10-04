@@ -98,3 +98,4 @@
 0097-enable-native-effects-geometry-materials.patch
 0098-share-original-audio-voice-steps.patch
 0099-share-original-frontend-pointer-production.patch
+0100-share-original-resident-cue-lifecycle.patch
