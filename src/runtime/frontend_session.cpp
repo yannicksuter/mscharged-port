@@ -42,7 +42,8 @@ struct FrontendSession::Implementation
                 throw std::invalid_argument("Invalid frontend scene path");
             if (request.initial_slide.size() > 4096 || request.initial_slide.find('\0') != std::string::npos)
                 throw std::invalid_argument("Invalid initial frontend slide name");
-            if (request.image_profile != FrontendImageProfile::Main && request.image_profile != FrontendImageProfile::InGame)
+            if (request.image_profile != FrontendImageProfile::Main && request.image_profile != FrontendImageProfile::InGame
+                && request.image_profile != FrontendImageProfile::BootLoading)
                 throw std::invalid_argument("Unknown frontend image profile");
             {
                 std::unique_ptr<nlFile> file(nlOpen(path.c_str()));
