@@ -17,6 +17,7 @@ include(cmake/Interpreter.cmake)
 include(cmake/NisPlayback.cmake)
 include(cmake/NisTriggerScript.cmake)
 include(cmake/FrontendWorldFiles.cmake)
+include(cmake/FrontendScene.cmake)
 include(cmake/FrontendInput.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp)
