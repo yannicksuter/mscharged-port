@@ -184,6 +184,15 @@ activation, screen-ring and loading-notification rules. Native scene ownership
 uses real frontend input; the original manager's state-6 gate and unavailable
 concrete handlers and HOME services remain explicit boundaries.
 
+Patch `0087-share-original-retail-boot-loading.patch` shares the retail boot
+screen's setup, input, fade and phase selection with a retained native adapter.
+It stops at the original logo sound request until audio services are available.
+
+Patch `0088-share-original-sanim-pose-steps.patch` shares the original bone-channel
+interpolation and unmapped-node fallback with native pose sampling. Native bounds
+checks handle singleton and rounded terminal samples; complete animation
+controllers, morphs and skinning remain separate work.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The
@@ -336,8 +345,3 @@ decompilation/link release. Keep published tags fixed and use new tags for later
 snapshots. A tag is a readable label; the port's gitlink and this series' `base`
 still record the exact commit. Creating or pushing a tag does not change this
 port's pin. Record its label when deliberately adopting the corresponding commit.
-
-Patch `0088-share-original-sanim-pose-steps.patch` shares the original bone-channel
-interpolation and unmapped-node fallback with native pose sampling. Native bounds
-checks handle singleton and rounded terminal samples; complete animation
-controllers, morphs and skinning remain separate work.

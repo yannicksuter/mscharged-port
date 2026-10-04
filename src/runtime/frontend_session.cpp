@@ -237,4 +237,12 @@ resources::FrontendLoadingSetup FrontendSession::SetupLoadingScene(const Handle&
     s.Mutate([&](auto& playback) { result = playback.SetupLoadingScene(widescreen); return true; });
     return result;
 }
+void FrontendSession::BootTransaction(const Handle& expected,
+    const std::function<void(resources::FrontendAnimationPlayback&)>& operation)
+{
+    auto& s=*impl_;s.CheckMutation();
+    if (!expected || expected!=s.current) throw std::logic_error("Boot handler requires the visible current snapshot");
+    s.Mutate([&](auto& playback){operation(playback);return true;});
+}
+
 }
