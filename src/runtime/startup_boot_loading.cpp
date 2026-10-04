@@ -60,6 +60,7 @@ std::string VerifyStartupBootLoading()
             const auto stop = boot.Stop();
             if (!stop) throw std::logic_error("Blocked boot script has no service diagnosis");
             result += "blocked at service " + std::to_string(stop->service) + " (" + stop->description + ").";
+            if (stop->service == 41) result += " " + VerifyStartupParticleResources();
         }
         else if (boot.State() == BootLoadingState::Complete)
             result += "selected script finished; full frontend initialization remains separate.";

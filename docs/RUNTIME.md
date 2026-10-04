@@ -31,7 +31,8 @@ The checks include original memory, file access, boot configuration, tweak
 registration, events, task scheduling, frame timing and authored camera loading
 and playback. A separate bounded diagnostic executes the original boot script
 until it reaches an unsupported service, currently particle loading. Movies and
-the complete game frame loop remain in development.
+the complete game frame loop remain in development. Particle files, effects
+records and textures can be read and checked; particle rendering is still pending.
 
 For the host check alone, use `cmake --workflow --preset aurora`, then run
 `./build/aurora/mscharged-aurora-check --window`.

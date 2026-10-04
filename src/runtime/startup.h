@@ -20,6 +20,7 @@ void InitializeStartupOS();
 void ResetStartupMemory();
 std::string StartupMemorySummary();
 std::string VerifyStartupBootLoading();
+std::string VerifyStartupParticleResources();
 // Returns 3 at an explicit unimplemented service, 1 for a startup error.
 int RunGameStartup(int argc, char** argv, const std::filesystem::path& config);
 }
