@@ -837,6 +837,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             glMatrixOrthographic(text_matrices.projection, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
             auto view = std::make_unique<FrontendFrameView>(text_matrices, *frame_packets);
             view->m_Name = options.frontend_animate ? "Authored frontend animated layout" : "Authored frontend static layout";
+            if (options.frontend_boot)
+            {
+                // Original glxInitTargets and glxSwap clear the boot backbuffer
+                // to transparent black. The diagnostic frame owns that clear
+                // until the complete original swap loop is connected.
+                glGetBackBufferTarget().target->mClearColour = {0, 0, 0, 0};
+                view->m_ClearColour = view->m_ClearDepth = true;
+            }
             gRootView.AddChild(view.get()); frame_view = view.release(); frontend_frame.reset();
             log("Mixed frontend text and images use retained registrations and original ordered GL packets.");
         }
