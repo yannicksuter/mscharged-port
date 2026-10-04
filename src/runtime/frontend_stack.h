@@ -14,6 +14,7 @@ struct FrontendStackRequest
     FrontendImageProfile image_profile = FrontendImageProfile::Main;
     std::string initial_slide;
     bool animate = true;
+    unsigned movement = 0; // Original ScreenMovement: nothing 0, forward 1, back 2.
 };
 enum class FrontendStackState
 { Queued, Loading, AwaitingHandler, AwaitingPublication, Published, Failed };
@@ -23,6 +24,7 @@ struct FrontendStackContext
     std::uint64_t token;
     FrontendSession& session;
     FrontendHandler& handler;
+    unsigned movement = 0;
     // These references are borrowed for this callback only. Do not retain them,
     // begin another load, acquire exclusive focus, or release either owner.
 };
@@ -41,6 +43,7 @@ struct FrontendStackEntry
     FrontendStackState state = FrontendStackState::Queued;
     bool visible = true, queued_pop = false;
     FrontendSession::Handle prepared, published;
+    unsigned movement = 0;
 };
 struct FrontendStackPublication
 {

@@ -117,12 +117,12 @@ struct FrontendSceneStack::Implementation
             }
             void SceneCreated()
             {
-                FrontendStackContext context{entry.value.token, *entry.session, *entry.handler};
+                FrontendStackContext context{entry.value.token, *entry.session, *entry.handler, entry.value.movement};
                 entry.callbacks.scene_created(context); owner.Validate(entry);
             }
             void InitializeSubHandlers()
             {
-                FrontendStackContext context{entry.value.token, *entry.session, *entry.handler};
+                FrontendStackContext context{entry.value.token, *entry.session, *entry.handler, entry.value.movement};
                 entry.callbacks.initialize_subhandlers(context); owner.Validate(entry);
             }
         } adapter{*this, e};
@@ -225,12 +225,13 @@ FrontendSceneStack::Token FrontendSceneStack::QueuePush(FrontendStackRequest req
     auto& s = *impl_; s.Mutable(); CheckCallbacks(callbacks); (void)SourcePath(request.scene);
     Require(request.language == FrontendLanguage::English || request.language == FrontendLanguage::NAFrench
         || request.language == FrontendLanguage::NASpanish, "Frontend scene stack supports the qualified USA languages");
+    Require(request.movement <= 2, "Frontend scene movement is outside original ScreenMovement");
     Require(s.entries.size() < 32, "Frontend scene stack exceeds its original 32-entry limit");
     const auto token = next_token.fetch_add(1);
     Require(token && token != std::numeric_limits<Token>::max(), "Frontend scene identity range exhausted");
     Guard guard(s.busy);
     auto entry = std::make_unique<Implementation::EntryData>();
-    entry->value.token = token; entry->value.scene = request.scene;
+    entry->value.token = token; entry->value.scene = request.scene; entry->value.movement = request.movement;
     entry->request = std::move(request); entry->callbacks = std::move(callbacks);
     s.entries.emplace(token, std::move(entry));
     try { FrontendQueueScene(s.queue, Implementation::Message{token, true}); }
@@ -302,7 +303,7 @@ void FrontendSceneStack::Update(float delta)
             s.Validate(e);
             Require(e.session->Current() == e.value.published, "Frontend handler mutated outside its stack callback");
             e.handler->Update(e.value.published, delta);
-            FrontendStackContext context{token, *e.session, *e.handler};
+            FrontendStackContext context{token, *e.session, *e.handler, e.value.movement};
             e.callbacks.after_base_update(context, delta); s.Validate(e);
             e.value.prepared = e.session->Current();
             e.value.state = FrontendStackState::AwaitingPublication;

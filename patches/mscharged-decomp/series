@@ -99,3 +99,4 @@
 0098-share-original-audio-voice-steps.patch
 0099-share-original-frontend-pointer-production.patch
 0100-share-original-resident-cue-lifecycle.patch
+0101-share-original-frontend-transition-waits.patch
