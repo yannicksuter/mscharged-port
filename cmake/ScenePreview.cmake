@@ -138,7 +138,7 @@ target_link_libraries(charged_scene_preview PRIVATE charged_nis_pip_scene charge
     charged_world_scene charged_world_objects charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
 target_link_libraries(charged_scene_preview PRIVATE charged_frontend_visuals charged_frontend_font_registry charged_frontend_text_catalog charged_frontend_layout_gx charged_frontend_input charged_frontend_session charged_particle_render)
-target_link_libraries(charged_scene_preview PRIVATE charged_frontend_packets charged_frontend_handler charged_frontend_boot_loading charged_skin_render)
+target_link_libraries(charged_scene_preview PRIVATE charged_frontend_packets charged_frontend_handler charged_frontend_boot_loading charged_audio_bank_load charged_skin_render)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)
 if(BUILD_TESTING)
     include(cmake/Tasks.cmake)

@@ -22,6 +22,8 @@
 #include "runtime/frontend_session.h"
 #include "runtime/frontend_handler.h"
 #include "runtime/frontend_boot_loading.h"
+#include "runtime/frontend_boot_audio.h"
+#include "NL/nlMath.h"
 #include "runtime/particle_files.h"
 #include "runtime/particle_controller.h"
 #include "runtime/particle_controller_render.h"
@@ -467,6 +469,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::vector<std::shared_ptr<const resources::FrontendFont>> inspector_fonts;
         std::optional<resources::FrontendLayoutFrame> frontend_frame;
         std::shared_ptr<FrontendSession> frontend_session;
+        std::shared_ptr<FrontendBootAudio> boot_audio;
         FrontendSession::Handle frontend_published_frame;
         EffectsRegistry::Handle particle_groups;
         std::unique_ptr<ParticleControllers> particles;
@@ -505,6 +508,30 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             : file.settings.language == "spanish" ? FrontendLanguage::NASpanish : FrontendLanguage::English;
         if (options.frontend_frame)
         {
+            if (options.frontend_boot)
+            {
+                PendingAsset global;global.Start("/audio/nlxgs.bun");
+                const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(30);
+                while(!global.done)
+                {
+                    if(Update())throw std::runtime_error("Boot audio loading cancelled");
+                    nlServiceFileSystem();
+                    if(std::chrono::steady_clock::now()>deadline)throw std::runtime_error("Boot audio metadata timed out");
+                    if(!global.done)SDL_Delay(1);
+                }
+                const auto catalog=resources::ReadAudioBankCatalog(global.Bytes());
+                const auto calculation=resources::ReadAudioCalculationInitial(global.Bytes());
+                AudioBankLoad load(catalog,25,23);
+                while(load.State()==AudioBankLoadState::Loading)
+                {
+                    if(Update())throw std::runtime_error("Boot audio loading cancelled");
+                    load.Service();
+                    if(std::chrono::steady_clock::now()>deadline)throw std::runtime_error("Boot audio bank timed out");
+                    if(load.State()==AudioBankLoadState::Loading)SDL_Delay(1);
+                }
+                boot_audio=std::make_shared<FrontendBootAudio>(load.Result(),calculation,nlDefaultSeed);
+                log("Resident boot audio loaded through NL: FE_GEN_Splash name25/slot23, original calculation and DSP samples.");
+            }
             frontend_session = std::make_shared<FrontendSession>();
             frontend_session->Begin({*options.frontend_frame, frontend_language,
                 options.frontend_images == "boot" ? FrontendImageProfile::BootLoading
@@ -939,9 +966,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 frontend_input->SetRepeat(action, .35f, .12f);
             if (options.frontend_boot)
             {
-                frontend_boot = std::make_unique<FrontendBootLoading>(frontend_session, *frontend_input);
+                frontend_boot = std::make_unique<FrontendBootLoading>(frontend_session, *frontend_input, false, boot_audio);
                 frontend_published_frame = frontend_boot->Current();
-                log("Original retail BootLoadingScene selected: strap, nunchuk and ESRB; audio service remains pending.");
+                log("Original retail BootLoadingScene selected: strap, nunchuk, ESRB and logo with resident audio.");
             }
             else frontend_handler = std::make_unique<FrontendHandler>(frontend_session, *frontend_input);
             frame_packets->Prepare(frontend_session->Current());
@@ -1053,6 +1080,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                                 log("Original boot screen phase: " + std::to_string(after.phase));
                             if (before.boundary != after.boundary)
                                 log("Boot screen stopped at FEAudio::PlaySound(0x17, 0xde83984e). Audio and full startup remain pending.");
+                            if (before.phase != after.phase && after.phase == 3 && boot_audio)
+                                log("Original logo cue admitted to SDL; selected sample " + std::to_string(*boot_audio->Status().sample));
+                            if (before.phase != after.phase && after.phase == 4 && boot_audio)
+                                log("Original boot bank unload completed; startup-manager readiness remains pending.");
                         }
                         else frontend_handler->Update(frame_packets->Current(), step);
                         ++animation_updates;
@@ -1220,9 +1251,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 const auto state = frontend_boot->Status();
                 ImGui::TextUnformatted("Original startup screen / work in progress");
                 if (state.boundary == FrontendBootBoundary::PlayLogoSound)
-                    ImGui::TextUnformatted("Stopped: logo sound playback is not implemented yet.");
+                    ImGui::TextUnformatted("Stopped: the logo audio service is unavailable.");
+                else if (state.phase == 4)
+                    ImGui::TextUnformatted("Boot slides complete. Game loading services are still in development.");
+                else if (state.phase == 3)
+                    ImGui::TextUnformatted("Original logo animation and sound.");
                 else ImGui::TextUnformatted("Enter or controller A: continue after the original delay.");
-                ImGui::BeginDisabled(options.frames != 0);
+                ImGui::BeginDisabled(options.frames != 0 || (boot_audio && boot_audio->Status().state != FrontendBootAudioState::Loaded));
                 if (ImGui::Button("Restart boot screen")) animation_reset = true;
                 ImGui::EndDisabled();
                 if (frame_packets->Current() != frontend_session->Current())
@@ -1574,7 +1609,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if (text_view->Rendered() != frames) throw std::runtime_error("Frontend text view missed a rendered frame");
             log("Frontend text inspection rendered: " + std::to_string(text_view->Rendered()) + " frames through the original view graph.");
         }
-        frontend_boot.reset(); frontend_handler.reset(); frontend_devices.reset(); frontend_input.reset();
+        frontend_boot.reset(); boot_audio.reset(); frontend_handler.reset(); frontend_devices.reset(); frontend_input.reset();
         frontend_session.reset(); // Drain pending reloads before NL services/arenas shut down.
         frontend_published_frame.reset();
         if (particles)
