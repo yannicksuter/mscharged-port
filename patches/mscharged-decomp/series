@@ -58,3 +58,4 @@
 0057-select-native-debug-camera.patch
 0058-share-original-frontend-camera-catalog.patch
 0059-select-native-interpreter-execution.patch
+0060-share-original-nis-playback-timing.patch

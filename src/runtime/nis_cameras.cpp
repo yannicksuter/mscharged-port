@@ -189,6 +189,7 @@ const cBaseCamera* NisCameras::Camera(unsigned slot) const
     return impl_->slots[slot] && impl_->slots[slot]->playback ? &*impl_->slots[slot] : nullptr;
 }
 float NisCameras::Time(unsigned slot) const { impl_->Ready(); return impl_->Get(slot).playback->camera.Time(); }
+float NisCameras::Duration(unsigned slot) const { impl_->Ready(); return impl_->Get(slot).playback->camera.Duration(); }
 float NisCameras::TimeLeft() const
 {
     impl_->Ready(); float remaining = 0;

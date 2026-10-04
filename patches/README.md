@@ -98,8 +98,9 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0056-select-native-animated-camera-playback.patch` | Select original camera interpolation, cuts, transforms, timing and focal calculations; provide explicit display/simulation inputs and validate sampling. | Retained asset ownership, loop/end callbacks, mirroring, facing, FOV, original CameraMan updates and authored scene preview. Full camera factory and DOF rendering remain pending. |
 | `0057-select-native-debug-camera.patch` | Select original desktop orbit/pan/distance/height controls and pose math through explicit native input values; define angle wrapping and reject degenerate look-at inputs. | CameraMan borrowing, SDL input mapping, static preview, failure cleanup and selected sanitizers. Focused input-to-render qualification, Wii DPD, player/replay targets and full factory selection remain pending. |
 | `0058-share-original-frontend-camera-catalog.patch` | Share the unchanged original filename/alias table and record type; retain the console factory's ordering and request loop. | Strict preparation and exact ordered comparison with the pinned source; native loading uses the same 37 entries. Full frontend factory and NIS selection remain separate. |
-
 | `0059-select-native-interpreter-execution.patch` | Select original interpreter execution and operations with checked native stacks, frame/string references and typed host services. | All original opcodes, available operations, calls/returns, pause/retry, budgets, malformed inputs and selected sanitizer checks. Real NIS trigger collection and game services are separate integration steps. |
+| `0060-share-original-nis-playback-timing.patch` | Share original NIS frame clamp/carry and trigger crossing arithmetic with bounded camera scheduling. | Camera timing, ordered trigger dispatch, explicit missing services and selection/teardown tests; complete NisPlayer actor and effect services remain pending. |
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

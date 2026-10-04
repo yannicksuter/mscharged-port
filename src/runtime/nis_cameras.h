@@ -60,6 +60,7 @@ public:
     void SetEndCallback(unsigned slot, void (*callback)());
     const cBaseCamera* Camera(unsigned slot) const;
     float Time(unsigned slot) const;
+    float Duration(unsigned slot) const;
     float TimeLeft() const;
     float CameraTimeLeft(unsigned slot) const;
     bool Failed() const;
