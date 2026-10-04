@@ -100,10 +100,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
 endif()
 include(cmake/WorldSceneResources.cmake)
 include(cmake/FrontendWorldFiles.cmake)
+include(cmake/GraphicsStartup.cmake)
 add_library(charged_scene_preview STATIC src/runtime/scene.cpp)
 target_compile_features(charged_scene_preview PRIVATE cxx_std_20)
 target_include_directories(charged_scene_preview PUBLIC src)
-target_link_libraries(charged_scene_preview PRIVATE charged_frontend_world_files charged_animated_camera charged_debug_camera_input charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
+target_link_libraries(charged_scene_preview PRIVATE charged_graphics_startup charged_frontend_world_files charged_animated_camera charged_debug_camera_input charged_frames charged_frame_timing charged_shadows charged_compressed_assets charged_static_inventory charged_decomp_startup
     charged_world_scene charged_world_objects charged_host aurora::gx aurora::mtx aurora::os aurora::vi aurora::dvd aurora::core mscharged_build_info)
 target_link_libraries(mscharged PRIVATE charged_scene_preview)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)

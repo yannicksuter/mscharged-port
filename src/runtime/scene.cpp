@@ -18,7 +18,7 @@
 #include "runtime/startup.h"
 #include "runtime/startup_files.h"
 #include "runtime/graphics_memory.h"
-#include "runtime/graphics_state.h"
+#include "runtime/graphics_startup.h"
 #include "runtime/static_inventory.h"
 #include "runtime/materials.h"
 #include "runtime/gpu_readback.h"
@@ -251,10 +251,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (!aurora_dvd_open(PathUtf8(disc_path).c_str())) throw std::runtime_error("Cannot mount the Wii data partition");
         session.disc = true; g_Region = 0; InitializeCore();
         const auto mem1_free = StandardAllocator.TotalFreeMemory(), mem2_free = VirtualAllocator.TotalFreeMemory();
-        // Original glStartup's memory callback; later graphics stages are pending.
-        glInitResourcePools(); InitializeOriginalGraphicsMemory();
+        GraphicsStartup graphics(GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight,
+            [] { VIInit(); VIConfigure(&GXNtsc480IntDf); }, DrainGX);
         log("Original graphics memory initialized: two MEM1/MEM2 frames, Global resource pool, static GLInventory and 1000 texture indices.");
-        InitializeOriginalGraphicsState();
         log("Original GL state and identity matrix initialized; native frame matrix handles and original NL camera math enabled.");
         log("Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
         const bool world_batch = options.world_res.has_value() || options.frontend_world;
@@ -486,9 +485,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 + std::to_string(authored_camera->Duration()) + " seconds; model coordinates preserved. Depth-of-field rendering remains pending.");
         }
         else if (!debug_camera) cCameraManager::PushCamera(&camera_input);
-        VIInit(); VIConfigure(&GXNtsc480IntDf);
         alignas(32) std::array<std::uint8_t, 65536> fifo{};
-        MaterialPrograms materials;
         std::unique_ptr<StaticInventory> inventory;
         std::unique_ptr<StaticWorldObjects> world;
         if (world_batch)
@@ -513,7 +510,6 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         if (!world && !native_model) throw std::runtime_error("Selected model is missing from original GLInventory");
         log("Checked RLG/RLT data installed as pool-owned native glModel/PlatTexture records; drawing original material Activate/Draw/Deactivate and TEV shader recipes through Aurora.");
         ViewMatrices view_matrices;
-        OriginalViews views(GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight, DrainGX);
         AuroraFrames backend;
         OriginalFrames lifecycle(backend);
         FrameCounter timing("frame", "send");
@@ -560,27 +556,15 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         StaticWorldSubmission world_submission;
         std::size_t world_considered = 0, world_visible = 0, world_packets = 0;
         const auto start = std::chrono::steady_clock::now();
-        float animation_time = 0;
-        while (!options.frames || frames < options.frames)
-        {
-            if (Update()) break;
-            nlServiceFileSystem();
-            if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
-            if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
-            if (!session.gx)
-            {
-                // GXInit queues viewport state; its first target must exist
-                // before any exception path can drain those commands.
-                GXInit(fifo.data(), fifo.size()); session.gx = true;
-                SetGraphicsCacheInvalidator(InvalidateCaches);
-                AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
-            }
-            glBeginFrame();
-            timing.StartTimer(0);
-            const float elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
-            const float delta = elapsed - animation_time;
-            glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
-            animation_time = elapsed;
+        float elapsed = 0, delta = 0;
+        GraphicsFrameTasks frame_tasks(graphics, lifecycle, {
+            [&](float) { timing.StartTimer(0); },
+            [&](float scheduler_delta) {
+                elapsed = float(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+                delta = scheduler_delta;
+                glGetCurrentResourcePool()->m_inventory->UpdateTextureAnims(delta);
+            },
+            [&](float) {
             auto frame_lighting = lighting;
             if (!shadows_enabled) frame_lighting.shadow = {};
             backend.time = elapsed;
@@ -717,9 +701,25 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             ImGui::TextUnformatted("Full stadium scenes and character animation are pending.");
             ImGui::TextUnformatted("Escape or close the window to exit."); ImGui::End();
             backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
-            glEndFrame();
-            timing.StartTimer(1);
-            glSendFrame();
+            },
+            [&](float) { timing.StartTimer(1); }
+        });
+        log("Selected begin/update/render/end callbacks use original nlTaskManager priorities 4/9/11/16; full game tasks remain pending.");
+        while (!options.frames || frames < options.frames)
+        {
+            if (Update()) break;
+            nlServiceFileSystem();
+            if (options.frames && std::chrono::steady_clock::now() - start > std::chrono::seconds(30)) throw std::runtime_error("Static preview frame deadline exceeded");
+            if (!lifecycle.Acquire()) { SDL_Delay(1); continue; }
+            if (!session.gx)
+            {
+                // GXInit queues viewport state; its first target must exist
+                // before any exception path can drain those commands.
+                GXInit(fifo.data(), fifo.size()); session.gx = true;
+                SetGraphicsCacheInvalidator(InvalidateCaches);
+                AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+            }
+            frame_tasks.RunAcquired();
             timing.FinishTiming();
             if (backend.read_colours)
             {
@@ -738,8 +738,9 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         // Explicitly stop services while CPU texture storage and frame FIFO still exist.
         if (glGetCurrentFrame() != static_cast<int>(frames))
             throw std::runtime_error("Original graphics frame counter diverged from submitted frames");
+        frame_tasks.Release();
         debug_input.reset(); debug_camera.reset(); authored_camera.reset(); cameras.Release();
-        lifecycle.Release(); views.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); materials.Release(); glShutdownMemory();
+        lifecycle.Release(); shadow_drawable.reset(); shadow_layers.reset(); pool_selection.Restore(); world.reset(); inventory.reset(); graphics.Release();
         if (StandardAllocator.TotalFreeMemory() != mem1_free || VirtualAllocator.TotalFreeMemory() != mem2_free)
             throw std::runtime_error("Graphics shutdown did not recover both original game arenas");
         log("Original graphics shutdown recovered both game arenas.");

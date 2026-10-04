@@ -87,6 +87,7 @@ with tempfile.TemporaryDirectory(prefix='mscharged-world-scene-') as directory:
             assert config.read_bytes() == original
             if code == 0:
                 assert 'Static preview rendered: 30 frames' in output and 'shutdown recovered both game arenas' in output, output
+                assert 'original nlTaskManager priorities 4/9/11/16' in output, output
             print(message)
             return output
         # Use the original frontend paths without explicit object selection.
