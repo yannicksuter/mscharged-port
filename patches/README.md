@@ -112,6 +112,11 @@ see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-start
 | `0067-select-native-sanim-sampling.patch` | Select original root, weight and equal-count morph sampling on retained native animation records. Disable Wii in-place loading and unselected callback ownership; bound sampling and avoid reading past constant/endpoint weight keys. | Checked channels, independent generated sampling comparisons and owned frontend animations. Unequal-count morph sampling, pose accumulation and skinning remain unqualified. |
 | `0068-share-original-nis-pip-steps.patch` | Share original PIP rectangles, expansion/swap timing and target settings with retained native cameras and rendering. | Exact endpoint and swap tests, target ownership, synthetic-disc entry and two-camera Vulkan composite pixels. Full NisPlayer actors, audio and Holotron remain separate. |
 
+Patch `0072-select-native-effects-registration.patch` shares original group/template
+resolution, persistence and cleanup on retained native records. Exact authored
+colour counts and resource IDs are preserved; user-effect factories, geometry
+registration and particle simulation remain separate services.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The

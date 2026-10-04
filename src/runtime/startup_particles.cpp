@@ -1,6 +1,6 @@
 #include "runtime/startup.h"
 #include "runtime/particle_files.h"
-#include "resources/effects_bundle.h"
+#include "runtime/effects_registry.h"
 #include <chrono>
 #include <thread>
 
@@ -19,17 +19,13 @@ std::string VerifyStartupParticleResources()
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     const auto files = load.Result();
-    const auto bundle = resources::ReadEffectsBundle((*files)[ParticleFileKind::Resident]);
-    const auto textures = resources::ReadEffectsTextureBundle((*files)[ParticleFileKind::NonResident]);
-    const auto geometry_textures = resources::ReadTextureBundle((*files)[ParticleFileKind::Textures]);
-    std::size_t templates = 0, groups = 0;
-    for (const auto& entry : bundle.entries)
-    { templates += entry.templates.size(); groups += entry.groups.size(); }
-    return "Independent particle resource diagnostic: 4 files, " + std::to_string(templates)
-        + " templates, " + std::to_string(groups) + " groups, "
-        + std::to_string(textures.textures.size()) + " effects textures and "
-        + std::to_string(geometry_textures.textures.size()) + " geometry textures decoded; "
+    const auto registry = EffectsRegistry::FromFiles(files);
+    return "Independent particle resource diagnostic: 4 files, " + std::to_string(registry->Templates())
+        + " templates, " + std::to_string(registry->Groups()) + " authored groups; "
+        + std::to_string(registry->RegisteredGroups()) + " groups resolved through original code, "
+        + std::to_string(registry->UnavailableGroups().size()) + " groups require user-effect factories; "
+        + std::to_string(registry->Textures()) + " unique textures retained; "
         + std::to_string((*files)[ParticleFileKind::Geometry].size())
-        + " geometry bytes retained. Original bundle/geometry registration and particle rendering remain unavailable.";
+        + " geometry bytes retained. Geometry/GL registration, particle simulation and rendering remain unavailable.";
 }
 }
