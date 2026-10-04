@@ -41,6 +41,7 @@ include(cmake/PoseAccumulator.cmake)
 include(cmake/AnimationPose.cmake)
 include(cmake/SkinPose.cmake)
 include(cmake/AudioBankLoad.cmake)
+include(cmake/AudioDsp.cmake)
 include(cmake/NisPip.cmake)
 
 add_library(charged_game_startup STATIC src/runtime/startup.cpp src/runtime/startup_tasks.cpp src/runtime/startup_cameras.cpp src/runtime/startup_camera_assets.cpp src/runtime/startup_boot_loading.cpp src/runtime/startup_particles.cpp)

@@ -90,3 +90,4 @@
 0089-share-original-frontend-font-fallback-and-escape.patch
 0090-share-original-rigid-skin-pose-steps.patch
 0091-share-original-audio-bank-selection.patch
+0093-share-original-dsp-adpcm-integer-step.patch
