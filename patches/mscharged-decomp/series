@@ -64,3 +64,4 @@
 0063-select-native-frontend-input.patch
 0064-hide-unselected-console-pad-class.patch
 0065-select-native-hierarchy.patch
+0066-share-original-async-loading-steps.patch
