@@ -74,3 +74,4 @@
 0073-share-original-frontend-animation-steps.patch
 0074-select-native-particle-simulation.patch
 0075-share-original-frontend-selection.patch
+0078-include-tweak-pool-destruction.patch

@@ -132,6 +132,10 @@ presentation/component clock reset predicates. The native scene session owns
 actual FEN/font/image loading and retained frames; it does not supply the original
 scene-manager stack, handler callbacks or menu readiness.
 
+Patch `0078-include-tweak-pool-destruction.patch` exposes the original inline
+slot-pool destructors to native tweak-registry exception cleanup. Optimized
+builds must not depend on another translation unit emitting those definitions.
+
 The initial explicit game allocator is adapted; complete game allocation,
 math, pointer-bearing interfaces, data conversion, and Wii services remain
 work in progress. The
