@@ -15,7 +15,13 @@ namespace
 void Finite(float value)
 {Require(std::isfinite(value)&&std::abs(value)<=1e7f,"Frontend animation scalar exceeds its finite profile");}
 std::uint8_t Colour(float value)
-{Require(std::isfinite(value)&&value>=0&&value<=255,"Frontend animated colour exceeds its byte range");return static_cast<std::uint8_t>(value);}
+{
+    // Original u8 conversion truncates first: e.g. constant255 Bezier curves
+    // can round to255.000015, whose truncated value remains representable.
+    const float integer=std::trunc(value);
+    Require(std::isfinite(value)&&integer>=0&&integer<=255,"Frontend animated colour exceeds its byte range");
+    return static_cast<std::uint8_t>(value);
+}
 struct Index
 {
     std::map<std::uint32_t,std::size_t> instances,slides,library,animations;
