@@ -129,13 +129,13 @@ Both frontend viewers register retained textures and submit original polygon
 packets, preserving the authored order of mixed text and images.
 
 Use `--experimental-scene --frontend-main` for the original Main Menu intro,
-mouse/Enter hover and selection, sound effects and streamed music. This is an
-unfinished menu diagnostic: selected actions report their pending services;
-saves, scene transitions and the full game startup are still being implemented.
+mouse/Enter controls, sound effects and streamed music. Selecting Options runs
+the original transition scripts and cameras; Back returns to a fresh Main Menu.
+Other actions, full game saves and complete startup remain in development.
 
 Use `--experimental-scene --frontend-options` for the original Options screen,
 button feedback, intro/outro, music and the original navigation overlay. Back
-plays the original outro; returning to Main and opening submenus are in progress.
+returns to Main through the original outro. Submenus are still in progress.
 
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`
