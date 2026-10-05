@@ -50,6 +50,11 @@ public:
     // window. It may call Route/Poll/DeliverPointer and query this owner.
     void Update(float delta, const std::function<void()>& input = {});
     FrontendPointerDispatch Route(const FrontendPointerDesktopSample&);
+    // Explicit desktop shortcut: one real gated action31 query, then the
+    // actually presented NAV Back pointer callback/cue. Call before normal
+    // pointer routing; a Back press wins simultaneous Confirm. Never a direct
+    // destination/pop or hidden NAV activation. Once per controlled input tick.
+    std::optional<FrontendPointerDispatch> BackShortcut();
     FrontendPointerDispatch Poll(SDL_Window*, bool capture = false);
     void DeliverPointer(const FrontendPointerEvent&); // Explicit same-event host route.
     FrontendMenuScenesFrame Current() const;

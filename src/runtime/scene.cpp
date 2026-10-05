@@ -23,6 +23,7 @@
 #include "runtime/frontend_handler.h"
 #include "runtime/frontend_pointer_display.h"
 #include "runtime/frontend_menu_scenes.h"
+#include "runtime/frontend_menu_cursor.h"
 #include "runtime/frontend_camera_assets.h"
 #include "runtime/frontend_visual_settings.h"
 #include "runtime/world_effects.h"
@@ -151,13 +152,13 @@ struct PendingAsset
     }
     resources::Bytes Bytes() const { return {static_cast<const std::uint8_t*>(data.get()), size}; }
 };
-bool Update()
+bool Update(bool native_menu_back = false)
 {
     bool exit = false;
     for (const auto* event = aurora_update(); event->type != AURORA_NONE; ++event)
         if (event->type == AURORA_EXIT) exit = true;
     const bool focused = aurora_get_window() && (SDL_GetWindowFlags(aurora_get_window()) & SDL_WINDOW_INPUT_FOCUS);
-    return exit || (focused && !ImGui::GetIO().WantCaptureKeyboard && SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_ESCAPE]);
+    return exit || (!native_menu_back && focused && !ImGui::GetIO().WantCaptureKeyboard && SDL_GetKeyboardState(nullptr)[SDL_SCANCODE_ESCAPE]);
 }
 using Bounds = resources::SceneBounds;
 class CharacterPreview
@@ -516,6 +517,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         FrontendVisualSettings::Handle menu_visual_settings;
         std::uint64_t menu_volume_frame = 0;
         std::unique_ptr<FrontendMenuScenes> frontend_menus;
+        std::unique_ptr<FrontendMenuCursor> menu_cursor;
         FrontendMenuScenesFrame menu_frame;
         FrontendSession::Handle navigation_frame;
         std::shared_ptr<FrontendSession> frontend_session;
@@ -644,6 +646,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 }
                 menu_effect_records=resources::WorldEffectData::Decode(effect_files.Result()->resident);
                 menu_effects=std::make_unique<WorldEffects>(menu_effect_records);
+                menu_cursor=std::make_unique<FrontendMenuCursor>();
                 frontend_menus=std::make_unique<FrontendMenuScenes>(*frontend_input,menu_audio,nlDefaultSeed,*menu_cameras,
                     script.Bytes(),native_preferences,[&](unsigned index){menu_music->BeginSelect(index,nlDefaultSeed);},
                     [&](unsigned type){
@@ -1236,7 +1239,15 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     const auto before=frontend_menus->Status();
                     frontend_menus->Update(step,[&]{
                         if(hooks && hooks->menu_input)hooks->menu_input(*frontend_menus,info.window);
-                        else pointer_dispatch=frontend_menus->Poll(info.window,ImGui::GetIO().WantCaptureMouse);
+                        else
+                        {
+                            const auto back=frontend_menus->BackShortcut();
+                            if(back){pointer_dispatch=*back;return;}
+                            const auto sample=menu_cursor->Poll(frontend_devices->LastSnapshot(),info.window,ImGui::GetIO().WantCaptureMouse);
+                            // A resize has no valid new input projection until a
+                            // real frame is presented. Preserve the existing Leave route.
+                            pointer_dispatch=sample?frontend_menus->Route(*sample):frontend_menus->Poll(info.window,true);
+                        }
                     });
                     menu_frame=frontend_menus->Current();frontend_published_frame=menu_frame.menu;navigation_frame=menu_frame.navigation;
                     const auto after=frontend_menus->Status();
@@ -1694,7 +1705,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 ImGui::SameLine(); if (ImGui::Button("Expand PIP")) pip->SetMode(NisPipMode::Expand);
             }
             if (!frontend_boot) ImGui::TextUnformatted("Complete stadium scenes and playable characters are pending.");
-            ImGui::TextUnformatted("Escape or close the window to exit."); ImGui::End();
+            ImGui::TextUnformatted(frontend_menus ? "Arrows / D-pad: move. Enter / A: select. Escape / B: back. Close window to exit." : "Escape or close the window to exit."); ImGui::End();
             backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
             },
             [&](float) { timing.StartTimer(1); }
@@ -1714,7 +1725,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         log("Selected begin/update/render/end callbacks use original nlTaskManager priorities 4/9/11/16; full game tasks remain pending.");
         while (!options.frames || frames < options.frames)
         {
-            if (Update()) break;
+            if (Update(bool(frontend_menus))) break;
             nlServiceFileSystem();
             if (frontend_session && frontend_session->State() == FrontendSessionState::Loading)
             {
@@ -1794,6 +1805,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     const FrontendPointerViewport viewport{present.window_id,size.width,size.height,
                         size.native_fb_width,size.native_fb_height,present.x,present.y,present.width,present.height};
                     frontend_menus->Acknowledge(menu_frame,viewport);
+                    if(menu_frame.menu)menu_cursor->Acknowledge(menu_frame.token,menu_frame.menu,viewport);
                     if(hooks && hooks->menu_presented)hooks->menu_presented(*frontend_menus,viewport);
                     if(!pointer_present_sequence)log("Original menu input bound to its exact successful Aurora presentation.");
                     pointer_present_sequence=present.sequence;
@@ -1884,7 +1896,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 +"; shared texture registrations "+std::to_string(frame_packets->Textures()));
             const auto music=menu_music->Status();
             log("Original menu music: "+std::to_string(music.completed_reads)+" NL reads; "+std::to_string(music.submitted_frames)+" submitted stereo frames.");
-            frontend_menus->Release();frontend_menus.reset();
+            frontend_menus->Release();frontend_menus.reset();menu_cursor.reset();
         }
         menu_frame={};navigation_frame.reset();menu_music.reset();menu_audio.reset();
         menu_volumes.reset();menu_visual_settings.reset();native_preferences.reset();

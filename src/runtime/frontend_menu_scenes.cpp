@@ -1,4 +1,5 @@
 #include "runtime/frontend_menu_scenes.h"
+#include "runtime/frontend_menu_back.h"
 #include "NL/nlFileGC.h"
 #include <algorithm>
 #include <cmath>
@@ -39,6 +40,7 @@ struct FrontendMenuScenes::Implementation
     std::unique_ptr<FrontendVisualNavigation> visual_nav;
     FrontendSession::Handle menu_shown, nav_shown, input_menu;
     std::optional<unsigned> pending_scene;
+    bool desktop_back_checked=false;
     bool busy = false, input_window = false, input_allowed = false, failed = false, released = false;
 
     Implementation(FrontendInput& i, std::shared_ptr<FrontendAudio> a, unsigned& rng,
@@ -235,7 +237,7 @@ void FrontendMenuScenes::Update(float delta,const std::function<void()>& input)
         const bool allowed=s.Interactive();
         s.stack.Update(delta,[&](auto token,const auto& shown){
             Require(token==s.token && shown==s.menu_shown,"Menu input crossed its published scene owner");
-            s.Commands();s.input_menu=shown;s.input_allowed=allowed&&s.Interactive();s.input_window=true;
+            s.Commands();s.input_menu=shown;s.input_allowed=allowed&&s.Interactive();s.input_window=true;s.desktop_back_checked=false;
             struct Reset{Implementation& s;~Reset(){s.input_window=false;s.input_menu.reset();s.input_allowed=false;}}reset{s};
             if(input&&s.input_allowed&&s.nav_shown)input();s.Commands();
             if(s.main&&s.main->Status().interactive)s.nav->SetPointerSlide(s.nav->Current(),0,FrontendNavigationPointer::Cursor);
@@ -253,6 +255,14 @@ FrontendPointerDispatch FrontendMenuScenes::Route(const FrontendPointerDesktopSa
     else if(s.audio_nav)result=s.audio_nav->Route(s.input_menu,s.nav_shown,sample).pointer;
     else result=s.visual_nav->Route(s.input_menu,s.nav_shown,sample).pointer;
     s.Pointer(result);return result;
+}
+std::optional<FrontendPointerDispatch> FrontendMenuScenes::BackShortcut()
+{
+    auto& s=*impl_;s.InputReady();Require(!s.desktop_back_checked,"Desktop Back shortcut was queried twice this tick");s.desktop_back_checked=true;
+    const auto binding=s.main?std::optional<FrontendNavigationBackBinding>{}:s.nav->BackButton(s.nav_shown);
+    const auto press=FrontendDesktopBackEvent(s.input,binding);if(!press)return {};
+    FrontendPointerDispatch event;event.active=true;event.event=*press;
+    DeliverPointer(event.event);s.Pointer(event);return event;
 }
 FrontendPointerDispatch FrontendMenuScenes::Poll(SDL_Window* window,bool capture)
 {

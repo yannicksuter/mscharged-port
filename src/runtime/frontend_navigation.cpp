@@ -247,6 +247,40 @@ FrontendNavigationDoneBinding FrontendNavigation::DoneButton(const FrontendSessi
     CheckNav(library!=frame->graph.library.end()&&library->type==3,"NAV Done component library is absent");
     FrontendDoneButtonBounds(&bounds,0);return{frame,component,bounds.value,it->visible&&library->attributes.visible};
 }
+FrontendNavigationBackBinding FrontendNavigation::BackButton(const FrontendSession::Handle& frame)const
+{
+    auto& s=*impl_;s.Ready();CheckNav(frame&&s.host.Current()&&s.host.Current()->Frame()==frame&&s.region,
+        "NAV Back binding requires its actual acknowledged frame");
+    const auto component=s.state.buttons[2];
+    const auto it=std::find_if(frame->graph.instances.begin(),frame->graph.instances.end(),[&](const auto& n){return n.offset==component;});
+    CheckNav(component&&it!=frame->graph.instances.end()&&it->type==4&&it->library,"NAV Back component is absent or mistyped");
+    const auto library=std::find_if(frame->graph.library.begin(),frame->graph.library.end(),[&](const auto& n){return n.offset==*it->library;});
+    CheckNav(library!=frame->graph.library.end()&&library->type==3,"NAV Back component library is absent");
+    // The root component is toggled by original NAV SetButtons. Also require
+    // actual published child geometry; invisible/unavailable ancestry cannot
+    // make a keyboard shortcut target merely stored source bounds.
+    std::vector<std::uint32_t> descendants{component};bool rendered=false;
+    for(std::size_t at=0;at<descendants.size();++at)
+    {
+        CheckNav(descendants.size()<=frame->graph.instances.size(),"NAV Back ancestry exceeds scene bounds");
+        const auto node=std::find_if(frame->graph.instances.begin(),frame->graph.instances.end(),[&](const auto& n){return n.offset==descendants[at];});
+        CheckNav(node!=frame->graph.instances.end(),"NAV Back ancestry instance absent");
+        for(const auto& entry:frame->layout.entries)std::visit([&](const auto& draw){if(draw.instance==node->offset&&draw.colour[3])rendered=true;},entry);
+        descendants.insert(descendants.end(),node->children.begin(),node->children.end());
+        if(node->type==4&&node->library)
+        {
+            const auto lib=std::find_if(frame->graph.library.begin(),frame->graph.library.end(),[&](const auto& n){return n.offset==*node->library;});
+            CheckNav(lib!=frame->graph.library.end(),"NAV Back child library absent");
+            if(lib->active_slide)
+            {
+                const auto slide=std::find_if(frame->graph.slides.begin(),frame->graph.slides.end(),[&](const auto& n){return n.offset==*lib->active_slide;});
+                CheckNav(slide!=frame->graph.slides.end(),"NAV Back active child slide absent");
+                descendants.insert(descendants.end(),slide->children.begin(),slide->children.end());
+            }
+        }
+    }
+    return{frame,component,s.region->Bounds(),it->visible&&library->attributes.visible&&rendered};
+}
 void FrontendNavigation::SetPointerSlide(const FrontendSession::Handle& frame,unsigned index,FrontendNavigationPointer value)
 {
     auto& s=*impl_;s.Expected(frame);CheckNav(index<4&&(value==FrontendNavigationPointer::Waiting||value==FrontendNavigationPointer::Cursor),"NAV pointer selection is unsupported");

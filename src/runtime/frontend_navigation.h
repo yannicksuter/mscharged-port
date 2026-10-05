@@ -12,6 +12,7 @@ struct FrontendNavigationDoneBinding
     FrontendPointerBounds bounds;
     bool visible=false; // Explicit visibility in the acknowledged source generation.
 };
+using FrontendNavigationBackBinding = FrontendNavigationDoneBinding;
 enum class FrontendNavigationPointer { Waiting, Cursor };
 struct FrontendNavigationPointerSample
 {
@@ -57,6 +58,8 @@ public:
     FrontendSession::Handle Current() const;
     FrontendNavigationStatus Status() const;
     FrontendPointerBounds Bounds() const;
+    // Exact presented Back component, original measured bounds and retained visibility.
+    FrontendNavigationBackBinding BackButton(const FrontendSession::Handle&) const;
     void Acknowledge(const FrontendSession::Handle&,FrontendPointerViewport);
     void HideButtons(const FrontendSession::Handle&);
     void SetButtons(const FrontendSession::Handle&,unsigned mask,bool enabled=true);

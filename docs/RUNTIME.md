@@ -129,7 +129,9 @@ Both frontend viewers register retained textures and submit original polygon
 packets, preserving the authored order of mixed text and images.
 
 Use `--experimental-scene --frontend-main` for the original Main Menu intro,
-mouse/Enter controls, sound effects and streamed music. Selecting Options runs
+mouse, keyboard/controller navigation, sound effects and streamed music. Arrows,
+D-pad or the left stick move the pointer; Enter/A selects and Escape/B goes Back.
+Selecting Options runs
 the original transition scripts and cameras; Back returns to a fresh Main Menu.
 Audio and Visual options support their original controls, Back and Done, with
 separate native preference saving. Other actions, full game saves and complete
