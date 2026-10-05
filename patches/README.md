@@ -28,6 +28,11 @@ The native transport preserves signed-short UVs, original lighting and alpha
 passes. Fractional skinning requires separately retained software pose output;
 material registration alone does not establish character rendering readiness.
 
+Patch 0135 shares the original zero-morph software-skin equations, with explicit
+binary32 fused operations in place of paired-single instructions. The native
+pose owner preserves bone accumulation order and retained hierarchy identity;
+NPC animation, drawing and morph integration remain separate work.
+
 Patch 0128 shares the original pure Remote/Freestyle/Classic input policies.
 The native profile adapter compiles unchanged WiiPad functions and checks raw
 buttons and calibrated sticks. Hardware discovery, motion and Wii services are
