@@ -41,6 +41,10 @@ Patch 0113 shares original option defaults and selected save-operation flag
 rules. The native preferences provider uses these rules with a dedicated host
 file; it does not load or complete the original Wii game save.
 
+Patch 0112 shares the original Audio Options controls and category volume rules.
+The selected native screen can change real resident and streamed audio gains;
+complete audio startup, navigation and game-save integration remain separate.
+
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
 camera catalog between the console factory and native loading code.
