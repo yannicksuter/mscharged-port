@@ -32,6 +32,7 @@ add_library(charged_original_core STATIC
     src/runtime/whole_file.cpp
     src/platform/os.cpp
     src/platform/system.cpp
+    src/platform/tweak_storage.cpp
 )
 add_dependencies(charged_original_core verify_prepared)
 target_include_directories(charged_original_core PUBLIC

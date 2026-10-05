@@ -4,6 +4,7 @@ include_guard(GLOBAL)
 include(cmake/OriginalCore.cmake)
 include(cmake/OriginalGraphics.cmake)
 include(cmake/OriginalTiming.cmake)
+include(cmake/OriginalTweaks.cmake)
 add_library(charged_decomp_startup STATIC
     "${MSCHARGED_PREPARED}/src/Game/Startup.cpp"
     src/runtime/startup_animation.cpp
