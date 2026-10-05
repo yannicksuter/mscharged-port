@@ -170,6 +170,7 @@ struct FrontendMainMenu::Implementation
     std::thread::id thread=std::this_thread::get_id();
     FrontendSession::Handle current;
     MenuState state;
+    std::array<FrontendPointerBounds,7> bounds{};
     FrontendPointerHost host;
     std::unique_ptr<FrontendHandler> handler;
     std::array<std::shared_ptr<FrontendPointerRegion>,7> regions{};
@@ -215,7 +216,7 @@ FrontendSession::Handle FrontendMainMenu::Current()const{impl_->Ready();return i
 FrontendMainMenuStatus FrontendMainMenu::Status()const
 {CheckMenu(impl_->thread==std::this_thread::get_id()&&bool(impl_->session),"Main Menu status requires a live owner thread");auto value=impl_->state.status;value.failed=impl_->failed;return value;}
 std::array<FrontendPointerBounds,7> FrontendMainMenu::Bounds()const
-{auto& s=*impl_;s.Ready();CheckMenu(s.state.status.interactive,"Main Menu pointer initialization waits for authored intro completion");std::array<FrontendPointerBounds,7> out;for(unsigned i=0;i<7;++i)out[i]=MeasureFrontendPointerBounds(s.current,s.state.bindings[i]);return out;}
+{auto& s=*impl_;s.Ready();CheckMenu(s.state.status.interactive,"Main Menu pointer initialization waits for authored intro completion");return s.bounds;}
 void FrontendMainMenu::Acknowledge(const FrontendSession::Handle& frame,FrontendPointerViewport viewport)
 {
     auto& s=*impl_;s.Expected(frame);
@@ -224,9 +225,7 @@ void FrontendMainMenu::Acknowledge(const FrontendSession::Handle& frame,Frontend
         if(s.state.status.interactive)
         {
             for(unsigned i=0;i<7;++i)
-                if(s.regions[i])s.regions[i]->Rebind(frame,s.state.bindings[i]);
-                else s.regions[i]=std::make_shared<FrontendPointerRegion>(s.input,frame,s.state.bindings[i],
-                    [&s,i](auto kind,unsigned index,const auto& source){s.Queue(kind,i,index,source);});
+                s.regions[i]->RebindFrame(frame);
             s.host.Publish(frame,viewport,s.regions);
         }
         else s.host.Publish(frame,viewport,{});
@@ -324,6 +323,22 @@ void FrontendMainMenu::AdvanceVisual(const FrontendSession::Handle& frame,float 
             MenuState next;
             s.session->HandlerTransaction(s.current,[&](auto& playback){MenuStep step(playback,s.state);step.Bind();next=step.Result();});
             s.state=std::move(next);s.current=s.session->Current();
+            try
+            {
+                // Original InitializeMenuItems measures each listener once;
+                // later feedback slides and animation only retag its frame.
+                std::array<FrontendPointerBounds,7> bounds;
+                std::array<std::shared_ptr<FrontendPointerRegion>,7> regions;
+                for(unsigned i=0;i<7;++i)
+                {
+                    regions[i]=std::make_shared<FrontendPointerRegion>(s.input,s.current,s.state.bindings[i],
+                        [&s,i](auto kind,unsigned index,const auto& source){s.Queue(kind,i,index,source);});
+                    bounds[i]=regions[i]->Bounds();
+                }
+                s.bounds=bounds;
+                s.regions=std::move(regions);
+            }
+            catch(...){s.failed=true;throw;}
         }
     }
 }
