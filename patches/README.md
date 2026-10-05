@@ -77,8 +77,12 @@ separate work.
 
 
 Patch 0120 shares the original Credits phase, text and scrolling rules. Its
-selected native owner reaches the NLG movie request; actual playback and
-completion remain explicit integration work.
+selected native owner executes bounded source phase and scrolling behavior.
+Composed Credits menu presentation remains integration work.
+
+Patch 0125 shares the original MoviePlayer update order. The native Credits owner
+uses real movie cancellation, retained text parsing and checked movie bindings;
+natural completion requires the playback provider's presentation/audio receipt.
 
 Patch 0123 shares original movie decode cadence, PCM mixing and float-quad
 construction. The selected native provider reads through NL, outputs through
