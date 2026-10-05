@@ -1,7 +1,7 @@
 # Experimental runtime
 
 The port is a work in progress alongside the decompilation. Selected original
-initialization, Wii assets, and Main/Options/Audio/Visual/Credits menus run on Linux.
+initialization, Wii assets, and Title/Main/Options/Audio/Visual/Credits menus run on Linux.
 **Full game startup and matches remain in development.** These experiments
 currently require a USA `R4QE01` revision 1 ISO/RVZ configured in `mscharged.ini`.
 
@@ -36,15 +36,16 @@ git -C extern/dawn -c submodule.recurse=false submodule update --init --checkout
   third_party/vulkan-headers/src third_party/vulkan-utility-libraries/src
 git -C extern/freetype -c submodule.recurse=false submodule update --init --checkout --depth 1 -- subprojects/dlg
 CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
-./build/scene/mscharged --experimental-scene --frontend-main --config ./mscharged.ini
+./build/scene/mscharged --experimental-scene --frontend-title --config ./mscharged.ini
 ```
 
 Arrows, D-pad or the left stick move the pointer; Enter/A selects and Escape/B
 goes Back. Options includes Audio and Visual controls with separate native
-preferences, plus Credits with movie playback and scrolling text. Other menu actions and original game saves remain in development.
+preferences, plus Credits with movie playback and scrolling text. Title's idle
+intro, other menu actions and original game saves remain in development.
 
-Omit `--frontend-main` for the static ball preview, or use `--frontend-options`
-to start at Options. Additional inspectors include `--particles`,
+Use `--frontend-main` or `--frontend-options` to start there directly, or omit
+the menu selection for the static ball preview. Additional inspectors include `--particles`,
 `--debug-camera`, and `--frontend-boot`; use `--help` for their options.
 Add `--frames 180` for a bounded run. Run without arguments to open the launcher.
 

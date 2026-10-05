@@ -28,6 +28,7 @@
 #include "runtime/frontend_visual_settings.h"
 #include "runtime/world_effects.h"
 #include "runtime/frontend_music.h"
+#include "runtime/frontend_idle_dimming.h"
 #include "runtime/host_retrace_clock.h"
 #include "runtime/frontend_boot_loading.h"
 #include "runtime/frontend_boot_audio.h"
@@ -385,7 +386,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
     try
     {
         auto options = requested;
-        const bool menu_preview = options.frontend_main || options.frontend_options;
+        const bool menu_preview = options.frontend_title || options.frontend_main || options.frontend_options;
         if (options.frontend_pointer && (!options.frontend_frame || options.frontend_pointer->empty()))
             throw std::invalid_argument("Frontend pointer inspection requires an authored frame and instance path");
         if (options.character_shock && (options.frontend_boot || options.frontend_frame || options.frontend_layout
@@ -410,15 +411,17 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         }
         if (menu_preview)
         {
-            if ((requested.frontend_main && requested.frontend_options) || requested.frontend_boot || options.frontend_frame || options.frontend_layout || options.frontend_slide
+            if ((unsigned(requested.frontend_title)+unsigned(requested.frontend_main)+unsigned(requested.frontend_options)>1)
+                || requested.frontend_boot || options.frontend_frame || options.frontend_layout || options.frontend_slide
                 || options.frontend_images || options.frontend_pointer || options.frontend_animate || options.frontend_world
                 || options.world || options.world_res || options.model_id || !options.object_ids.empty() || options.camera
                 || options.debug_camera || options.nis_primary || options.nis_secondary || options.pip_expand
                 || options.shadow_id || options.shadow_textures || options.particles || options.unlit || options.no_world_culling
                 || options.character_shock || options.model != SceneOptions{}.model || options.textures != SceneOptions{}.textures)
                 throw std::invalid_argument("Original menu selects its own visual/input/audio resources");
-            options.frontend_frame = options.frontend_options ? "/Art/fe/options_main_menu.fen" : "/Art/fe/main_menu_v3.fen";
-            options.frontend_slide = options.frontend_options ? "in" : "MAIN";
+            options.frontend_frame = options.frontend_title ? "/Art/fe/sms2_start.fen"
+                : options.frontend_options ? "/Art/fe/options_main_menu.fen" : "/Art/fe/main_menu_v3.fen";
+            options.frontend_slide = options.frontend_title ? "regular" : options.frontend_options ? "in" : "MAIN";
             options.frontend_images = "main";
             options.frontend_animate = true;
         }
@@ -464,6 +467,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             throw std::invalid_argument("Debug camera cannot be combined with authored camera or shadow preview");
         log(options.character_shock ? "Original Bowser shock skin and FE animation diagnostic. Full characters/gameplay remain pending."
             : options.frontend_boot ? "Retail boot screen diagnostic. Complete game startup remains pending."
+            : options.frontend_title ? "Original Title/Main source-flow diagnostic. Intro and full startup remain pending."
             : options.frontend_options ? "Original Main/Options source-flow diagnostic. Full startup and additional menus remain pending."
             : options.frontend_main ? "Original Main/Options source-flow diagnostic. Full startup and additional menus remain pending."
             : "Static material and stadium shadow preview. Full world loading, character animation and game scenes are pending.");
@@ -471,6 +475,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         AuroraConfig config{};
         config.appName = options.character_shock ? "Mario Strikers Charged | Character preview"
             : options.frontend_boot ? "Mario Strikers Charged | Boot screen"
+            : options.frontend_title ? "Mario Strikers Charged | Title"
             : options.frontend_options ? "Mario Strikers Charged | Options"
             : options.frontend_main ? "Mario Strikers Charged | Main Menu" : "Mario Strikers Charged | Static asset preview";
         config.userPath = config.cachePath = data_path.c_str(); config.resourcesPath = base;
@@ -492,6 +497,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         log("Original graphics memory initialized: two MEM1/MEM2 frames, Global resource pool, static GLInventory and 1000 texture indices.");
         log("Original GL state and identity matrix initialized; native frame matrix handles and original NL camera math enabled.");
         log(options.frontend_boot ? "Original InitializeCore completed; loading retail boot resources through original NL reads."
+            : options.frontend_title ? "Original InitializeCore completed; loading Title resources through original NL reads."
             : options.frontend_options ? "Original InitializeCore completed; loading Options through original NL reads."
             : options.frontend_main ? "Original InitializeCore completed; loading Main Menu resources through original NL reads."
             : "Original InitializeCore completed; loading RLG/RLT through original NL whole-file async services.");
@@ -524,9 +530,12 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::shared_ptr<FrontendSession> frontend_session;
         std::shared_ptr<FrontendBootAudio> boot_audio;
         std::shared_ptr<FrontendAudio> menu_audio;
-        std::unique_ptr<FrontendMusic> menu_music;
+        std::shared_ptr<FrontendMusic> menu_music;
         bool stadium_rendering = true;
         HostRetraceClock movie_retraces(HostRetraceRate::Ntsc());
+        std::shared_ptr<FrontendIdleDimming> menu_idle_dimming;
+        std::shared_ptr<FrontendTitleDimming> menu_title_dimming;
+        std::optional<std::array<float,2>> menu_mouse_position;
         FrontendMovieImageBinding::Handle credits_movie_binding;
         std::shared_ptr<FrontendCredits> credits_movie_owner;
         FrontendSession::Handle frontend_published_frame;
@@ -604,8 +613,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     menu_visual_settings=std::make_shared<FrontendVisualSettings>(preferences->auto_zoom,preferences->camera_zoom);
                     menu_audio=std::make_shared<FrontendAudio>(load.Result(),calculation,AudioVoicesOptions{64,64*1024*1024,0,menu_volumes});
                     log("Resident frontend audio loaded through NL: FE_GEN_Sfx name23/slot21 and original cue/source lifecycles.");
-                    menu_music=std::make_unique<FrontendMusic>(catalog,calculation,FrontendMusicOptions{0,menu_volumes});
-                    menu_music->BeginSelect(1,nlDefaultSeed);
+                    menu_music=std::make_shared<FrontendMusic>(catalog,calculation,FrontendMusicOptions{0,menu_volumes});
+                    if(!options.frontend_title)menu_music->BeginSelect(1,nlDefaultSeed);
                     while(menu_music->Status().load==FrontendMusicLoadState::Loading)
                     {
                         if(Update())throw std::runtime_error("Menu music loading cancelled");
@@ -614,8 +623,11 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                         if(menu_music->Status().load==FrontendMusicLoadState::Loading)SDL_Delay(1);
                     }
                     menu_music->Check();
-                    if(menu_music->Status().load!=FrontendMusicLoadState::Ready)throw std::runtime_error("Menu music is unavailable");
-                    log("Main music1 loaded through original FE_GEN_Music name26/slot22 with bounded NL stereo refill.");
+                    if(!options.frontend_title)
+                    {
+                        if(menu_music->Status().load!=FrontendMusicLoadState::Ready)throw std::runtime_error("Menu music is unavailable");
+                        log("Main music1 loaded through original FE_GEN_Music name26/slot22 with bounded NL stereo refill.");
+                    }
                 }
                 else
                 {
@@ -652,6 +664,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 menu_effect_records=resources::WorldEffectData::Decode(effect_files.Result()->resident);
                 menu_effects=std::make_unique<WorldEffects>(menu_effect_records);
                 menu_cursor=std::make_unique<FrontendMenuCursor>();
+                menu_idle_dimming=std::make_shared<FrontendIdleDimming>(movie_retraces.Count());
+                menu_title_dimming=std::make_shared<FrontendTitleDimming>([retained=menu_idle_dimming](unsigned mode){
+                    retained->Select(mode);return true;
+                });
                 frontend_menus=std::make_unique<FrontendMenuScenes>(*frontend_input,menu_audio,nlDefaultSeed,*menu_cameras,
                     script.Bytes(),native_preferences,[&](unsigned index){menu_music->BeginSelect(index,nlDefaultSeed);},
                     [&](unsigned type){
@@ -660,13 +676,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                             throw resources::UnsupportedResource("Menu transition world-effect emission requires its real world/particle service");
                         if(menu_effects->Trigger(type)!=0)throw std::logic_error("Absent menu effect unexpectedly matched");
                         return true;
-                    },[&]{if(session.gx)DrainGX();},options.frontend_options?13:1,frontend_language,menu_volumes,menu_visual_settings,
+                    },[&]{if(session.gx)DrainGX();},options.frontend_title?0:options.frontend_options?13:1,frontend_language,menu_volumes,menu_visual_settings,
                     FrontendMenuCreditsServices{
                         [&]{menu_music->Stop();},
                         [&](bool enabled){stadium_rendering=enabled;},
                         [](const auto& request,const auto& output,std::uint64_t retrace){
                             return std::make_shared<FrontendMoviePlayback>(request,output,retrace);
-                        },FrontendMovieOptions{},false,0});
+                        },FrontendMovieOptions{},false,0},
+                    FrontendMenuTitleServices{menu_music,menu_title_dimming});
                 while(!frontend_menus->Current().menu||!frontend_menus->Current().navigation)
                 {
                     if(Update())throw std::runtime_error("Menu loading cancelled");
@@ -675,7 +692,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     SDL_Delay(1);
                 }
                 menu_frame=frontend_menus->Current();navigation_frame=menu_frame.navigation;
-                log("Original Main/Options queue, scripts and cameras share permanent menu/NAV resources; complete startup remains pending.");
+                log("Original Title/Main/Options queue, scripts and cameras share permanent menu/NAV resources; complete startup remains pending.");
+                log("Native idle dimming uses original NTSC retrace thresholds with a black overlay; full Wii video behavior is unqualified.");
             }
             else
             {
@@ -1226,6 +1244,30 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     if (frontend_boot && options.frames) frontend_input->Update({}, 1.f / 60);
                     else frontend_devices->Poll(*frontend_input, info.window, std::clamp(delta, 0.f, .1f),
                         io.WantCaptureKeyboard, io.NavActive && (io.ConfigFlags & ImGuiConfigFlags_NavEnableGamepad));
+                    if(menu_idle_dimming)
+                    {
+                        const auto& sample=frontend_devices->LastSnapshot();
+                        bool activity=false;
+                        if(sample.capture.focused)
+                        {
+                            activity=std::any_of(sample.devices.keys.begin(),sample.devices.keys.end(),[](bool held){return held;});
+                            for(const auto& pad:sample.devices.pads)if(pad.id)
+                                activity|=std::any_of(pad.buttons.begin(),pad.buttons.end(),[](bool held){return held;})
+                                    ||std::abs(int(pad.left_x))>int(.18f*32767)||std::abs(int(pad.left_y))>int(.18f*32767);
+                        }
+                        float x=0,y=0;const auto buttons=SDL_GetMouseState(&x,&y);
+                        const bool mouse_focus=sample.capture.focused&&SDL_GetMouseFocus()==info.window;
+                        if(mouse_focus)
+                        {
+                            const std::array position{x,y};
+                            activity|=buttons!=0||(menu_mouse_position&&*menu_mouse_position!=position);
+                            menu_mouse_position=position;
+                        }
+                        else menu_mouse_position.reset();
+                        // Inspect the accepted physical snapshot without another
+                        // FE update or button query. Capture may still wake video.
+                        menu_idle_dimming->Sample(movie_retraces.Count(),activity);
+                    }
                     if (frontend_pointer) pointer_dispatch = frontend_pointer->Poll(info.window, io.WantCaptureMouse);
                     if (text_view)
                     {
@@ -1515,7 +1557,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             if(frame_view && frontend_menus)
             {
                 const auto status=frontend_menus->Status();
-                ImGui::TextUnformatted(status.scene==1?"Main Menu — work in progress":status.scene==13?"Options — work in progress":"Menu transition");
+                ImGui::TextUnformatted(status.title?"Title — work in progress":status.scene==1?"Main Menu — work in progress":status.scene==13?"Options — work in progress":"Menu transition");
                 ImGui::Text("%zu images | %zu text components",frame_view->ImageCount(),frame_view->TextCount());
                 ImGui::TextUnformatted(status.interactive?"Mouse/Enter: original controls and sounds.":"Playing the original menu transition.");
                 if(status.pending_scene)ImGui::Text("Scene %u is still in development.",*status.pending_scene);
@@ -1722,6 +1764,17 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 ? "Enter / A: skip movie. Tab / Start: skip credits. Close window to exit."
                 : frontend_menus ? "Arrows / D-pad: move. Enter / A: select. Escape / B: back. Close window to exit."
                 : "Escape or close the window to exit."); ImGui::End();
+            if(menu_idle_dimming)
+            {
+                const float opacity=menu_idle_dimming->Opacity();
+                if(opacity>0)
+                {
+                    const auto* viewport=ImGui::GetMainViewport();
+                    ImGui::GetForegroundDrawList()->AddRectFilled(viewport->Pos,
+                        {viewport->Pos.x+viewport->Size.x,viewport->Pos.y+viewport->Size.y},
+                        ImGui::ColorConvertFloat4ToU32({0,0,0,opacity}));
+                }
+            }
             backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
             },
             [&](float) { timing.StartTimer(1); }
@@ -1789,6 +1842,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     std::chrono::steady_clock::now().time_since_epoch()).count();
                 if(raw_ns<0)throw std::runtime_error("The host movie clock must be monotonic and nonnegative");
                 const auto retrace=movie_retraces.Observe(static_cast<std::uint64_t>(raw_ns));
+                menu_idle_dimming->Sample(retrace,false);
                 const auto credits=frontend_menus->Credits();
                 if(credits_movie_binding)
                 {
@@ -1958,6 +2012,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
             frontend_menus.reset();menu_cursor.reset();
         }
         menu_frame={};navigation_frame.reset();menu_music.reset();menu_audio.reset();
+        menu_title_dimming.reset();menu_idle_dimming.reset();
         menu_volumes.reset();menu_visual_settings.reset();native_preferences.reset();
         if(menu_effects)menu_effects->Release();menu_effects.reset();menu_effect_records.reset();
         if(menu_cameras)menu_cameras->Release();menu_cameras.reset();menu_camera_assets.Clear();
