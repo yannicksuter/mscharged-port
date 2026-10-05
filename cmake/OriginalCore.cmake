@@ -27,6 +27,7 @@ add_library(charged_original_core STATIC
     "${MSCHARGED_PREPARED}/src/NL/nlFileGC.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlFileBasic.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlString.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlSlotPool.cpp"
     src/runtime/function_memory.cpp
     src/runtime/whole_file.cpp
     src/platform/os.cpp

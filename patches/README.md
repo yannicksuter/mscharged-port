@@ -19,6 +19,13 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch `0143-original-font-native-abi.patch` restores the complete original
+`nlFont` and text escape bodies, with Wii32 words, big endian keys, native matrix
+handles, stack allocation and owning game frees. Generated and owned font
+bundles verify original parsing, metrics, kerning and texture-name requests.
+The bounded CPU qualifier excludes unused draw/extended-colour sections at link
+time; original font-manager texture completion and rendering remain pending.
+
 Patch 0141 compiles the complete original NL bundle reader with exact Wii data
 words, native callback contexts and owning game allocations. Original searches,
 read requests and completion decisions remain in the source TU. Generated and

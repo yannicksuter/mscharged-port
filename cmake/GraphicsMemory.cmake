@@ -9,7 +9,6 @@ add_library(charged_graphics_memory STATIC
     "${MSCHARGED_PREPARED}/src/Game/GL/GLTextureAnim.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glTextureManagerStatic.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlAVLTree.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlSlotPool.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glModelMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glState.cpp"

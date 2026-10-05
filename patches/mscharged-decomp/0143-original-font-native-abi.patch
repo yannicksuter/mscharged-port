@@ -1,0 +1,1112 @@
+Subject: Restore whole original NL font and escape flow with native word/ownership ABI
+Upstream-base: 443164c91fded218656a8443432e642fdad57838
+
+Retire DrawString and escape parser body extractions. Keep the complete original
+control flow, glyph layout, metrics, kerning, passes and requests. Adapt Wii32
+scalars and BE keys, stack allocation syntax, pointer-token sentinels, native
+matrix handles, template emission and owning game allocation/free. No alternate
+font manager, successful texture upload or readiness is introduced.
+
+diff --git a/include/NL/nlFont.h b/include/NL/nlFont.h
+--- a/include/NL/nlFont.h
++++ b/include/NL/nlFont.h
+@@ -10,13 +10,20 @@
+ #include "NL/nlString.h"
+ #include "NL/nlTextEscape.h"
+ 
++#if defined(MSCHARGED_NATIVE)
++// The font's counters, hash identifiers and width arithmetic are Wii32 words.
++typedef u32 nlFontWord;
++#else
++typedef unsigned long nlFontWord;
++#endif
++
+ struct nlColour;
+ class FontCharString;
+ class GLView;
+ 
+ struct TextMetrics
+ {
+-    /* 0x00 */ unsigned long FontName;
++    /* 0x00 */ nlFontWord FontName;
+     /* 0x04 */ unsigned short Height;
+     /* 0x06 */ unsigned short Ascent;
+     /* 0x08 */ unsigned short InternalLeading;
+@@ -78,7 +85,7 @@
+             /* 0x16 */ unsigned short hash;
+         };
+ 
+-        operator unsigned long() const { return UnicodeChar; }
++        operator nlFontWord() const { return UnicodeChar; }
+         static int SortProc(const GlyphInfo* pa, const GlyphInfo* pb) { return pa->UnicodeChar - pb->UnicodeChar; }
+     };
+ 
+@@ -91,7 +98,7 @@
+                 /* 0x0 */ unsigned short A;
+                 /* 0x2 */ unsigned short B;
+             } s;
+-            /* 0x0 */ unsigned long hash;
++            /* 0x0 */ nlFontWord hash;
+         };
+         /* 0x4 */ int Kern;
+ 
+@@ -103,49 +110,73 @@
+             return *this;
+         }
+ 
+-        operator unsigned long() const { return hash; }
+-        static int SortProc(const KernPair* pa, const KernPair* pb) { return pa->hash - pb->hash; }
+-    };
+-
+-    unsigned long GetStringWidth(const FontCharString& Text, bool SingleLine, unsigned long Width, bool WordWrap) const;
+-    unsigned long GetStringWidth(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, bool SingleLine, unsigned long Width, bool WordWrap) const;
+-    unsigned long GetStringHeight(const FontCharString& Text, unsigned long Width, bool WordWrap) const;
+-    unsigned long GetStringHeight(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, unsigned long Width, bool WordWrap) const;
+-    unsigned long GetStringLineCount(const FontCharString& Text, unsigned long Width, bool WordWrap) const;
++        operator nlFontWord() const
++        {
++#if defined(MSCHARGED_NATIVE)
++            // The Wii union key has A in the high half, B in the low half.
++            return (nlFontWord(s.A) << 16) | s.B;
++#else
++            return hash;
++#endif
++        }
++        static int SortProc(const KernPair* pa, const KernPair* pb)
++        {
++#if defined(MSCHARGED_NATIVE)
++            return nlFontWord(*pa) - nlFontWord(*pb);
++#else
++            return pa->hash - pb->hash;
++#endif
++        }
++    };
++
++    nlFontWord GetStringWidth(const FontCharString& Text, bool SingleLine, nlFontWord Width, bool WordWrap) const;
++    nlFontWord GetStringWidth(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, bool SingleLine, nlFontWord Width, bool WordWrap) const;
++    nlFontWord GetStringHeight(const FontCharString& Text, nlFontWord Width, bool WordWrap) const;
++    nlFontWord GetStringHeight(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, nlFontWord Width, bool WordWrap) const;
++    nlFontWord GetStringLineCount(const FontCharString& Text, nlFontWord Width, bool WordWrap) const;
+     const GlyphInfo& GetGlyphInfo(unsigned short c) const
+     {
+         const GlyphInfo& glyph = c > 0x7F ? m_pExtendedGlyphs[c - 0x80] : m_GlyphLookup[c - 0x20];
+         return glyph.IsValid() ? glyph : m_GlyphLookup['?' - 0x20];
+     }
+-    unsigned long GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const;
++    nlFontWord GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const;
+     unsigned short GetExtendedFontChar(unsigned short Character) const;
+     void DisableScissorBox() const;
+     void SetScissorBox(const ScissorBox& other) const;
+     void DrawString(GLView* View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, glMatrixHandle* pMatrix, nlColour* pOverrideColour) const;
+-    unsigned char Load(const char* szFontName, char* pFontDescData, unsigned long HashId);
++    unsigned char Load(const char* szFontName, char* pFontDescData, nlFontWord HashId);
++
++#if defined(MSCHARGED_NATIVE)
++    static void* operator new(size_t size) { return nlMalloc(size); }
++    static void* operator new(size_t size, unsigned int alignment, bool fromEnd)
++    { return nlMalloc(size, alignment, fromEnd); }
++    static void operator delete(void* pointer) noexcept { nlFree(pointer); }
++    static void operator delete(void* pointer, unsigned int, bool) noexcept
++    { nlFree(pointer); }
++#endif
+ 
+     ~nlFont();
+     nlFont();
+ 
+-    /* 0x000 */ unsigned long m_PageCount;
+-    /* 0x004 */ unsigned long m_TextureHandles[16];
+-    /* 0x044 */ unsigned long m_EffectTextureHandles[16];
++    /* 0x000 */ nlFontWord m_PageCount;
++    /* 0x004 */ nlFontWord m_TextureHandles[16];
++    /* 0x044 */ nlFontWord m_EffectTextureHandles[16];
+     /* 0x084 */ TextureType m_TextureType;
+     /* 0x088 */ mutable unsigned char m_bScissorBox;
+     /* 0x089 */ unsigned char _pad_089;
+     /* 0x08A */ mutable ScissorBox m_scissorBox;
+     /* 0x092 */ unsigned char _pad_092[2];
+     /* 0x094 */ Distribution m_Distribution;
+-    /* 0x098 */ unsigned long m_CharacterSet;
+-    /* 0x09C */ unsigned long m_PageSize;
++    /* 0x098 */ nlFontWord m_CharacterSet;
++    /* 0x09C */ nlFontWord m_PageSize;
+     /* 0x0A0 */ char m_FontName[32];
+     /* 0x0C0 */ TextMetrics m_Metrics;
+     /* 0x0D4 */ float m_InvTexSize;
+     /* 0x0D8 */ GlyphInfo m_GlyphLookup[95];
+     /* 0x9C0 */ GlyphInfo* m_pExtendedGlyphs;
+-    /* 0x9C4 */ unsigned long m_ExtendedGlyphCount;
++    /* 0x9C4 */ nlFontWord m_ExtendedGlyphCount;
+     /* 0x9C8 */ KernPair* m_pKernTable;
+-    /* 0x9CC */ unsigned long m_KernTableSize;
++    /* 0x9CC */ nlFontWord m_KernTableSize;
+ };
+ 
+ inline unsigned short nlFont::GetExtendedFontChar(unsigned short Character) const
+@@ -159,6 +190,12 @@
+     }
+     return 0x3F;
+ }
++
++#if defined(MSCHARGED_NATIVE)
++static_assert(sizeof(TextMetrics) == 20);
++static_assert(sizeof(nlFont::KernPair) == 8);
++static_assert(sizeof(nlFont::GlyphInfo) == 24);
++#endif
+ 
+ class FontCharString
+ {
+@@ -170,7 +207,11 @@
+     {
+         if (m_InternalBuffer != 0)
+         {
++#if defined(MSCHARGED_NATIVE)
++            nlFree(m_pString);
++#else
+             delete[] m_pString;
++#endif
+         }
+     }
+ 
+@@ -225,13 +266,13 @@
+     *dest = 0;
+ }
+ 
+-inline unsigned long nlFont::GetStringWidth(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, bool SingleLine, unsigned long Width, bool WordWrap) const
++inline nlFontWord nlFont::GetStringWidth(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, bool SingleLine, nlFontWord Width, bool WordWrap) const
+ {
+     FontCharString fontText(Text.c_str(), this, (unsigned short*)0);
+     return GetStringWidth(fontText, SingleLine, Width, WordWrap);
+ }
+ 
+-inline unsigned long nlFont::GetStringHeight(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, unsigned long Width, bool WordWrap) const
++inline nlFontWord nlFont::GetStringHeight(const BasicString<unsigned short, Detail::TempStringAllocator>& Text, nlFontWord Width, bool WordWrap) const
+ {
+     FontCharString fontText(Text.c_str(), this, (unsigned short*)0);
+     return GetStringHeight(fontText, Width, WordWrap);
+diff --git a/src/NL/nlFont.cpp b/src/NL/nlFont.cpp
+--- a/src/NL/nlFont.cpp
++++ b/src/NL/nlFont.cpp
+@@ -1,4 +1,3 @@
+-#include "NL/FontTextState.h"
+ #include "NL/nlFont.h"
+ #include "NL/nlList.h"
+ #include "NL/nlPrint.h"
+@@ -6,7 +5,27 @@
+ #include "NL/gl/glDraw2.h"
+ #include "NL/gl/glState.h"
+ #include "NL/gl/glStruct.h"
+-#include "NL/FontTextSteps.h"
++
++#if defined(MSCHARGED_NATIVE)
++#include <stdint.h>
++#include <type_traits>
++#if defined(_MSC_VER)
++#include <malloc.h>
++#define __alloca _alloca
++#else
++#include <alloca.h>
++#define __alloca alloca
++#endif
++
++// Preserve the original null-plus-one token sentinel without undefined native
++// pointer arithmetic. No token, parser branch or request is changed.
++static inline char* NextFontToken(char* text)
++{
++    return reinterpret_cast<char*>(reinterpret_cast<uintptr_t>(nlStrChr(text, ' ')) + 1);
++}
++#else
++#define NextFontToken(text) (nlStrChr(text, ' ') + 1)
++#endif
+ 
+ nlFont::nlFont()
+ {
+@@ -14,11 +33,21 @@
+ 
+ nlFont::~nlFont()
+ {
++#if defined(MSCHARGED_NATIVE)
++    nlFree(m_pKernTable);
++#else
+     ::operator delete[](m_pKernTable);
++#endif
+     m_pKernTable = 0;
+     if (m_pExtendedGlyphs != 0)
+     {
++#if defined(MSCHARGED_NATIVE)
++        // This source array has no nontrivial destructor or native array cookie.
++        static_assert(std::is_trivially_destructible<GlyphInfo>::value);
++        nlFree(m_pExtendedGlyphs);
++#else
+         delete[] m_pExtendedGlyphs;
++#endif
+     }
+ }
+ 
+@@ -26,9 +55,12 @@
+ {
+     pInfo->HasKernPairs = 1;
+     nlFont::KernPair kp;
+-    char* pKernToken = nlStrChr(pToken, ' ');
+-    pKernToken++;
++    char* pKernToken = NextFontToken(pToken);
++#if defined(MSCHARGED_NATIVE)
++    while ((uintptr_t)pKernToken != 1)
++#else
+     while ((unsigned long)pKernToken != 1)
++#endif
+     {
+         kp.s.A = Base;
+         int nB;
+@@ -41,11 +73,11 @@
+             nB = pKernToken[0];
+         }
+         kp.s.B = (unsigned short)nB;
+-        pKernToken = nlStrChr(pKernToken, ' ') + 1;
++        pKernToken = NextFontToken(pKernToken);
+         kp.Kern = atoi(pKernToken);
+         KernList.AddEntry(kp);
+         self->m_KernTableSize++;
+-        pKernToken = nlStrChr(pKernToken, ' ') + 1;
++        pKernToken = NextFontToken(pKernToken);
+     }
+ }
+ 
+@@ -57,12 +89,12 @@
+     return &pEntry->entry;
+ }
+ 
+-unsigned char nlFont::Load(const char* szFontName, char* pFontDescData, unsigned long HashId)
+-{
+-    unsigned long CurrentPage;
+-    unsigned long CurrentTexelX;
+-    unsigned long CurrentTexelY;
+-    unsigned long RenderHeight;
++unsigned char nlFont::Load(const char* szFontName, char* pFontDescData, nlFontWord HashId)
++{
++    nlFontWord CurrentPage;
++    nlFontWord CurrentTexelX;
++    nlFontWord CurrentTexelY;
++    nlFontWord RenderHeight;
+     unsigned short RenderAscent;
+     char* pCurrentLine;
+ 
+@@ -104,7 +136,7 @@
+             *pEOL = 0;
+         }
+ 
+-        pToken = nlStrChr(pCurrentLine, ' ') + 1;
++        pToken = NextFontToken(pCurrentLine);
+ 
+         switch (nlToUpper(*pCurrentLine))
+         {
+@@ -121,12 +153,12 @@
+ 
+                 pCurrentLine = nlStrChr(pToken, ' ');
+                 pCurrentLine++;
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 m_PageCount = atoi(pCurrentLine);
+ 
+                 pCurrentLine = nlStrChr(pCurrentLine, ' ');
+                 pCurrentLine++;
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 switch (nlToLower(*pCurrentLine))
+                 {
+                 case 'c':
+@@ -170,22 +202,22 @@
+ 
+             pCurrentLine = nlStrChr(pToken, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             RenderHeight = atoi(pCurrentLine);
+ 
+             pCurrentLine = nlStrChr(pCurrentLine, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             m_Metrics.Ascent = (unsigned short)atoi(pCurrentLine);
+ 
+             pCurrentLine = nlStrChr(pCurrentLine, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             RenderAscent = (unsigned short)atoi(pCurrentLine);
+ 
+             pCurrentLine = nlStrChr(pCurrentLine, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             m_Metrics.InternalLeading = (unsigned short)atoi(pCurrentLine);
+             break;
+         }
+@@ -196,7 +228,7 @@
+ 
+             pCurrentLine = nlStrChr(pToken, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             m_Metrics.LineHeight = (float)atoi(pCurrentLine) / 100.0f;
+             break;
+         }
+@@ -228,13 +260,13 @@
+ 
+             pCurrentLine = nlStrChr(pToken, ' ');
+             pCurrentLine++;
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             pInfo->Advance = (unsigned char)atoi(pCurrentLine);
+ 
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             pInfo->RenderWidth = (unsigned char)atoi(pCurrentLine);
+ 
+-            pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++            pCurrentLine = NextFontToken(pCurrentLine);
+             pInfo->Offset = (signed char)atoi(pCurrentLine);
+ 
+             bool usePackedGlyphs = 1.2f - FormatVersion > 0.0001f;
+@@ -257,16 +289,16 @@
+             }
+             else
+             {
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 pInfo->RenderHeight = (unsigned char)atoi(pCurrentLine);
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 pInfo->RenderAscent = (unsigned char)atoi(pCurrentLine);
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 CurrentTexelX = atoi(pCurrentLine);
+-                pCurrentLine = nlStrChr(pCurrentLine, ' ') + 1;
++                pCurrentLine = NextFontToken(pCurrentLine);
+                 CurrentTexelY = atoi(pCurrentLine);
+             }
+ 
+@@ -362,7 +394,7 @@
+ 
+     static char TextureNameFormat[] = "%s_%d";
+     char sHashFontName[265] = { 0 };
+-    unsigned long page;
++    nlFontWord page;
+     for (page = 0; page < m_PageCount; page++)
+     {
+         nlStrNCpy(sHashFontName, szFontName, 0x109);
+@@ -377,6 +409,34 @@
+     }
+ 
+     return 1;
++}
++
++template <typename GlyphLookup>
++static inline nlFontWord CalculateCharWidth(const nlFont& font, const GlyphLookup& glyphLookup, unsigned short FontChar, unsigned short PrevFontChar)
++{
++    const nlFont::GlyphInfo* pGlyph = &glyphLookup.GetGlyphInfo(FontChar);
++
++    signed char offset = pGlyph->Offset;
++    unsigned short prevChar = PrevFontChar;
++    unsigned char advance = pGlyph->Advance;
++    nlFontWord ret = advance + offset;
++
++    if (prevChar != 0)
++    {
++        const nlFont::GlyphInfo* pPrevGlyph = &glyphLookup.GetGlyphInfo(prevChar);
++
++        if (pPrevGlyph->HasKernPairs)
++        {
++            nlFont::KernPair kp = { { PrevFontChar, FontChar }, 0 };
++            nlFont::KernPair* pFoundKP = nlBSearch<nlFont::KernPair, nlFont::KernPair>(kp, font.m_pKernTable, font.m_KernTableSize);
++            if (pFoundKP != 0)
++            {
++                ret += pFoundKP->Kern;
++            }
++        }
++    }
++
++    return (nlFontWord)(ret * font.m_Metrics.Spacing);
+ }
+ 
+ // Shared lookup state for one string traversal.
+@@ -393,13 +453,7 @@
+     {
+     }
+ 
+-    int Kerning(unsigned short a, unsigned short b) const
+-    {
+-        nlFont::KernPair key = { { a, b }, 0 };
+-        nlFont::KernPair* found = nlBSearch<nlFont::KernPair, nlFont::KernPair>(key, m_Font.m_pKernTable, m_Font.m_KernTableSize);
+-        return found ? found->Kern : 0;
+-    }
+-    unsigned long GetEscapeBegin() const { return m_EscapeBegin; }
++    nlFontWord GetEscapeBegin() const { return m_EscapeBegin; }
+ 
+     const GlyphInfo& GetGlyphInfo(unsigned short c) const
+     {
+@@ -407,73 +461,232 @@
+         return glyph.IsValid() ? glyph : m_Fallback;
+     }
+ 
+-    unsigned long GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const
+-    {
+-        return FontCharacterWidth(*this, m_Font.m_Metrics.Spacing, FontChar, PrevFontChar);
++    nlFontWord GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const
++    {
++        return CalculateCharWidth(m_Font, *this, FontChar, PrevFontChar);
+     }
+ 
+ private:
+     const nlFont& m_Font;
+-    unsigned long m_EscapeBegin;
++    nlFontWord m_EscapeBegin;
+     const GlyphInfo* m_Glyphs;
+     const GlyphInfo& m_Fallback;
+ };
+ 
+-class OriginalFontPageSink
+-{
+-public:
+-    OriginalFontPageSink(const nlFont& font, GLView* view, glPoly2* quads,
+-        glMatrixHandle* matrix, bool effect)
+-        : m_Font(font), m_View(view), m_Quads(quads), m_Current(quads), m_Matrix(matrix), m_Effect(effect) {}
+-    void BeginPage(unsigned long page)
+-    {
+-        glSetCurrentTexture((m_Effect ? m_Font.m_EffectTextureHandles : m_Font.m_TextureHandles)[page], GLTT_Diffuse);
+-    }
+-    void Quad(const FontTextQuad& quad)
+-    {
+-        for (int i = 0; i < 4; ++i) { m_Current->m_pos[i] = quad.m_pos[i]; m_Current->m_uv[i] = quad.m_uv[i]; }
+-        m_Current->depth = 0.0f;
+-        m_Current->SetColour(quad.colour);
+-        ++m_Current;
+-    }
+-    void EndPage()
+-    {
+-        unsigned long count = (unsigned long)(m_Current - m_Quads);
+-        if (count != 0)
+-        {
+-            if (m_Font.m_bScissorBox)
+-            {
+-                nlVector4 scissor;
+-                scissor.x = m_Font.m_scissorBox.X; scissor.y = m_Font.m_scissorBox.Y;
+-                scissor.z = m_Font.m_scissorBox.Width; scissor.w = m_Font.m_scissorBox.Height;
+-                glAttachPoly2(m_View, 0, count, m_Quads, &scissor, m_Matrix);
+-            }
+-            else glAttachPoly2(m_View, 0, count, m_Quads, m_Matrix);
+-        }
+-        m_Current = m_Quads;
+-    }
+-private:
+-    const nlFont& m_Font;
+-    GLView* m_View;
+-    glPoly2* m_Quads;
+-    glPoly2* m_Current;
+-    glMatrixHandle* m_Matrix;
+-    bool m_Effect;
+-};
+-
+ void nlFont::DrawString(GLView* View, const FontCharString& Text, const nlVector2& Position, const nlColour& Colour, const nlColour& EffectColour, int Length, nlFont::TextPass Passes, bool FlipY, glMatrixHandle* pMatrix, nlColour* pOverrideColour) const
+ {
+-    float pixelCentre = glGetScreenInfo()->PixelCentre;
+-    int length = Length == -1 ? nlStrLen(Text.m_pString) : Length;
+-    glPoly2* quads = (glPoly2*)__alloca((unsigned long)(length * sizeof(glPoly2)));
+-    FontSetTextRasterState();
+-    FontStringContext lookup(*this);
+-    OriginalFontPageSink sink(*this, View, quads, pMatrix, Passes == PASS_Effect && m_TextureType == SplitFX);
+-    FontTextColourResult result = FontDrawStringSteps<FontStringContext, nlEscapeSequence>(Text.m_pString, lookup,
+-        m_Metrics.Spacing, Position.x + pixelCentre, Position.y + pixelCentre, Colour, length, FlipY, pOverrideColour, sink);
++    gl_ScreenInfo* pScreenInfo = glGetScreenInfo();
++    float PixelCenter = pScreenInfo->PixelCentre;
++    float StartingX = Position.x + PixelCenter;
++    float StartingY = Position.y + PixelCenter;
++    nlVector2 CurrentPosition;
++
++    int StringLength = Length == -1 ? nlStrLen(Text.m_pString) : Length;
++
++    const GlyphInfo* pGlyph;
++    glPoly2* pQuads = (glPoly2*)__alloca((nlFontWord)(StringLength * sizeof(glPoly2)));
++    glPoly2* pCurrentQuad = pQuads;
++
++    nlFontWord HandledChars = 0;
++    nlFontWord CurrentPage = 0;
++    const unsigned short* pCurrentChar;
++
++    glSetDefaultState(false);
++    glSetRasterState(GLS_AlphaBlend, 1);
++    glSetRasterState(GLS_AlphaTest, 1);
++    glSetRasterState(GLS_AlphaTestRef, 0);
++    glSetRasterState(GLS_Culling, 0);
++    glSetCurrentRasterState(glHandleizeRasterState());
++    nlVector4 Scissor;
++    Scissor.x = m_scissorBox.X;
++    Scissor.y = m_scissorBox.Y;
++    Scissor.z = m_scissorBox.Width;
++    Scissor.w = m_scissorBox.Height;
++
++    nlColour OverrideColour = Colour;
++    if (pOverrideColour != 0 && pOverrideColour->c[3] != 0)
++    {
++        OverrideColour = *pOverrideColour;
++    }
++
++    FontStringContext glyphLookup(*this);
++    const unsigned short* PushColourIndex = 0;
++    nlColour LastPushedColour = OverrideColour;
++    nlVec2Set(CurrentPosition, StartingX, StartingY);
++
++    while (HandledChars < (nlFontWord)StringLength)
++    {
++        bool useEffectTextures = false;
++        if (Passes == PASS_Effect && m_TextureType == SplitFX)
++        {
++            useEffectTextures = true;
++        }
++
++        const nlFontWord* textureHandles = useEffectTextures ? m_EffectTextureHandles : m_TextureHandles;
++        glSetCurrentTexture(textureHandles[CurrentPage], GLTT_Diffuse);
++
++        CurrentPosition.x = StartingX;
++        int i = 0;
++        pCurrentChar = Text.m_pString;
++
++        while (*pCurrentChar != 0 && HandledChars < (nlFontWord)StringLength && i < (nlFontWord)StringLength)
++        {
++            nlFontWord Char = *pCurrentChar;
++            if (Char == glyphLookup.GetEscapeBegin())
++            {
++                nlEscapeSequence escape(pCurrentChar);
++                switch (escape.m_Type)
++                {
++                case ESC_COLOUR:
++                    OverrideColour = escape.GetExtendedColour();
++
++                    if (PushColourIndex < pCurrentChar)
++                    {
++                        if (OverrideColour.c[3] == 0)
++                        {
++                            LastPushedColour = Colour;
++                            LastPushedColour.c[3] = 0;
++                        }
++                        else
++                        {
++                            LastPushedColour = OverrideColour;
++                            LastPushedColour.c[3] = 0xFF;
++                        }
++                        PushColourIndex = pCurrentChar;
++                    }
++
++                    if (OverrideColour.c[3] == 0)
++                    {
++                        OverrideColour = Colour;
++                    }
++                    break;
++
++                case ESC_NON_BREAKING_SPACE:
++                {
++                    const GlyphInfo* pSpaceGlyph = &glyphLookup.GetGlyphInfo(' ');
++                    CurrentPosition.x += (float)((int)pSpaceGlyph->Offset + (int)pSpaceGlyph->Advance);
++                }
++                    break;
++                default:
++                    break;
++                }
++
++                i += (escape.m_pEnd - pCurrentChar) - 1;
++                if (CurrentPage == 0)
++                {
++                    HandledChars += escape.m_pEnd - pCurrentChar;
++                }
++                pCurrentChar = escape.m_pEnd - 1;
++            }
++            else
++            {
++                pGlyph = &glyphLookup.GetGlyphInfo(Char);
++                nlFontWord Page = pGlyph->Page;
++                CurrentPosition.x += (float)pGlyph->Offset;
++                if (Page == CurrentPage)
++                {
++                    int renderAscent = FlipY ? -pGlyph->RenderAscent : pGlyph->RenderAscent;
++                    CurrentPosition.y = StartingY - (float)renderAscent;
++                    pCurrentQuad->m_pos[1].x = CurrentPosition.x;
++                    pCurrentQuad->m_pos[0].x = CurrentPosition.x;
++
++                    pCurrentQuad->m_pos[2].x = pCurrentQuad->m_pos[3].x = CurrentPosition.x + (float)pGlyph->RenderWidth - 1.0f;
++
++                    pCurrentQuad->m_pos[3].y = CurrentPosition.y;
++                    pCurrentQuad->m_pos[0].y = CurrentPosition.y;
++
++                    int renderHeight;
++                    if (FlipY)
++                    {
++                        renderHeight = -(pGlyph->RenderHeight - 1);
++                    }
++                    else
++                    {
++                        renderHeight = pGlyph->RenderHeight - 1;
++                    }
++
++                    pCurrentQuad->m_pos[1].y = pCurrentQuad->m_pos[2].y = CurrentPosition.y + (float)renderHeight;
++
++                    pCurrentQuad->depth = 0.0f;
++
++                    pCurrentQuad->m_uv[0].x = pCurrentQuad->m_uv[1].x = pGlyph->uv.x;
++
++                    pCurrentQuad->m_uv[2].x = pCurrentQuad->m_uv[3].x = pGlyph->uvEnd.x;
++
++                    pCurrentQuad->m_uv[0].y = pCurrentQuad->m_uv[3].y = pGlyph->uv.y;
++
++                    pCurrentQuad->m_uv[1].y = pCurrentQuad->m_uv[2].y = pGlyph->uvEnd.y;
++
++                    nlColour QuadColour = OverrideColour;
++                    QuadColour.c[3] = Colour.c[3];
++                    pCurrentQuad->SetColour(QuadColour);
++
++                    pCurrentQuad++;
++                    HandledChars++;
++                }
++
++                int FinalAdvance = (int)pGlyph->Advance;
++                if (pGlyph->HasKernPairs && pCurrentChar[1] != 0)
++                {
++                    unsigned short* pKern = (unsigned short*)pCurrentChar;
++                    KernPair kp = { { pKern[0], pKern[1] }, 0 };
++                    KernPair* pValidKp = nlBSearch<KernPair, KernPair>(kp, m_pKernTable, m_KernTableSize);
++                    if (pValidKp != 0)
++                    {
++                        FinalAdvance += pValidKp->Kern;
++                    }
++                }
++
++                CurrentPosition.x += (float)FinalAdvance * m_Metrics.Spacing;
++            }
++
++            pCurrentChar++;
++            i++;
++        }
++
++        if (pOverrideColour != 0 && pOverrideColour->c[3] != 0)
++        {
++            OverrideColour = *pOverrideColour;
++        }
++        else
++        {
++            OverrideColour = Colour;
++        }
++
++        nlFontWord UsedQuads = (nlFontWord)(pCurrentQuad - pQuads);
++        if (UsedQuads != 0)
++        {
++            if (m_bScissorBox)
++            {
++                glAttachPoly2(View, 0, UsedQuads, pQuads, &Scissor, pMatrix);
++            }
++            else
++            {
++                glAttachPoly2(View, 0, UsedQuads, pQuads, pMatrix);
++            }
++        }
++
++        pCurrentQuad = pQuads;
++        CurrentPage++;
++    }
++
+     if (m_TextureType == SplitFX && Passes == PASS_TextAndEffect)
++    {
+         DrawString(View, Text, Position, EffectColour, EffectColour, Length, PASS_Effect, View != 0, pMatrix, 0);
+-    result.Apply(pOverrideColour);
++    }
++
++    if (pOverrideColour != 0)
++    {
++        if (PushColourIndex != 0 && LastPushedColour.c[3] != 0)
++        {
++            *pOverrideColour = LastPushedColour;
++            pOverrideColour->c[3] = 0xFF;
++        }
++        else
++        {
++            pOverrideColour->c[3] = 0;
++        }
++    }
+ }
+ 
+ void nlFont::SetScissorBox(const ScissorBox& other) const
+@@ -487,26 +700,200 @@
+     m_bScissorBox = false;
+ }
+ 
+-unsigned long nlFont::GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const
+-{
+-    FontStringContext lookup(*this);
+-    return lookup.GetCharWidth(FontChar, PrevFontChar);
+-}
+-
+-unsigned long nlFont::GetStringWidth(const FontCharString& Text, bool SingleLine, unsigned long Width, bool WordWrap) const
+-{
+-    FontStringContext lookup(*this);
+-    return FontGetStringWidth<FontStringContext, nlEscapeSequence>(Text.m_pString, lookup, SingleLine, Width, WordWrap);
+-}
+-
+-unsigned long nlFont::GetStringHeight(const FontCharString& Text, unsigned long Width, bool WordWrap) const
+-{
+-    unsigned long LineCount = GetStringLineCount(Text, Width, WordWrap);
+-    return FontStringHeight(m_Metrics.Height, LineCount, m_Metrics.Spacing);
+-}
+-
+-unsigned long nlFont::GetStringLineCount(const FontCharString& Text, unsigned long Width, bool WordWrap) const
+-{
+-    FontStringContext lookup(*this);
+-    return FontGetStringLineCount<FontStringContext, nlEscapeSequence>(Text.m_pString, lookup, Width, WordWrap);
+-}
++nlFontWord nlFont::GetCharWidth(unsigned short FontChar, unsigned short PrevFontChar) const
++{
++    return CalculateCharWidth(*this, *this, FontChar, PrevFontChar);
++}
++
++nlFontWord nlFont::GetStringWidth(const FontCharString& Text, bool SingleLine, nlFontWord Width, bool WordWrap) const
++{
++    if (SingleLine)
++    {
++        unsigned short PrevChar = 0;
++        nlFontWord StringWidth = 0;
++        const unsigned short* pCurrentChar = Text.m_pString;
++        FontStringContext glyphLookup(*this);
++        while (*pCurrentChar != 0)
++        {
++            if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++            {
++                nlEscapeSequence esc(pCurrentChar);
++                pCurrentChar = esc.m_pEnd - 1;
++            }
++            else
++            {
++                StringWidth += glyphLookup.GetCharWidth(*pCurrentChar, PrevChar);
++                PrevChar = *pCurrentChar;
++            }
++            pCurrentChar++;
++        }
++        return StringWidth;
++    }
++
++    nlFontWord CurrentRowWidth = 0;
++    nlFontWord MaxWidth = 0;
++    const unsigned short* pLastSpace = 0;
++    const unsigned short* pLastNonEsc = 0;
++    nlFontWord WidthAtLastSpace = 0;
++    unsigned char FirstChar = 1;
++    unsigned char IsNewParagraph = 0;
++    const unsigned short* pCurrentChar = Text.m_pString;
++    nlFontWord CharWidth;
++    FontStringContext glyphLookup(*this);
++
++    while (*pCurrentChar != 0)
++    {
++        if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++        {
++            nlEscapeSequence esc(pCurrentChar);
++            if (esc.GetType() == ESC_NON_BREAKING_SPACE)
++            {
++                unsigned short prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? *pLastNonEsc : 0);
++                CharWidth = glyphLookup.GetCharWidth(' ', prevChar);
++            }
++            else if (esc.GetType() == ESC_PARAGRAPH)
++            {
++                CharWidth = Width + 1;
++                WidthAtLastSpace = CurrentRowWidth;
++                IsNewParagraph = 1;
++                pLastSpace = esc.m_pEnd - 1;
++            }
++            else
++            {
++                CharWidth = 0;
++            }
++            pCurrentChar = esc.m_pEnd - 1;
++        }
++        else
++        {
++            unsigned short prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? *pLastNonEsc : 0);
++            CharWidth = glyphLookup.GetCharWidth(*pCurrentChar, prevChar);
++            pLastNonEsc = pCurrentChar;
++            if (*pCurrentChar == ' ')
++            {
++                pLastSpace = pCurrentChar;
++                WidthAtLastSpace = CurrentRowWidth;
++            }
++        }
++        FirstChar = 0;
++        if (CurrentRowWidth + CharWidth > Width)
++        {
++            if (WordWrap && pLastSpace != 0)
++            {
++                CurrentRowWidth = WidthAtLastSpace;
++                pCurrentChar = pLastSpace + 1;
++                pLastSpace = 0;
++                WidthAtLastSpace = 0;
++            }
++            if (*pCurrentChar != ' ')
++            {
++                pCurrentChar--;
++            }
++            bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++            if (useWidth)
++            {
++                MaxWidth = CurrentRowWidth;
++            }
++            CurrentRowWidth = 0;
++        }
++        CurrentRowWidth += CharWidth;
++        if (IsNewParagraph)
++        {
++            bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++            if (useWidth)
++            {
++                MaxWidth = CurrentRowWidth;
++            }
++            CurrentRowWidth = 0;
++            IsNewParagraph = 0;
++        }
++        pCurrentChar++;
++    }
++    bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++    if (useWidth)
++    {
++        MaxWidth = CurrentRowWidth;
++    }
++    return MaxWidth;
++}
++
++nlFontWord nlFont::GetStringHeight(const FontCharString& Text, nlFontWord Width, bool WordWrap) const
++{
++    nlFontWord LineCount = GetStringLineCount(Text, Width, WordWrap);
++    return (nlFontWord)(m_Metrics.Spacing * (m_Metrics.Height * LineCount));
++}
++
++nlFontWord nlFont::GetStringLineCount(const FontCharString& Text, nlFontWord Width, bool WordWrap) const
++{
++    nlFontWord RowCount = 0;
++    nlFontWord CurrentRowWidth = 0;
++    const unsigned short* pLastSpace = 0;
++    const unsigned short* pLastNonEsc = 0;
++    unsigned char FirstChar = 1;
++    unsigned char IsNewParagraph = 0;
++    const unsigned short* pCurrentChar = Text.m_pString;
++    nlFontWord CharWidth;
++    FontStringContext glyphLookup(*this);
++
++    while (*pCurrentChar != 0)
++    {
++        if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++        {
++            nlEscapeSequence esc(pCurrentChar);
++            if (esc.GetType() == ESC_NON_BREAKING_SPACE)
++            {
++                nlFontWord prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? (nlFontWord)*pLastNonEsc : 0);
++                CharWidth = glyphLookup.GetCharWidth(' ', (unsigned short)prevChar);
++            }
++            else if (esc.GetType() == ESC_PARAGRAPH)
++            {
++                CharWidth = Width + 1;
++                IsNewParagraph = 1;
++                pLastSpace = esc.m_pEnd - 1;
++            }
++            else
++            {
++                CharWidth = 0;
++            }
++            pCurrentChar = esc.m_pEnd - 1;
++        }
++        else
++        {
++            nlFontWord prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? (nlFontWord)*pLastNonEsc : 0);
++            CharWidth = glyphLookup.GetCharWidth(*pCurrentChar, (unsigned short)prevChar);
++            pLastNonEsc = pCurrentChar;
++            if (*pCurrentChar == ' ')
++            {
++                pLastSpace = pCurrentChar;
++            }
++        }
++        FirstChar = 0;
++        if (CurrentRowWidth + CharWidth > Width)
++        {
++            if (WordWrap && pLastSpace != 0)
++            {
++                pCurrentChar = pLastSpace + 1;
++                pLastSpace = 0;
++            }
++            RowCount++;
++            if (*pCurrentChar != ' ')
++            {
++                pCurrentChar--;
++            }
++            CurrentRowWidth = 0;
++        }
++        CurrentRowWidth += CharWidth;
++        if (IsNewParagraph)
++        {
++            CurrentRowWidth = 0;
++            IsNewParagraph = 0;
++        }
++        pCurrentChar++;
++    }
++    return RowCount + 1;
++}
++
++#if defined(MSCHARGED_NATIVE)
++// Emit the original out-of-line template under the modern compiler as well.
++#include "NL/nlstring_impl.h"
++#endif
+diff --git a/include/NL/nlTextEscape.h b/include/NL/nlTextEscape.h
+--- a/include/NL/nlTextEscape.h
++++ b/include/NL/nlTextEscape.h
+@@ -2,6 +2,12 @@
+ #define NL_TEXT_ESCAPE_H
+ 
+ #include "NL/nlColour.h"
++
++#if defined(MSCHARGED_NATIVE)
++typedef u32 nlEscapeWord;
++#else
++typedef unsigned long nlEscapeWord;
++#endif
+ 
+ enum ESCAPE_TYPE
+ {
+@@ -18,11 +24,11 @@
+ public:
+     struct ESCAPE_LOOKUP
+     {
+-        /* 0x0 */ unsigned long hash;
++        /* 0x0 */ nlEscapeWord hash;
+         /* 0x4 */ ESCAPE_TYPE type;
+ 
+-        operator unsigned long() const { return hash; }
+-        bool operator==(const unsigned long& key) const { return hash == key; }
++        operator nlEscapeWord() const { return hash; }
++        bool operator==(const nlEscapeWord& key) const { return hash == key; }
+     };
+ 
+     nlColour GetExtendedColour();
+@@ -35,7 +41,7 @@
+     /* 0x04 */ unsigned short m_Extended[16];
+     /* 0x24 */ const unsigned short* m_pEnd;
+ 
+-    static const unsigned long ESCAPE_DEFN[ESC_COUNT];
++    static const nlEscapeWord ESCAPE_DEFN[ESC_COUNT];
+     static ESCAPE_LOOKUP s_EscapeLookup[ESC_COUNT];
+     static const unsigned short ESCAPE_BEGIN;
+ };
+diff --git a/src/NL/nlTextEscape.cpp b/src/NL/nlTextEscape.cpp
+--- a/src/NL/nlTextEscape.cpp
++++ b/src/NL/nlTextEscape.cpp
+@@ -1,10 +1,9 @@
+ #include "NL/nlTextEscape.h"
+-#include "NL/FrontendTextEscapeSteps.h"
+ 
+ #include "NL/nlAlgorithm.h"
+ #include "NL/nlString.h"
+ 
+-const unsigned long nlEscapeSequence::ESCAPE_DEFN[ESC_COUNT] = {
++const nlEscapeWord nlEscapeSequence::ESCAPE_DEFN[ESC_COUNT] = {
+     0x00000000,
+     0x7B000000,
+     0x6E627300,
+@@ -55,18 +54,80 @@
+     return colour;
+ }
+ 
+-namespace
+-{
+-struct OriginalEscapeLookup
+-{
+-    ESCAPE_TYPE operator()(unsigned long key) const
+-    {
+-        nlEscapeSequence::ESCAPE_LOOKUP* found = nlBSearch(key, nlEscapeSequence::s_EscapeLookup, ESC_COUNT);
+-        return found != 0 ? found->type : ESC_UNKNOWN;
+-    }
+-};
+-}
+ nlEscapeSequence::nlEscapeSequence(const unsigned short* str)
+ {
+-    FrontendParseTextEscape(*this, str, OriginalEscapeLookup());
++    char Seq[4] = { 0, 0, 0, 0 };
++    const unsigned short* ExtendedStart = 0;
++    const unsigned short* p = str;
++    char* pSeq = Seq;
++    nlEscapeWord Char = 0;
++    nlEscapeWord key;
++    ESCAPE_LOOKUP* pEscape;
++    ESCAPE_TYPE type;
++
++    while (true)
++    {
++        nlEscapeWord ch = p[1];
++
++        if (ch == '}')
++        {
++            break;
++        }
++
++        if (ch == ':')
++        {
++            const unsigned short* pExtended = str;
++            pExtended += Char;
++            ExtendedStart = pExtended + 2;
++            break;
++        }
++
++        if (Char < 4)
++        {
++            *pSeq = (char)ch;
++        }
++
++        p++;
++        pSeq++;
++        Char++;
++    }
++
++    if (ExtendedStart != 0)
++    {
++        nlEscapeSequence* pSelf = this;
++
++        for (Char = 0; Char < 15; Char++)
++        {
++            nlEscapeWord ch = ExtendedStart[Char];
++            if (ch == '}')
++            {
++                break;
++            }
++
++            pSelf->m_Extended[Char] = (unsigned short)ch;
++        }
++    }
++
++    m_Extended[Char] = 0;
++    m_pEnd = (ExtendedStart ? ExtendedStart : str + 1) + Char + 1;
++
++#if defined(MSCHARGED_NATIVE)
++    // This is an authored four-byte BE identifier, not a native word load.
++    key = (nlEscapeWord((unsigned char)Seq[0]) << 24)
++        | (nlEscapeWord((unsigned char)Seq[1]) << 16)
++        | (nlEscapeWord((unsigned char)Seq[2]) << 8)
++        | nlEscapeWord((unsigned char)Seq[3]);
++#else
++    key = *(nlEscapeWord*)Seq;
++#endif
++    pEscape = nlBSearch(key, s_EscapeLookup, ESC_COUNT);
++    if (pEscape != 0)
++    {
++        type = pEscape->type;
++    }
++    else
++    {
++        type = ESC_UNKNOWN;
++    }
++    m_Type = type;
+ }
