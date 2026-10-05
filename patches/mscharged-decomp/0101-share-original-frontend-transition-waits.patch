@@ -1,5 +1,5 @@
 Subject: Share original frontend presentation camera and time waits
-Upstream-base: b072ce3e7719c2a0ef738f01594eda2035f666dd
+Upstream-base: 443164c91fded218656a8443432e642fdad57838
 
 Share exact callback-consumption and single-float wait subtraction from original
 presentation services44/48. The console dispatcher retains StopWithUndo; the

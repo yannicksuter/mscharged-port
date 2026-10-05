@@ -30,15 +30,16 @@ ownership. Its external scene, navigation and Wii services require explicit
 providers; full original startup remains separate.
 
 
-The current base is `b072ce3e7719c2a0ef738f01594eda2035f666dd`, adopted from
+The current base is `443164c91fded218656a8443432e642fdad57838`, adopted from
 published upstream main. It remains an incomplete development snapshot. The
-update links original Wii input, quaternion math, screen transition, lighting
-and network input units upstream. Native source selection remains explicit.
+update source-links EmissionManager, FlyingCamera and the AI ScriptMachine
+upstream. Native source selection remains explicit.
 
-Patches 0028, 0038, 0072 and 0111 follow revised SDK/header context while
-preserving upstream device types, resource access and original scene readiness.
-All other patch bodies are unchanged for this update. Matching Wii source does
-not establish full native startup, device support or gameplay.
+Patches 0028, 0033, 0038, 0039, 0042, 0061, 0074, 0083, 0089, 0106, 0123 and 0131
+follow upstream math declarations, container APIs and the named packet sorter,
+movie, NIS trigger and effects interfaces. All other patch bodies are unchanged for this
+update. Matching Wii source does not establish full native startup, device
+support or gameplay.
 
 Patch 0111 shares the inherited empty `InitializeSubHandlers` stage used by
 Main and Options. Their selected native visual owners share one base handler

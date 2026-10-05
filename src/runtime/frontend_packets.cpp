@@ -18,7 +18,7 @@
 #include <thread>
 #include <variant>
 // Original GLViewSort_None factory; compare identity to reject reordering views.
-extern UnidentifiedPacketSorter* fn_802CEFC0();
+extern GLPacketSorter* CreateUnsortedPacketSorter();
 namespace mscharged
 {
 namespace
@@ -367,7 +367,7 @@ unsigned FrontendPacketRenderer::Submit(GLView& view,FrontendSession::Handle inp
 {
     auto& s=*impl_; s.Check();
     if (!glIsFrameActive() || s.failed || (s.pending && *s.pending!=glNativeFrameGeneration())
-        || !view.m_Interface || view.m_NativeIterating || view.m_CreateSorter!=fn_802CEFC0)
+        || !view.m_Interface || view.m_NativeIterating || view.m_CreateSorter!=CreateUnsortedPacketSorter)
         throw std::logic_error("Frontend submission requires an unsorted collecting view and a finished previous frame");
     Require(SameOwners(s.current,input),"Prepare changed frontend resources while idle before submission");
     const auto prepared=PreparePackets(input,s.movie_binding,s.retired_movie);
