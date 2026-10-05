@@ -8,7 +8,8 @@ quad order, texture binding, TEV recipe, scissor coordinates and reset. Adapt
 FIFO/cache operations to Aurora and preserve four-byte material array cells
 on LP64. Add bounded native frame/array ownership and registry cleanup. The
 console branches, text visibility and Credits scrolling rules are unchanged.
-Untextured/utility polygons and generic pointer parameter kinds stay unselected.
+Polygon restrictions require MSCHARGED_DIAGNOSTIC_POLYGONS; complete original
+glDraw2 keeps untextured/utility paths. Generic parameter providers remain open.
 
 diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
 --- a/src/NL/gl/glDraw2.cpp
@@ -17,21 +18,21 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
  #include "NL/gl/glTexture.h"
  
  #include "Game/GL/GLTexturedColourMeshWriter.h"
--#ifndef MSCHARGED_NATIVE
+-#ifndef MSCHARGED_DIAGNOSTIC_POLYGONS
  #include "Game/GL/GLFloatTexturedColourMeshWriter.h"
 -#endif
- #ifdef MSCHARGED_NATIVE
+ #ifdef MSCHARGED_DIAGNOSTIC_POLYGONS
  #include <stdexcept>
  #endif
 @@ -182,10 +180,13 @@
      return true;
  }
  
--#ifndef MSCHARGED_NATIVE
+-#ifndef MSCHARGED_DIAGNOSTIC_POLYGONS
  bool glAttachPoly2(GLView* view, int layer, unsigned long numPolys,
      glPoly2* pPolys, const void* pUserData, glMatrixHandle* pMatrixHandle)
  {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_POLYGONS
 +    if (!view || !pUserData || view->m_NativeIterating || glNativeViewDispatchActive())
 +        throw std::logic_error("Native clipped glPoly2 requires data and a non-dispatching view");
 +#endif
@@ -42,7 +43,7 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
  glModel* glBuildPoly2ModelFloatUV(glPoly2* pPolys,
      unsigned long numPolys, glMatrixHandle* pMatrixHandle, bool textured)
  {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_POLYGONS
 +    if (!pPolys || numPolys == 0 || numPolys > 65535 / 6 || !textured)
 +        throw std::invalid_argument("Native float glPoly2 requires bounded textured quads");
 +#endif
@@ -53,7 +54,7 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
  
      oldMatrix = glSetCurrentMatrix(
          pMatrixHandle != 0 ? *pMatrixHandle : glGetIdentityMatrix());
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_POLYGONS
 +    struct MatrixRestore
 +    {
 +        glMatrixHandle value;
@@ -67,7 +68,7 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
              state->unknown07 = 0;
          }
      }
-+#ifndef MSCHARGED_NATIVE
++#ifndef MSCHARGED_DIAGNOSTIC_POLYGONS
      else
      {
          if (writer.Begin(numVerts * numPolys, primitive, 0))
@@ -84,7 +85,7 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
      return model;
  }
  
-+#ifndef MSCHARGED_NATIVE
++#ifndef MSCHARGED_DIAGNOSTIC_POLYGONS
  void glPoly2::FullCoverage(const nlColour& col, float z)
  {
      const float width = glGetOrthographicWidth() + 1.0f;
@@ -104,11 +105,11 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
  
  class GLFloatTexturedColourMeshWriter
  {
-@@ -15,12 +21,20 @@
+@@ -15,12 +21,22 @@
  
      glModel* GetModel() const
      {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +        NativeCheckLive();
 +#endif
          return model;
@@ -117,7 +118,9 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
      void Colour(const nlColour& c)
      {
 +#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +        NativeCheckWrite(writtenColour);
++#endif
 +        std::memcpy(colour++, &c, sizeof(c));
 +#else
          *colour++ = *(const u32*)&c;
@@ -129,7 +132,7 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
  
      void Texcoord(float u, float v)
      {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +        if (!std::isfinite(u) || !std::isfinite(v))
 +            throw std::invalid_argument("Invalid float polygon UV");
 +        NativeCheckWrite(writtenUV);
@@ -140,7 +143,7 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
  
      void TexcoordZero()
      {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +        NativeCheckWrite(writtenUV);
 +#endif
          *texcoord++ = 0.0f;
@@ -149,7 +152,7 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
  
      void Vertex(float x, float y, float z)
      {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
 +            throw std::invalid_argument("Invalid float polygon vertex");
 +        NativeCheckWrite(writtenPosition);
@@ -159,7 +162,7 @@ diff --git a/include/Game/GL/GLFloatTexturedColourMeshWriter.h b/include/Game/GL
          *position++ = z;
      }
  
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +    void NativeCheckLive() const
 +    {
 +        if (!model || generation != glNativeFrameGeneration())
@@ -194,7 +197,7 @@ diff --git a/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp b/src/Game/GL/GLFlo
  bool GLFloatTexturedColourMeshWriter::Begin(
      int vertexCount, int primitive, void* allocator)
  {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +    if (model && !finished && generation == glNativeFrameGeneration())
 +        throw std::logic_error("Float polygon Begin before End");
 +    if (allocator || vertexCount <= 0 || vertexCount > 65535 || primitive < 0 || primitive >= 6)
@@ -209,11 +212,11 @@ diff --git a/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp b/src/Game/GL/GLFlo
      glModel* newModel;
      resource = allocator;
      count = vertexCount;
-@@ -112,19 +126,33 @@
+@@ -112,19 +126,35 @@
          streams + 2, 2, colour, sizeof(u32), 3);
  
      return true;
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +    }
 +    catch (...) { model = nullptr; position = nullptr; colour = nullptr; texcoord = nullptr; throw; }
 +#endif
@@ -221,7 +224,7 @@ diff --git a/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp b/src/Game/GL/GLFlo
  
  bool GLFloatTexturedColourMeshWriter::End()
  {
-+#ifdef MSCHARGED_NATIVE
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +    NativeCheckLive();
 +    if (finished || writtenPosition != unsigned(count) || writtenColour != unsigned(count) || writtenUV != unsigned(count))
 +        throw std::logic_error("Incomplete or already finalized float polygon mesh");
@@ -239,7 +242,9 @@ diff --git a/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp b/src/Game/GL/GLFlo
      PPCSync();
 +#else
 +    // Aurora copies native arrays at submission; no Wii cache writeback.
++#ifdef MSCHARGED_DIAGNOSTIC_MESH_WRITERS
 +    finished = true;
++#endif
 +#endif
      return true;
  }
