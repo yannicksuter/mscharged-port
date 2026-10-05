@@ -37,6 +37,8 @@ target_link_libraries(charged_materials PUBLIC charged_graphics_memory charged_s
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_materials PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
 endif()
+include(cmake/SpecularMaterial.cmake)
+
 add_library(charged_frames STATIC
     "${MSCHARGED_PREPARED}/src/NL/gl/glFrame.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glQuadSupport.cpp"
