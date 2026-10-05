@@ -50,6 +50,10 @@ zoom settings. The selected native screen preserves the original Back behavior
 and can save scoped native preferences; gameplay camera and full game saves
 remain separate services.
 
+Patch 0115 shares Main's original Options action. The native adapter queues the
+actual source scene pop, hides navigation, plays its cue and starts the original
+transition script. Missing transition services remain explicit.
+
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
 camera catalog between the console factory and native loading code.
