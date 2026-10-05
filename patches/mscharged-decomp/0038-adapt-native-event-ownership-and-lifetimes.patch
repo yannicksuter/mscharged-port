@@ -1,6 +1,6 @@
 Subject: Adapt original event ownership, delivery and registry lifetime
 
-Upstream-base: d6850f8dae162827f94d3f9b01a91538c02849dd
+Upstream-base: b072ce3e7719c2a0ef738f01594eda2035f666dd
 
 Keep original event hashing, AVL registration, listener ordering and callback
 transfer. Native owners retain full addresses; flags/counts use explicit masks
@@ -873,8 +873,8 @@ diff --git a/include/NL/plat/PlatPadManager.h b/include/NL/plat/PlatPadManager.h
 -};
 +#include "Game/UnidentifiedStaticEvent3.h"
  
- struct PlatPadManager
- {
+ // Device type stored per channel in PlatPadManager::type.
+ enum PlatPadType
 diff --git a/src/NL/nlEvent.cpp b/src/NL/nlEvent.cpp
 index 7f8ff32..3dfb150 100644
 --- a/src/NL/nlEvent.cpp

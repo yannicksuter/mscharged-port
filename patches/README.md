@@ -19,18 +19,15 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
-The current base is `d6850f8dae162827f94d3f9b01a91538c02849dd`, adopted from
-published upstream main. It remains an incomplete development snapshot. This
-update includes matching, source-linked pose accumulation, world visibility and
-DebugWriteCache. Patches 0038 and 0066 follow revised event/header context;
-0084 preserves the matched pose arithmetic, adapts the two PowerPC return-value
-captures and retires the native world-matrix initialization workaround now
-covered upstream. Native source selection and validation remain explicit.
-The audio backend, bank loader and bundle manager are now source-linked;
-AudioSource remains incomplete. Patch 0094 follows its updated header and field
-names. Patches 0098–0099 share original resident source states and frontend
-pointer production for checked native owners; full audio and menu startup remain
-in development.
+The current base is `b072ce3e7719c2a0ef738f01594eda2035f666dd`, adopted from
+published upstream main. It remains an incomplete development snapshot. The
+update links original Wii input, quaternion math, screen transition, lighting
+and network input units upstream. Native source selection remains explicit.
+
+Patches 0028, 0038, 0072 and 0111 follow revised SDK/header context while
+preserving upstream device types, resource access and original scene readiness.
+All other patch bodies are unchanged for this update. Matching Wii source does
+not establish full native startup, device support or gameplay.
 
 Patch 0111 shares the inherited empty `InitializeSubHandlers` stage used by
 Main and Options. Their selected native visual owners share one base handler
