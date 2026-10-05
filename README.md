@@ -25,8 +25,8 @@ reconstructed source makes it easier to:
   types, and data structures when diagnosing problems.
 - **Integrate modern platforms:** adapt engine services and memory layouts for
   native graphics, audio, and input APIs.
-- **Improve and extend the game:** refactor and optimize code or add features
-  through explicit, reviewable source changes while preserving original behavior.
+- **Support future extensions:** optional mods and enhancements can build on
+  readable source once the faithful game foundation works.
 
 ## Build
 
@@ -51,8 +51,11 @@ See [disc setup](docs/BUILDING.md#configure-your-disc) for configuration details
 ## Source and development
 
 The decompilation, Aurora, and other source dependencies are Git submodules
-pinned to specific commits. Before building, the port applies its patches to
-generated source copies, keeping upstream checkouts clean. Dependency updates
+pinned to specific commits. The build exports an exact copy of the decomp's
+`include/`, `libs/`, and `src/` trees, then applies patches to that generated
+copy, keeping upstream checkouts clean. Porting changes must preserve original
+game behavior and address compiler, ABI, or platform compatibility. The aim is
+to run the reconstructed retail code throughout the game. Dependency updates
 are reviewed explicitly, so new upstream commits do not change an existing
 port checkout.
 
