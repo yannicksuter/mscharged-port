@@ -28,6 +28,22 @@ struct FrontendSessionFrame
     unsigned image_completed_files = 0;
 };
 enum class FrontendSessionState { Idle, Loading, Ready, Failed, Cancelled };
+enum class FrontendSessionResourcesMode { Scene, PermanentMain };
+// Created only after complete, checked permanent MainUI/font/localization reads.
+// The opaque token owns immutable host data; it survives its donor session and
+// does not assert that a GL resource pool or original FE manager is ready.
+class FrontendSessionResources final
+{
+    friend class FrontendSession;
+    FrontendSessionResources() = default;
+    FrontendLanguage language_{};
+    std::shared_ptr<const FrontendVisualAssets> visuals_;
+    resources::FrontendImageCatalog::Handle images_;
+public:
+    using Handle = std::shared_ptr<const FrontendSessionResources>;
+    FrontendSessionResources(const FrontendSessionResources&) = delete;
+    FrontendSessionResources& operator=(const FrontendSessionResources&) = delete;
+};
 struct FrontendSessionProgress
 {
     bool fen_completed = false;
@@ -57,6 +73,14 @@ public:
     FrontendSession(const FrontendSession&) = delete;
     FrontendSession& operator=(const FrontendSession&) = delete;
     void Begin(FrontendSessionRequest);
+    void Begin(FrontendSessionRequest, FrontendSessionResourcesMode);
+    // Reads only the new FEN. Language/profile must match the verified token;
+    // all static image references are checked, including invisible resources.
+    // Incompatible admission leaves existing pending work and Current intact.
+    void BeginShared(FrontendSessionRequest, FrontendSessionResources::Handle);
+    // Token of Current, unaffected by a pending or failed replacement. Throws
+    // if Current was not created with PermanentMain or BeginShared.
+    FrontendSessionResources::Handle SharedResources() const;
     void Poll();
     void Service();
     void Cancel();
