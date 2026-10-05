@@ -7,3 +7,4 @@
 0007-release-gx-default-resources-on-shutdown.patch
 0008-finish-frames-without-presentation.patch
 0009-report-successful-presentation-geometry.patch
+0010-retain-dvd-handles-on-allocation-failure.patch
