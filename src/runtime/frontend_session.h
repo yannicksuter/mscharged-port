@@ -60,6 +60,7 @@ class FrontendSession
     struct Implementation;
     std::unique_ptr<Implementation> impl_;
     friend class FrontendBootLoading;
+    friend class FrontendCredits;
     friend class FrontendMainMenu;
     friend class FrontendOptions;
     friend class FrontendAudioOptions;

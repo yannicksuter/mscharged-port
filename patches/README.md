@@ -76,6 +76,10 @@ explicit host preference persistence; full Wii save and haptic services remain
 separate work.
 
 
+Patch 0120 shares the original Credits phase, text and scrolling rules. Its
+selected native owner reaches the NLG movie request; actual playback and
+completion remain explicit integration work.
+
 | Patch | Reason | Current validation |
 | --- | --- | --- |
 | `0001-use-standard-fabs-in-nlMath-header.patch` | The shared math header uses CodeWarrior's undeclared `__fabs`; native Clang rejects `nlRandom.cpp`. Use the standard float overload. | Native compilation; finite, signed-zero, infinity, and NaN checks. |
