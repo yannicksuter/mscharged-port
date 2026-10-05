@@ -9,7 +9,7 @@ namespace mscharged
 enum class FrontendVisualOptionsCommandKind
 {
     HideNavigation,BindBack,BindDone,PointerWaiting,PointerCursor,ShowBackAndDone,
-    DoneText,DoneDown,PushOptions,HoverRumble
+    DoneText,DoneDown,PushOptions,HoverRumble,ResetNavigation
 };
 struct FrontendVisualOptionsCommand{FrontendVisualOptionsCommandKind kind;unsigned argument=0;};
 struct FrontendVisualOptionsStatus

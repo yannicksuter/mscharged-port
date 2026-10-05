@@ -117,7 +117,7 @@ struct Step
     {
         Step& s;
         void SetPopScene(bool value){Check(!value,"Visual options requires source false-pop navigation");}
-        void SetButtons(unsigned mask,bool enabled){Check(enabled&&(mask==0||mask==0x24),"Visual options NAV request is unsupported");s.Command(mask?FrontendVisualOptionsCommandKind::ShowBackAndDone:FrontendVisualOptionsCommandKind::HideNavigation,mask);}
+        void SetButtons(unsigned mask,bool enabled){Check(enabled&&(mask==0||mask==0x24),"Visual options NAV request is unsupported");s.Command(mask?FrontendVisualOptionsCommandKind::ShowBackAndDone:FrontendVisualOptionsCommandKind::ResetNavigation,mask);}
         void SetDoneButtonText(int value){Check(value==1,"Visual options done text differs");s.Command(FrontendVisualOptionsCommandKind::DoneText,1);}
     } navigation{*this};Navigation& mNavigation=navigation;
     struct SaveButton
