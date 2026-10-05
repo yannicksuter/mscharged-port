@@ -1,12 +1,24 @@
 #pragma once
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
 
+struct SDL_Window;
+
 namespace mscharged
 {
+class FrontendMenuScenes;
+struct FrontendPointerViewport;
+// Optional embedding/diagnostic callbacks. Input remains inside the original
+// controlled scene window; presentation is observed only after GPU success.
+struct ScenePreviewHooks
+{
+    std::function<void(FrontendMenuScenes&, SDL_Window*)> menu_input;
+    std::function<void(const FrontendMenuScenes&, const FrontendPointerViewport&)> menu_presented;
+};
 struct SceneOptions
 {
     std::string model = "/Art/objects/gameplay/ball.rlg";
@@ -38,5 +50,6 @@ struct SceneOptions
     unsigned frames = 0; // Zero keeps the preview open until Escape/window close.
     std::optional<unsigned> frame_timeout; // Explicit wall-clock bound for long diagnostics; defaults30s.
 };
-int RunScenePreview(int argc, char** argv, const std::filesystem::path& config, const SceneOptions& options);
+int RunScenePreview(int argc, char** argv, const std::filesystem::path& config, const SceneOptions& options,
+    const ScenePreviewHooks* hooks = nullptr);
 }

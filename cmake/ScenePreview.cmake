@@ -186,6 +186,9 @@ if(BUILD_TESTING)
     target_link_libraries(material_pipeline_tests PRIVATE charged_views charged_static_inventory aurora::gx aurora::vi aurora::core)
 endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    # This executable takes a caller-owned disc INI; retail data is not a CI fixture.
+    add_executable(frontend_menu_scene_tests tests/frontend_menu_scene.cpp)
+    target_link_libraries(frontend_menu_scene_tests PRIVATE charged_scene_preview charged_frontend_menu_scenes SDL3::SDL3)
     add_test(NAME effects_material_pipeline COMMAND material_pipeline_tests --effects-only)
     set_tests_properties(effects_material_pipeline PROPERTIES TIMEOUT 90 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation" RESOURCE_LOCK gx_check

@@ -372,7 +372,8 @@ nlVector3 SubmitModel(glModel& model, GLView& submitted, ViewMatrices& matrices,
 }
 }
 
-int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_path, const SceneOptions& requested)
+int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_path, const SceneOptions& requested,
+    const ScenePreviewHooks* hooks)
 {
     std::ofstream logfile;
     auto log = [&](const std::string& message) {
@@ -1233,7 +1234,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 {
                     const float step=frames?(options.frames?1.f/60:std::clamp(delta,0.f,.1f)):0.f;
                     const auto before=frontend_menus->Status();
-                    frontend_menus->Update(step,[&]{pointer_dispatch=frontend_menus->Poll(info.window,ImGui::GetIO().WantCaptureMouse);});
+                    frontend_menus->Update(step,[&]{
+                        if(hooks && hooks->menu_input)hooks->menu_input(*frontend_menus,info.window);
+                        else pointer_dispatch=frontend_menus->Poll(info.window,ImGui::GetIO().WantCaptureMouse);
+                    });
                     menu_frame=frontend_menus->Current();frontend_published_frame=menu_frame.menu;navigation_frame=menu_frame.navigation;
                     const auto after=frontend_menus->Status();
                     if(after.scene!=before.scene)log("Original menu scene: "+std::to_string(after.scene));
@@ -1790,6 +1794,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     const FrontendPointerViewport viewport{present.window_id,size.width,size.height,
                         size.native_fb_width,size.native_fb_height,present.x,present.y,present.width,present.height};
                     frontend_menus->Acknowledge(menu_frame,viewport);
+                    if(hooks && hooks->menu_presented)hooks->menu_presented(*frontend_menus,viewport);
                     if(!pointer_present_sequence)log("Original menu input bound to its exact successful Aurora presentation.");
                     pointer_present_sequence=present.sequence;
                 }
