@@ -35,6 +35,7 @@ struct FrontendMenuTransition::Implementation
     FrontendMenuTransitionKind kind=FrontendMenuTransitionKind::MainDeparture;
     FrontendMenuTransitionServices services;FrontendStackCallbacks callbacks;
     FrontendSession::Handle source;
+    FrontendSessionResources::Handle resources;
     FrontendCameraSelectionHandle camera,blend_camera;
     std::vector<FrontendCameraSelectionHandle> end_callbacks;
     std::shared_ptr<Completion> completion=std::make_shared<Completion>();
@@ -145,6 +146,7 @@ struct FrontendMenuTransition::Implementation
             Require(source&&!queued,"Menu script has no retained source or already queued its destination");
             FrontendStackRequest request;request.scene=scene;request.movement=movement;request.language=source->request.language;
             request.image_profile=FrontendImageProfile::Main;request.initial_slide=scene==13?"in":"MAIN";
+            if(resources)request.shared_resources=resources;
             queued=stack.QueuePush(std::move(request),callbacks);break;
         }
         default:throw std::logic_error("Unqualified menu transition host");
@@ -181,10 +183,11 @@ void FrontendMenuTransition::Begin(FrontendMenuTransitionKind kind,FrontendScene
     Require(frame&&entry.published==frame&&entry.scene==(kind==FrontendMenuTransitionKind::MainDeparture?1u:13u)
         &&(entry.state==FrontendStackState::Published||entry.state==FrontendStackState::AwaitingPublication),
         "Menu transition requires its exact published source scene");
-    auto selected=s.cameras.Selection();auto completion=std::make_shared<Implementation::Completion>();Guard guard(s.busy);
+    auto selected=s.cameras.Selection();auto resources=s.stack.Resources(token);
+    auto completion=std::make_shared<Implementation::Completion>();Guard guard(s.busy);
     try
     {
-        s.Detach();s.kind=kind;s.source=frame;s.services=std::move(services);s.callbacks=std::move(callbacks);
+        s.Detach();s.kind=kind;s.source=frame;s.resources=std::move(resources);s.services=std::move(services);s.callbacks=std::move(callbacks);
         s.camera=std::move(selected);s.completion=std::move(completion);s.queued.reset();s.pending.reset();s.calls.clear();
         s.navigation_started=s.options_stage=false;s.vm.Reset();s.state=FrontendMenuTransitionState::Running;
         Require(s.vm.Execute(kind==FrontendMenuTransitionKind::MainDeparture?departure:to_main),"Original menu transition is absent");s.Complete();
@@ -217,12 +220,12 @@ FrontendMenuTransitionStatus FrontendMenuTransition::Status()const
 std::span<const unsigned> FrontendMenuTransition::Calls()const{impl_->Thread();return impl_->calls;}
 void FrontendMenuTransition::Cancel()
 {
-    auto& s=*impl_;s.Mutable(true);Guard guard(s.busy);s.Detach();s.vm.Reset();s.source.reset();s.services={};s.callbacks={};s.pending.reset();
+    auto& s=*impl_;s.Mutable(true);Guard guard(s.busy);s.Detach();s.vm.Reset();s.source.reset();s.resources.reset();s.services={};s.callbacks={};s.pending.reset();
     s.state=FrontendMenuTransitionState::Cancelled;
 }
 void FrontendMenuTransition::Release()
 {
     auto& s=*impl_;s.Thread();if(s.state==FrontendMenuTransitionState::Released)return;s.Mutable(true);Guard guard(s.busy);
-    s.Detach();s.vm.Reset();s.source.reset();s.services={};s.callbacks={};s.pending.reset();s.state=FrontendMenuTransitionState::Released;
+    s.Detach();s.vm.Reset();s.source.reset();s.resources.reset();s.services={};s.callbacks={};s.pending.reset();s.state=FrontendMenuTransitionState::Released;
 }
 }

@@ -53,9 +53,10 @@ FrontendStackCallbacks Inspection()
         [](auto& c){Check(c.movement<=2,"Original ScreenMovement lost");},
         [](auto& c,float){Check(c.session.Current()==c.handler.Current(),"Base update context differs");}};
 }
-FrontendSceneStack::Token Scene(FrontendSceneStack& stack,unsigned scene)
+FrontendSceneStack::Token Scene(FrontendSceneStack& stack,unsigned scene,bool permanent=false)
 {
     FrontendStackRequest request;request.scene=scene;request.initial_slide=scene==1?"MAIN":"in";
+    if(permanent)request.resources_mode=FrontendSessionResourcesMode::PermanentMain;
     const auto token=stack.QueuePush(request,Inspection());Pump(stack,token);
     Check(stack.Entry(token).state==FrontendStackState::AwaitingPublication,"Inspection scene callbacks failed");
     stack.Publish(token,stack.Entry(token).prepared);return token;
@@ -88,7 +89,9 @@ void RoundTrip(const Blob& script,CameraAssetLibrary& library,bool owned)
 {
     OriginalCameras core;FrontendCameras cameras(core,library);cameras.Push("startidle");
     FrontendInput input;unsigned drains=0;FrontendSceneStack stack(input,[&]{++drains;});
-    const auto main=Scene(stack,1);auto frame=stack.Entry(main).published;
+    const auto main=Scene(stack,1,true);auto frame=stack.Entry(main).published;
+    const auto resources=stack.Resources(main);const auto visuals=frame->visuals;const auto images=frame->images;
+    Check(bool(resources),"Permanent Main resource token was not retained");
     FrontendMenuTransition flow(script,cameras,stack);FixtureServices service;
     Reject([&]{flow.NavigationTransition("TransitionMainMenuToOptions");});
     auto wrong=std::make_shared<FrontendSessionFrame>(*frame);
@@ -139,6 +142,10 @@ void RoundTrip(const Blob& script,CameraAssetLibrary& library,bool owned)
     Pump(stack,options);Check(stack.Entry(options).state==FrontendStackState::AwaitingHandler&&stack.RenderPlan().empty(),
         "Concrete Options readiness was fabricated");
     Check(stack.Entry(options).prepared->request.initial_slide=="in","Options authored intro slide differs");
+    Check(stack.Resources(options)==resources&&stack.Entry(options).prepared->visuals==visuals
+        &&stack.Entry(options).prepared->images==images,"Options destination replaced permanent resources after source Pop");
+    Check(stack.Entry(options).prepared->image_completed_files==0,
+        "Shared Options destination reread font or image bundles");
     if(owned)Check(stack.Entry(options).prepared->layout.ImageCount()>0,"Owned Options images missing");
     stack.Bind(options,Inspection());stack.Poll();stack.Publish(options,stack.Entry(options).prepared);
     auto options_frame=stack.Entry(options).published;const auto before_return=cameras.Selection();
@@ -166,6 +173,10 @@ void RoundTrip(const Blob& script,CameraAssetLibrary& library,bool owned)
         &&Count(flow,42)==2&&service.musics==1&&Count(flow,23)==1&&Count(flow,25)==1,"Return host count/scene/movement differs");
     Pump(stack,*back.queued_scene);Check(stack.Entry(*back.queued_scene).state==FrontendStackState::AwaitingHandler
         &&stack.Entry(*back.queued_scene).prepared->request.initial_slide=="MAIN","Missing Main readiness was fabricated");
+    Check(stack.Resources(*back.queued_scene)==resources&&stack.Entry(*back.queued_scene).prepared->visuals==visuals
+        &&stack.Entry(*back.queued_scene).prepared->images==images,"Returning Main replaced permanent resources");
+    Check(stack.Entry(*back.queued_scene).prepared->image_completed_files==0,
+        "Returning Main reread font or image bundles");
     flow.Cancel();Check(bool(stack.Entry(*back.queued_scene).prepared),"Cancellation undid an admitted original scene");
     flow.Release();Reject([&]{flow.Update(0);});stack.Release();Check(drains>=4,"Source/destination teardown did not drain owners");
     std::cout<<"Main departure "<<frames<<" frames/"<<duration<<" seconds; Options/Main destinations AwaitingHandler\n";

@@ -34,6 +34,8 @@ struct FrontendMenuTransitionStatus
 // CameraMan once before Update. Input/stack/cameras/NL outlive this owner.
 // Camera pops require an owned underlying frontend camera; a borrowed gameplay
 // camera is outside this selected Main/Options flow.
+// Permanent Main resources, when present, stay retained across the source Pop
+// and both destination FEN reads. Ordinary scene requests remain independent.
 class FrontendMenuTransition
 {
     struct Implementation;
