@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <new>
 #include <source_location>
@@ -38,40 +39,34 @@ void Pump(FrontendSession& session)
 auto Session(const char* path="/Art/fe/main_menu_v3.fen")
 {auto owner=std::make_shared<FrontendSession>();owner->Begin({path,FrontendLanguage::English,FrontendImageProfile::Main,"MAIN",true});Pump(*owner);return owner;}
 using namespace audio_bank_fixture;
-std::shared_ptr<FrontendAudio> Audio(bool owned,unsigned device=0)
+Data Calculation()
 {
- if(owned)
+ Data header,records(120);Append(header,0x23401,Words({5,0xf1000100,0}));
+ for(unsigned i=0;i<5;++i){Put(records,i*24,i);Put(records,i*24+4,0x1234+i);Put(records,i*24+12,i?0xf1000100:0);}Append(header,0x23402,records);return Wrap(0x80000001,Wrap(0x80023400,header));
+}
+Data MenuData(const char* path){std::unique_ptr<nlFile> f(nlOpen(path));Check(bool(f),"Required owned/synthetic NL file is absent");const auto n=nlFileSize(f.get(),nullptr);Data b(n);nlRead(f.get(),b.data(),n,n);return b;}
+void SaveFile(const std::filesystem::path& p,const Data& b){std::ofstream f(p,std::ios::binary);f.write(reinterpret_cast<const char*>(b.data()),b.size());Check(bool(f),"Cannot write synthetic fixture");}
+std::shared_ptr<FrontendAudio> Audio(bool owned,AudioCategoryVolumes::Handle volumes)
+{
+ LoadedAudioBank::Handle loaded;
+ if(owned){auto catalog=ReadAudioBankCatalog(MenuData("/audio/nlxgs.bun"));AudioBankLoad load(catalog,23,21);const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(15);while(load.State()==AudioBankLoadState::Loading){load.Service();Check(std::chrono::steady_clock::now()<end,"Resident audio timed out");SDL_Delay(1);}loaded=load.Result();}
+ else
  {
-  auto global=Load("/audio/nlxgs.bun");auto catalog=ReadAudioBankCatalog(global);AudioBankLoad owner(catalog,23,21);
-  const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(10);while(owner.State()==AudioBankLoadState::Loading){owner.Service();Check(std::chrono::steady_clock::now()<end,"NAV sound bank timed out");SDL_Delay(1);}
-  return std::make_shared<FrontendAudio>(owner.Result(),ReadAudioCalculationInitial(global),AudioVoicesOptions{32,64*1024*1024,device});
- }
- auto f=Make();const auto word=[](const Data& d,std::size_t at){return (std::uint32_t(d.at(at))<<24)|(std::uint32_t(d.at(at+1))<<16)|(std::uint32_t(d.at(at+2))<<8)|d.at(at+3);};
- const auto chunks=[&](const Data& data){std::vector<std::pair<unsigned,Data>> out;for(std::size_t at=0;at<data.size();){const auto id=word(data,at),n=word(data,at+4);out.emplace_back(id,Data(data.begin()+at+8,data.begin()+at+8+n));at+=(n+11)&~3u;}return out;};
- const std::array keys{0x6b0689d4u,0x0a93e9a0u,0xf0afd586u,0x304fdd1eu,0xf6eb899eu,0x4430b152u,0xaccdca48u,0x6f6a3a07u,0xb19dbc20u};Data root;
- for(auto [id,data]:chunks(Data(f.bytes.begin()+8,f.bytes.end())))
- {
-  if(id==0x80023000)
+  auto f=Make();const auto chunks=[](Bytes data){std::vector<std::pair<unsigned,Data>> out;for(std::size_t at=0;at<data.size();){const auto id=U32(data,at),n=U32(data,at+4);out.emplace_back(id,Data(data.begin()+at+8,data.begin()+at+8+n));at+=(n+11)&~3u;}return out;};
+  constexpr std::array keys{0x96deb5c3u,0x3021a1eeu,0x1f824c84u,0x304fdd1eu,0xf0afd586u,0xaa73ef33u,0x6b0689d4u,0x0a93e9a0u,0xf6eb899eu,0x4430b152u,0xaccdca48u,0x6f6a3a07u,0xb19dbc20u,0x362f2841u};Data root;
+  for(auto [id,data]:chunks(Bytes(f.bytes).subspan(8)))
   {
-   Data map,records;Append(map,0x23001,Words({unsigned(keys.size()),0,0}));for(unsigned i=0;i<keys.size();++i){auto b=Words({keys[i],0,0,0,i});records.insert(records.end(),b.begin(),b.end());}Append(map,0x23003,records);data=std::move(map);
-  }
-  if(id==0x80023300)
-  {
-   Data graph;bool refs=false;
-   for(auto [kind,part]:chunks(data))
-   {
-    if(kind==0x23301)Put(part,8,unsigned(keys.size()));
+   if(id==0x80023000){Data map,records;Append(map,0x23001,Words({unsigned(keys.size()),0,0}));for(unsigned i=0;i<keys.size();++i){auto row=Words({keys[i],0,0,0,i});records.insert(records.end(),row.begin(),row.end());}Append(map,0x23003,records);data=std::move(map);}
+   if(id==0x80023300){Data graph;bool refs=false;for(auto [kind,part]:chunks(data)){
+    if(kind==0x23301)Put(part,8,keys.size());
     if(kind==0x23302){Data rows;for(auto key:keys){auto row=Data(part.begin()+40,part.end());Put(row,0,key);rows.insert(rows.end(),row.begin(),row.end());}part=std::move(rows);}
-    if(kind==0x23308){if(!refs){for(unsigned i=0;i<keys.size();++i)Append(graph,kind,Words({0xf0001000,0,Float(255),0,0}));refs=true;}continue;}
-    Append(graph,kind,part);
-   }
-   data=std::move(graph);
+    if(kind==0x23303)Put(part,12,4); // Synthetic real sound source belongs to SFX category.
+    if(kind==0x23308){if(!refs){for(unsigned i=0;i<keys.size();++i)Append(graph,kind,Words({0xf0001000,0,Float(255),0,0}));refs=true;}continue;}Append(graph,kind,part);}data=std::move(graph);}
+   Append(root,id,data);
   }
-  Append(root,id,data);
+  loaded=std::make_shared<const LoadedAudioBank>(LoadedAudioBank{23,21,{23,"FE_GEN_Sfx"},{21,0,1,false},ReadAudioResidentBank(Wrap(0x80000001,root),f.wave)});
  }
- auto bank=std::make_shared<const LoadedAudioBank>(LoadedAudioBank{23,21,{23,"FE_GEN_Sfx"},{21,0,1,false},ReadAudioResidentBank(Wrap(0x80000001,root),f.wave)});
- Data calc;Append(calc,0x23401,Words({2,0xf1000100,0}));Append(calc,0x23402,Words({0,0,0,0,0,0,1,0,0,0xf1000100,0,0}));
- return std::make_shared<FrontendAudio>(bank,ReadAudioCalculationInitial(Wrap(0x80000001,Wrap(0x80023400,calc))),AudioVoicesOptions{32,64*1024*1024,device});
+ AudioVoicesOptions options;options.category_volumes=volumes;return std::make_shared<FrontendAudio>(loaded,volumes->Initial(),options);
 }
 void Input(FrontendInput& input)
 {std::array<FrontendPadSample,4> pads{};for(auto& p:pads)p.connected=true;input.Update(pads,1.f/60);}
@@ -96,23 +91,29 @@ void Catalog(CameraAssetLibrary& library)
 
 void Flow(bool owned,const std::vector<std::uint8_t>& script,CameraAssetLibrary& library,const std::filesystem::path& folder)
 {
- FrontendInput input;unsigned seed=0x194fe921;auto audio=Audio(owned);unsigned drains=0,effects=0,music=0;
+ FrontendInput input;unsigned seed=0x194fe921;unsigned drains=0,effects=0,music=0;
  OriginalCameras core;FrontendCameras cameras(core,library);cameras.Push("startidle");
- auto preferences=std::make_shared<NativePreferences>(std::filesystem::absolute(folder/"native-preferences"));
+ auto path=std::filesystem::absolute(folder/"native-preferences");auto defaults=DefaultNativePreferences();
+ defaults.audio={5,5,5};defaults.audio_defaults={9,8,7};defaults.auto_zoom=false;defaults.camera_zoom=.61f;
+ auto bytes=EncodeNativePreferences(defaults);SaveFile(path,Data(bytes.begin(),bytes.end()));
+ auto preferences=std::make_shared<NativePreferences>(path);
  preferences->StartLoad();while(preferences->Status().host_pending){preferences->Poll();SDL_Delay(1);}preferences->RethrowFailure();
+ auto volumes=std::make_shared<AudioCategoryVolumes>(ReadAudioVolumeProfile(owned?Load("/audio/nlxgs.bun"):Calculation()),preferences->Current()->audio);
+ auto audio=Audio(owned,volumes);auto visual_settings=std::make_shared<FrontendVisualSettings>(preferences->Current()->auto_zoom,preferences->Current()->camera_zoom);
  FrontendMenuScenes menus(input,audio,seed,cameras,script,preferences,
      [&](unsigned index){Check(index==1,"Source requested another music profile");++music;},
-     [&](unsigned kind){Check(kind==95,"Source requested another stadium effect");++effects;return true;},[&]{++drains;});
+     [&](unsigned kind){Check(kind==95,"Source requested another stadium effect");++effects;return true;},[&]{++drains;},1,FrontendLanguage::English,volumes,visual_settings);
  Reject([&]{menus.DeliverPointer({});});Reject([&]{menus.Update(-1);});
  const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(15);
  while(!menus.Current().menu||!menus.Current().navigation){menus.Service();Check(std::chrono::steady_clock::now()<deadline,"Initial menus timed out");SDL_Delay(1);}
  auto shown=menus.Current();menus.Acknowledge(shown,Viewport());const auto images=shown.menu->images;const auto visuals=shown.menu->visuals;
  const auto step=[&](const std::function<void()>& action={}){
-  Input(input);menus.Update(1.f/60,action);shown=menus.Current();
+  Input(input);volumes->Update(volumes->Snapshot().frame+1,1.f/60);audio->ServiceAudio();audio->Update(1.f/60);menus.Update(1.f/60,action);shown=menus.Current();
   if(shown.navigation){Check(!shown.menu||(shown.menu->images==images&&shown.menu->visuals==visuals),"Transition replaced permanent resources");menus.Acknowledge(shown,Viewport());}
  };
- const auto until=[&](unsigned scene){
+ const auto until=[&](unsigned scene,std::source_location at=std::source_location::current()){
   for(unsigned i=0;i<2400&&!(menus.Status().scene==scene&&menus.Status().interactive);++i)step();
+  if(menus.Status().scene!=scene||!menus.Status().interactive)std::cerr<<"Menu wait at line "<<at.line()<<": expected scene"<<scene<<", actual scene"<<menus.Status().scene<<" state"<<menus.Status().state<<" pending"<<menus.Status().pending_scene.value_or(0)<<" transition"<<unsigned(menus.Status().transition.state)<<"\n";
   Check(menus.Status().scene==scene&&menus.Status().interactive,"Source menu did not become interactive");
  };
  until(1);Check(menus.Bounds().size()==7&&!menus.Status().full_scene_created,"Main selected scope differs");
@@ -127,10 +128,36 @@ void Flow(bool owned,const std::vector<std::uint8_t>& script,CameraAssetLibrary&
  Check(menus.Status().state==3&&!menus.Status().interactive,"Real NAV Back did not start source Options outro");
  until(1);Check(shown.token!=main_token&&shown.token!=options_token&&shown.menu->image_completed_files==0,"Returning Main reused old handler or reread resources");
  Check(cameras.ActiveAlias()=="startidle"&&effects==1&&music>=2,"Original return camera/music hosts differ");
- // A second complete loop verifies retained callback identities and fresh handlers.
+ // A second loop opens both original submenus and replaces Options anew.
  step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[6]),true});});until(13);
+ const auto child_options_token=shown.token;
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[1]),true});});until(14);
+ Check(menus.Bounds().size()==6&&shown.token!=child_options_token,"Audio did not replace original Options");
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[0]),true});});
+ Check(volumes->Snapshot().settings==std::array{4,5,5},"Original Audio decrement did not reach live category authority");
+ const auto audio_token=shown.token;
+ step([&]{menus.DeliverPointer({0,Center(menus.DoneBounds()),true});});
+ Check(preferences->Status().host_pending&&menus.Status().state==3,"Done did not start actual native preferences worker");
+ until(13);Check(shown.token!=audio_token&&shown.token!=child_options_token&&preferences->Current()->audio==std::array{4,5,5},"Audio save/return reused old Options or lost preferences");
+ Check(preferences->Current()->audio_defaults==defaults.audio_defaults&&preferences->Current()->camera_zoom==defaults.camera_zoom,"Audio save changed unrelated native fields");
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[1]),true});});until(14);
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[0]),true});});Check(volumes->Snapshot().settings[0]==3,"Second Audio edit failed");
+ step([&]{menus.DeliverPointer({0,Center(menus.BackBounds()),true});});until(13);
+ Check(volumes->Snapshot().settings==std::array{4,5,5}&&preferences->Current()->audio[0]==4,"Audio Back failed to restore original backup");
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[0]),true});});until(15);
+ Check(menus.Bounds().size()==7,"Visual source pointer listener count differs");
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[4]),true});});
+ Check(visual_settings->Snapshot().zoom==1,"Visual level press did not reach desired settings");
+ step([&]{menus.DeliverPointer({0,Center(menus.BackBounds()),true});});until(13);
+ Check(!visual_settings->Snapshot().auto_zoom&&visual_settings->Snapshot().zoom==.5f&&preferences->Current()->camera_zoom==.61f,"Visual Back did not preserve source quantization/native file distinction");
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[0]),true});});until(15);
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[3]),true});});
+ step([&]{menus.DeliverPointer({0,Center(menus.Bounds()[5]),true});});
+ Check(visual_settings->Snapshot().zoom==.75f&&visual_settings->Snapshot().auto_zoom,"Visual level/mode source changes differ");
+ step([&]{menus.DeliverPointer({0,Center(menus.DoneBounds()),true});});until(13);
+ Check(preferences->Current()->camera_zoom==.75f&&preferences->Current()->auto_zoom&&preferences->Current()->audio==std::array{4,5,5}&&preferences->Current()->audio_defaults==defaults.audio_defaults,"Visual native save lost audio/default fields");
  step([&]{menus.DeliverPointer({0,Center(menus.BackBounds()),true});});until(1);
- Check(effects==2&&!preferences->Status().original_normal_save_loaded&&!preferences->Status().full_save_complete,"Selected menu manufactured original save readiness");
+ Check(effects==2&&!preferences->Status().original_normal_save_loaded&&!preferences->Status().full_save_complete,"Selected menus manufactured original save readiness");
  const auto retained=shown;menus.Release();Reject([&]{menus.Update(0);});
  Check(retained.menu->images==images&&retained.navigation->visuals==visuals&&drains>8,"Menu teardown lost retained data or missed drains");
 }
@@ -144,6 +171,6 @@ int main(int argc,char** argv)
   Host host;const auto h=aurora_initialize(argc,argv,&config);host.live=true;Check(h.window,"Aurora failed");InitializeStartupOS();nlInitMemory();Check(aurora_dvd_open(argv[1]),"Disc missing");host.disc=true;nlInitFileSystem();
   const auto before1=StandardAllocator.TotalFreeMemory(),before2=VirtualAllocator.TotalFreeMemory();CameraAssetLibrary library;Catalog(library);const auto script=Load("/Art/scripts/fe_presentation.byte_code");
   Flow(owned,script,library,folder);library.Clear();Check(!nlAsyncReadsPending(nullptr)&&before1==StandardAllocator.TotalFreeMemory()&&before2==VirtualAllocator.TotalFreeMemory(),"Menu flow did not restore arenas/files");
-  std::cout<<checks<<" original Main/Options menu lifecycle checks passed; full SceneCreated remains unavailable\n";
+  std::cout<<checks<<" original Main/Options/Audio/Visual menu lifecycle checks passed; full SceneCreated remains unavailable\n";
  }catch(const std::exception&e){allocation_budget=-1;std::cerr<<"FAILED: "<<e.what()<<" (check "<<checks<<")\n";return 1;}
 }

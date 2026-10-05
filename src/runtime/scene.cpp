@@ -651,7 +651,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                             throw resources::UnsupportedResource("Menu transition world-effect emission requires its real world/particle service");
                         if(menu_effects->Trigger(type)!=0)throw std::logic_error("Absent menu effect unexpectedly matched");
                         return true;
-                    },[&]{if(session.gx)DrainGX();},options.frontend_options?13:1,frontend_language);
+                    },[&]{if(session.gx)DrainGX();},options.frontend_options?13:1,frontend_language,menu_volumes,menu_visual_settings);
                 while(!frontend_menus->Current().menu||!frontend_menus->Current().navigation)
                 {
                     if(Update())throw std::runtime_error("Menu loading cancelled");
