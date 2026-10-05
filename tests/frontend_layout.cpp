@@ -184,7 +184,10 @@ void Images()
     result=build();Check(result.ImageCount()==0&&result.unavailable.at("image texture outside the supplied set")==1,"Missing image resource became a placeholder");
     images.textures[hash]=texture;image.resource.reset();Check(build().ImageCount()==0,"Handler-assigned image invented a resource");image.resource=601;
     f.scene.resources.back().hash=FrontendNameHash("movie");images.textures[f.scene.resources.back().hash]=texture;
-    result=build();Check(result.ImageCount()==0&&result.unavailable.at("dynamic movie or grab image")==1,"Dynamic movie image accepted an ordinary texture");
+    result=build();Check(result.ImageCount()==0&&result.MovieCount()==1
+        &&result.unavailable.at("movie image awaiting actual provider")==1,"Dynamic movie image accepted an ordinary texture");
+    const auto& pending_movie=std::get<FrontendLayoutMovie>(result.entries[2]);
+    Check(!pending_movie.image&&pending_movie.resource==601,"Unbound movie image invented a registration or lost its source resource");
     f.scene.resources.back().hash=hash;images.textures.erase(FrontendNameHash("movie"));
     texture->width=0;Reject(build);texture->width=16;texture->pixels.pop_back();Reject(build);texture=frontend_image_fixture::Texture(hash);images.textures[hash]=texture;
     result=build();auto retained=std::get<FrontendLayoutImage>(result.entries[2]).texture;
