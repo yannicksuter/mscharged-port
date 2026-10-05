@@ -4,6 +4,7 @@ include_guard(GLOBAL)
 # This compiler inventory is not an executable link or original scene startup.
 add_library(charged_original_task_flow OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/nlTask.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Game.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Team.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Task/FrontEndTask.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Task/GameRenderTask.cpp"
