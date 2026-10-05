@@ -5,9 +5,9 @@ Upstream-base: 443164c91fded218656a8443432e642fdad57838
 Select original textured short-UV glPoly2 construction and attachment with
 native bounds and exception-safe matrix restoration. Float/scissor, untextured
 white fallback and utility polygon paths remain unselected on native builds.
-Share original DrawString raster setup and add a separate glHasQuads copy for
-selected-source diagnostics, leaving the original gl.cpp body unchanged. No FontManager publication
-or full original font service is supplied by this selection.
+Add standalone raster-setup and glHasQuads helpers for selected-source
+diagnostics. Leave original nlFont.cpp and gl.cpp bodies unchanged. No
+FontManager publication or full original font service is established here.
 
 diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
 --- a/src/NL/gl/glDraw2.cpp
@@ -116,28 +116,6 @@ new file mode 100644
 +{
 +    return true;
 +}
-diff --git a/src/NL/nlFont.cpp b/src/NL/nlFont.cpp
---- a/src/NL/nlFont.cpp
-+++ b/src/NL/nlFont.cpp
-@@ -1,3 +1,4 @@
-+#include "NL/FontTextState.h"
- #include "NL/nlFont.h"
- #include "NL/nlList.h"
- #include "NL/nlPrint.h"
-@@ -465,12 +466,7 @@
-     float pixelCentre = glGetScreenInfo()->PixelCentre;
-     int length = Length == -1 ? nlStrLen(Text.m_pString) : Length;
-     glPoly2* quads = (glPoly2*)__alloca((unsigned long)(length * sizeof(glPoly2)));
--    glSetDefaultState(false);
--    glSetRasterState(GLS_AlphaBlend, 1);
--    glSetRasterState(GLS_AlphaTest, 1);
--    glSetRasterState(GLS_AlphaTestRef, 0);
--    glSetRasterState(GLS_Culling, 0);
--    glSetCurrentRasterState(glHandleizeRasterState());
-+    FontSetTextRasterState();
-     FontStringContext lookup(*this);
-     OriginalFontPageSink sink(*this, View, quads, pMatrix, Passes == PASS_Effect && m_TextureType == SplitFX);
-     FontTextColourResult result = FontDrawStringSteps<FontStringContext, nlEscapeSequence>(Text.m_pString, lookup,
 diff --git a/include/NL/FontTextState.h b/include/NL/FontTextState.h
 new file mode 100644
 --- /dev/null
