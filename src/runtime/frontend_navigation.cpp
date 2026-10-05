@@ -129,6 +129,7 @@ struct FrontendNavigation::Implementation
     std::shared_ptr<FrontendSession> session;FrontendInput& input;std::shared_ptr<FrontendAudio> audio;unsigned& seed;
     unsigned controller;bool wide,busy=false,failed=false;std::thread::id thread=std::this_thread::get_id();
     FrontendSession::Handle current;State state;FrontendPointerHost host;std::unique_ptr<FrontendHandler> handler;
+    FrontendSession::Handle input_source;
     FrontendNavigation::TransitionCallback transition_callback;
     std::shared_ptr<FrontendPointerRegion> region;std::vector<Pending> pending;std::vector<FrontendAudioHandle> sounds;
     Implementation(std::shared_ptr<FrontendSession> s,FrontendInput& i,std::shared_ptr<FrontendAudio> a,unsigned& r,bool w,unsigned c)
@@ -141,6 +142,7 @@ struct FrontendNavigation::Implementation
     void Ready()const{CheckNav(thread==std::this_thread::get_id()&&session&&!failed,"NAV requires its live nonfailed owner thread");}
     void Mutable()const{Ready();CheckNav(!busy&&!nlGetCurrentAsyncRead(),"NAV recursive or NL-callback mutation is unsupported");}
     void Expected(const FrontendSession::Handle& f)const{Mutable();CheckNav(f&&f==current&&f==session->Current(),"NAV requires its exact current frame");}
+    const FrontendSession::Handle& Presented()const{return input_source?input_source:current;}
     void Play(const std::vector<std::uint32_t>& cues)
     {
         const auto live=audio->Handles();std::erase_if(sounds,[&](auto h){return std::find(live.begin(),live.end(),h)==live.end();});
@@ -178,7 +180,7 @@ FrontendNavigationStatus FrontendNavigation::Status()const
 FrontendPointerBounds FrontendNavigation::Bounds()const{impl_->Ready();CheckNav(bool(impl_->region),"NAV bounds require acknowledged frame");return impl_->region->Bounds();}
 void FrontendNavigation::Acknowledge(const FrontendSession::Handle& frame,FrontendPointerViewport viewport)
 {
-    auto& s=*impl_;s.Expected(frame);CheckNav(viewport.widescreen==s.wide,"NAV pointer projection must match its authored aspect");
+    auto& s=*impl_;s.Expected(frame);CheckNav(!s.input_source,"Cannot acknowledge NAV during input");CheckNav(viewport.widescreen==s.wide,"NAV pointer projection must match its authored aspect");
     try
     {
         if(!s.region)
@@ -236,7 +238,7 @@ void FrontendNavigation::StartTransition(const FrontendSession::Handle& frame,st
 }
 void FrontendNavigation::AdvanceVisual(const FrontendSession::Handle& frame,float delta)
 {
-    auto& s=*impl_;s.Expected(frame);CheckNav(s.pending.empty(),"NAV pointer callbacks must finish before advancement");
+    auto& s=*impl_;s.Expected(frame);CheckNav(!s.input_source,"Cannot advance NAV during input");CheckNav(s.pending.empty(),"NAV pointer callbacks must finish before advancement");
     s.handler->Update(frame,delta);s.current=s.session->Current();if(!s.state.status.transition_playing)return;
     Busy guard(s.busy);
     try
@@ -261,7 +263,7 @@ void FrontendNavigation::AdvanceVisual(const FrontendSession::Handle& frame,floa
 }
 bool FrontendNavigation::ApplyPending(unsigned index)
 {
-    auto& s=*impl_;s.Expected(s.current);CheckNav(index<4,"NAV pointer exceeds four");const auto frame=s.current;Busy guard(s.busy);bool pressed=false;
+    auto& s=*impl_;s.Expected(s.current);CheckNav(index<4,"NAV pointer exceeds four");const auto frame=s.current,presented=s.Presented();Busy guard(s.busy);bool pressed=false;
     try
     {
         State next;std::vector<std::uint32_t> cues;
@@ -270,7 +272,7 @@ bool FrontendNavigation::ApplyPending(unsigned index)
             const auto empty=[](int,void*){}; // Source base callbacks are genuinely unset for this FEBackButton.
             for(const auto& event:s.pending)
             {
-                CheckNav(event.frame==frame&&event.index==index,"NAV callback received a stale pointer/frame");
+                CheckNav(event.frame==presented&&event.index==index,"NAV callback received a stale pointer/frame");
                 switch(event.kind)
                 {
                 case FrontendPointerCallback::Enter:FrontendBackEnter(step,int(index),nullptr,play,[&](int,void*){++step.state.status.hover_feedback_requests;});break;
@@ -289,31 +291,43 @@ bool FrontendNavigation::ApplyPending(unsigned index)
 }
 bool FrontendNavigation::DeliverPointer(const FrontendSession::Handle& frame,const FrontendPointerEvent& event)
 {
-    auto& s=*impl_;s.Expected(frame);CheckNav(s.host.Current()&&s.host.Current()->Frame()==frame,"NAV input requires acknowledged frame");CheckNav(event.index<4,"NAV pointer exceeds four");
+    auto& s=*impl_;s.Expected(s.current);CheckNav(frame&&frame==s.Presented()&&s.host.Current()&&s.host.Current()->Frame()==frame,"NAV input requires acknowledged frame");CheckNav(event.index<4,"NAV pointer exceeds four");
     try{s.region->Deliver(frame,event);return ApplyPending(event.index);}catch(...){s.failed=true;throw;}
 }
 FrontendNavigationDispatch FrontendNavigation::Route(const FrontendPointerDesktopSample& sample)
 {
-    auto& s=*impl_;s.Expected(s.current);CheckNav(s.host.Current()&&s.host.Current()->Frame()==s.current,"NAV input requires acknowledged frame");
+    auto& s=*impl_;s.Expected(s.current);CheckNav(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"NAV input requires acknowledged frame");
     try{auto out=s.host.Route(s.host.Current(),sample);return {out,ApplyPending(out.event.index)};}catch(...){s.failed=true;throw;}
 }
 FrontendNavigationDispatch FrontendNavigation::Poll(SDL_Window* window,bool capture)
 {
-    auto& s=*impl_;s.Expected(s.current);CheckNav(s.host.Current()&&s.host.Current()->Frame()==s.current,"NAV input requires acknowledged frame");
+    auto& s=*impl_;s.Expected(s.current);CheckNav(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"NAV input requires acknowledged frame");
     try
     {
         CheckNav(window&&SDL_GetWindowID(window)==s.host.Current()->Viewport().window,"NAV input received a different window");
         int w=0,h=0,pw=0,ph=0;CheckNav(SDL_GetWindowSize(window,&w,&h)&&SDL_GetWindowSizeInPixels(window,&pw,&ph),"Cannot query NAV window extent");
         const auto& v=s.host.Current()->Viewport();
         if(w<=0||h<=0||pw<=0||ph<=0||unsigned(w)!=v.window_width||unsigned(h)!=v.window_height||unsigned(pw)!=v.pixel_width||unsigned(ph)!=v.pixel_height)
-        {const FrontendPointerEvent leave{s.controller,{-999,-999}};DeliverPointer(s.current,leave);s.host.Reset();return {{leave,false,1},false};}
+        {const FrontendPointerEvent leave{s.controller,{-999,-999}};DeliverPointer(s.Presented(),leave);s.host.Reset();return {{leave,false,1},false};}
         auto out=s.host.Poll(s.host.Current(),window,capture);return {out,ApplyPending(out.event.index)};
     }
     catch(...){s.failed=true;throw;}
 }
+void FrontendNavigation::WithPresentedInput(const FrontendSession::Handle& frame,const std::function<void()>& operation)
+{
+    auto& s=*impl_;s.Expected(s.current);
+    CheckNav(!s.input_source&&operation&&frame&&s.host.Current()&&s.host.Current()->Frame()==frame,
+        "NAV input window requires its exact acknowledged presentation");
+    CheckNav(frame->visuals==s.current->visuals&&frame->images==s.current->images&&frame->request.path==s.current->request.path,
+        "NAV input window cannot cross resource generations");
+    s.input_source=frame;
+    struct Reset{Implementation& s;~Reset(){s.input_source.reset();}}reset{s};
+    try{operation();CheckNav(s.current==s.session->Current(),"NAV input bypassed its retained visual owner");}
+    catch(...){s.failed=true;throw;}
+}
 void FrontendNavigation::Release()
 {
-    auto& s=*impl_;CheckNav(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"NAV release requires idle owner thread");if(!s.session)return;Busy guard(s.busy);
+    auto& s=*impl_;CheckNav(s.thread==std::this_thread::get_id()&&!s.busy&&!s.input_source&&!nlGetCurrentAsyncRead(),"NAV release requires idle owner thread");if(!s.session)return;Busy guard(s.busy);
     s.transition_callback={};s.host.Release();s.region.reset();s.pending.clear();if(s.handler)s.handler->Release();s.handler.reset();s.CancelSounds();s.current.reset();s.session.reset();s.audio.reset();s.state={};
 }
 }

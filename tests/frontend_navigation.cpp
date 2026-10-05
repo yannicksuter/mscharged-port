@@ -120,6 +120,21 @@ void Lifecycle(bool owned,bool wide)
  nav.UpdatePointers(nav.Current(),pointers,true);Check(!Instance(nav.Current(),Find(nav.Current(),{"Slide1","Layer","cursor0"})).visible,"Hidden pointer remains visible");
  nav.SetPointerSlide(nav.Current(),0,FrontendNavigationPointer::Cursor);Check(Active(nav.Current(),Find(nav.Current(),{"Slide1","Layer","cursor0"}))=="cursor","NAV cursor request differs");
  f=nav.Current();nav.AdvanceVisual(f,1.f/60);Check(nav.Current()!=f,"NAV base update absent");Reject([&]{nav.Acknowledge(f,Viewport(wide));});Ack(nav);Near(nav.Bounds().min_x,bounds.min_x);
+ // Input reads an actually acknowledged frame after the next base/command
+ // mutations. No candidate is acknowledged just to make its hit regions usable.
+ f=nav.Current();nav.AdvanceVisual(f,.125f);nav.HideButtons(nav.Current());const auto candidate=nav.Current();
+ Reject([&]{nav.DeliverPointer(f,{0,center});});
+ Reject([&]{nav.WithPresentedInput(candidate,[]{});});
+ nav.WithPresentedInput(f,[&]{
+  Reject([&]{nav.WithPresentedInput(f,[]{});});
+  Reject([&]{nav.AdvanceVisual(nav.Current(),0);});
+  Reject([&]{nav.Acknowledge(nav.Current(),Viewport(wide));});
+  Reject([&]{nav.Release();});
+  Check(nav.DeliverPointer(f,{3,center,true}),"Presented NAV input did not complete source back");
+ });
+ Check(nav.Current()!=candidate&&!nav.Status().failed&&Instance(f,back).visible&&!Instance(nav.Current(),back).visible,
+  "Presented NAV input changed old geometry or lost candidate commands");
+ Reject([&]{nav.DeliverPointer(f,{3,center});});Ack(nav);nav.SetButtons(nav.Current(),4);Ack(nav);
  if(!owned&&!wide)
  {
   f=nav.Current();std::unique_ptr<nlFile> file(nlOpen("/Art/fe/english.loc"));std::array<std::uint8_t,16> bytes{};CallbackProbe probe{nav};nlReadAsync(file.get(),bytes.data(),bytes.size(),Callback,reinterpret_cast<nlFileAsyncParam>(&probe),bytes.size());const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
@@ -149,6 +164,10 @@ void Failures(SDL_Window* window)
  }audio->Unload();
  session=Session();audio=Audio(false,0x1234567);FrontendNavigation nav(session,input,audio,seed);nav.SetButtons(nav.Current(),4);Ack(nav);const auto frame=nav.Current();const auto b=nav.Bounds();const auto before_device_seed=seed;
  Reject([&]{nav.DeliverPointer(frame,{0,{(b.min_x+b.max_x)/2,(b.min_y+b.max_y)/2}});});Check(nav.Status().failed&&session->Current()==frame&&audio->Handles().empty()&&seed==before_device_seed,"Failed NAV SDL admission published effects");nav.Release();audio->Unload();
+ session=Session();audio=Audio(false);FrontendNavigation failed(session,input,audio,seed);Ack(failed);const auto shown=failed.Current();
+ failed.AdvanceVisual(shown,.125f);
+ Reject([&]{failed.WithPresentedInput(shown,[]{throw std::runtime_error("Actual input callback failure");});});
+ Check(failed.Status().failed,"Throwing NAV input window remained available");failed.Release();audio->Unload();
 }
 struct Host{bool live=false,disc=false;~Host(){if(live)ResetStartupFiles();if(disc)aurora_dvd_close();if(live){ResetStartupMemory();aurora_shutdown();}}};
 }

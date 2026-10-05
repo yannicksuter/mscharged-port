@@ -63,6 +63,10 @@ public:
     FrontendNavigationDispatch Route(const FrontendPointerDesktopSample&);
     FrontendNavigationDispatch Poll(SDL_Window*,bool capture=false);
     bool DeliverPointer(const FrontendSession::Handle&,const FrontendPointerEvent&);
+    // Source commands and the base update can change the candidate before
+    // input. Route against the exact last acknowledged geometry in this bounded
+    // window; callbacks mutate only this owner's current resource generation.
+    void WithPresentedInput(const FrontendSession::Handle&,const std::function<void()>&);
     void Release();
 };
 }
