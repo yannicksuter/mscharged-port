@@ -141,6 +141,22 @@ void UnsupportedAndErrors()
     Check(f.Build().entries.empty(),"Nonplanar ancestor branch was rendered");
     f.Parent().attributes.rotation[0]=NAN;Reject([&]{f.Build();});
     f.Parent().attributes.rotation[0]=0;f.Text().duration=-1;Reject([&]{f.Build();});f.Text().duration=100;
+    f.Parent().overload_flags=4;f.Parent().attributes.scale={1,1,1};
+    const auto planar=f.Build();
+    for(float scale:{0.f,.752083f,-2.f,3.f})
+    {
+        f.Parent().attributes.scale[2]=scale;const auto transformed=f.Build();
+        Check(transformed.TextCount()==3&&transformed.unavailable.empty(),"Pure ancestor Z scale changed the XY text plane");
+        for(unsigned i=0;i<transformed.entries.size();++i)
+        {
+            const auto& a=std::get<FrontendLayoutText>(transformed.entries[i]);
+            const auto& b=std::get<FrontendLayoutText>(planar.entries[i]);
+            for(unsigned axis:{0u,1u,4u,5u,12u,13u})Near(a.transform[axis],b.transform[axis]);
+        }
+    }
+    f.Parent().attributes.rotation[1]=.1f;f.Parent().overload_flags|=2;
+    Check(f.Build().entries.empty(),"Pure Z scale admitted an out-of-plane rotation");
+    f.Parent().overload_flags=0;
     f.Parent().children.push_back(200);Reject([&]{f.Build();});f.Parent().children.pop_back();
     f.Parent().children.push_back(999);Reject([&]{f.Build();});f.Parent().children.pop_back();
     f.Text().library=999;Reject([&]{f.Build();});f.Text().library=30;

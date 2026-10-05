@@ -272,15 +272,11 @@ class Builder
         if(!ValidTime(time,instance.start,instance.duration)||!instance.visible||!object.attributes.visible)
         {++result_.hidden;active_.erase(id);return;}
         const auto attributes=Effective(instance,object);
-        // Original movie callback submits XY vertices with z=0. A pure,
-        // bounded Z scale (owned Credits4:3 uses .752083) is therefore planar
-        // for this exact path. Retain it in the source matrix; other profiles
-        // keep their existing unit-Z admission rule.
-        const bool movie=instance.type==2&&instance.resource&&resources_.contains(*instance.resource)
-            &&(resources_.at(*instance.resource)->native_movie
-                ||resources_.at(*instance.resource)->hash==FrontendNameHash("movie"));
-        if(attributes.rotation[0]!=0||attributes.rotation[1]!=0||attributes.position[2]!=0||attributes.pivot[2]!=0
-            ||(attributes.scale[2]!=1&&!movie))
+        // Image/movie/text geometry lies in XY with z=0. Pure finite Z
+        // scaling, including authored Title component/image scale0, leaves
+        // that plane unchanged. Retain the full source matrix. Descendants
+        // must independently satisfy the same rotation/translation/pivot gate.
+        if(attributes.rotation[0]!=0||attributes.rotation[1]!=0||attributes.position[2]!=0||attributes.pivot[2]!=0)
         {++result_.unavailable["nonplanar instance branch"];active_.erase(id);return;}
         const auto matrix=Combine(attributes,parent);
         for(unsigned i=0;i<4;++i)colour[i]=(attributes.colour[i]*colour[i])/255.f;
