@@ -3,6 +3,7 @@
 include_guard(GLOBAL)
 include(cmake/OriginalCore.cmake)
 include(cmake/OriginalStringStorage.cmake)
+include(cmake/OriginalAllocation.cmake)
 include(cmake/OriginalFontTextures.cmake)
 include(cmake/OriginalTextureResources.cmake)
 include(cmake/OriginalGraphics.cmake)

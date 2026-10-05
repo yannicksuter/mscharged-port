@@ -10,9 +10,11 @@ target_include_directories(charged_sanim_decode PUBLIC "${MSCHARGED_PREPARED}/in
 target_compile_definitions(charged_sanim_decode PUBLIC MSCHARGED_NATIVE=1)
 target_compile_features(charged_sanim_decode PRIVATE cxx_std_17)
 
-add_library(charged_native_allocator STATIC "${MSCHARGED_PREPARED}/src/NL/MemAlloc.cpp")
+add_library(charged_native_allocator STATIC "${MSCHARGED_PREPARED}/src/NL/MemAlloc.cpp"
+    src/platform/game_allocation_ownership.cpp)
 add_dependencies(charged_native_allocator verify_prepared)
 target_include_directories(charged_native_allocator PUBLIC "${MSCHARGED_PREPARED}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
     PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 target_compile_definitions(charged_native_allocator PRIVATE MSCHARGED_NATIVE=1)
 target_compile_features(charged_native_allocator PRIVATE cxx_std_17)
