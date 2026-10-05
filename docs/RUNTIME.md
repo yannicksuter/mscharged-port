@@ -134,7 +134,8 @@ unfinished menu diagnostic: selected actions report their pending services;
 saves, scene transitions and the full game startup are still being implemented.
 
 Use `--experimental-scene --frontend-options` for the original Options screen,
-button feedback, intro/outro and music. Back navigation and submenus are in progress.
+button feedback, intro/outro, music and the original navigation overlay. Back
+plays the original outro; returning to Main and opening submenus are in progress.
 
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`
