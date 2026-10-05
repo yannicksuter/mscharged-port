@@ -19,6 +19,11 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0128 shares the original pure Remote/Freestyle/Classic input policies.
+The native profile adapter compiles unchanged WiiPad functions and checks raw
+buttons and calibrated sticks. Hardware discovery, motion and Wii services are
+separate; the existing desktop input policy is preserved.
+
 Patch 0127 shares the original Title initialization, timing and input steps.
 The selected native owner uses real frontend music/cues and checked presentation
 ownership. Its external scene, navigation and Wii services require explicit
