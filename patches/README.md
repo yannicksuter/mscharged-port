@@ -45,6 +45,11 @@ Patch 0112 shares the original Audio Options controls and category volume rules.
 The selected native screen can change real resident and streamed audio gains;
 complete audio startup, navigation and game-save integration remain separate.
 
+Patch 0114 shares the original Visual Options controls, pointer feedback and
+zoom settings. The selected native screen preserves the original Back behavior
+and can save scoped native preferences; gameplay camera and full game saves
+remain separate services.
+
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
 camera catalog between the console factory and native loading code.
