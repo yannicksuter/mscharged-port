@@ -80,6 +80,12 @@ Patch 0120 shares the original Credits phase, text and scrolling rules. Its
 selected native owner reaches the NLG movie request; actual playback and
 completion remain explicit integration work.
 
+Patch 0123 shares original movie decode cadence, PCM mixing and float-quad
+construction. The selected native provider reads through NL, outputs through
+SDL, and renders with the original YUV movie material. Completion requires the
+exact final frame's presentation and flushed audio consumption. Full game audio
+mixing and live volume changes remain separate work.
+
 | Patch | Reason | Current validation |
 | --- | --- | --- |
 | `0001-use-standard-fabs-in-nlMath-header.patch` | The shared math header uses CodeWarrior's undeclared `__fabs`; native Clang rejects `nlRandom.cpp`. Use the standard float overload. | Native compilation; finite, signed-zero, infinity, and NaN checks. |
@@ -261,6 +267,11 @@ builds.
 Patch 0011 adds bounded video/PCM entry points to the existing THP decoder,
 sharing its valid decoding arithmetic. Native movie reads validate container,
 frame and output bounds. Decoding is separate from presentation and playback.
+
+Patch 0012 records tagged GX draws after they are encoded into the render pass.
+Native movie playback combines this evidence with successful frame presentation
+and drain before accepting a displayed frame. A skipped cold pipeline does not
+issue draw evidence; an encoded draw alone does not prove GPU completion.
 
 `aurora/0001-isolate-core-build-dependencies.patch` makes SQLite conditional on
 GX, matching where Aurora defines that dependency, and stops Aurora's dependency
