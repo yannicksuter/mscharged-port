@@ -258,6 +258,10 @@ builds.
 
 ## Aurora series
 
+Patch 0011 adds bounded video/PCM entry points to the existing THP decoder,
+sharing its valid decoding arithmetic. Native movie reads validate container,
+frame and output bounds. Decoding is separate from presentation and playback.
+
 `aurora/0001-isolate-core-build-dependencies.patch` makes SQLite conditional on
 GX, matching where Aurora defines that dependency, and stops Aurora's dependency
 setup from forcing the parent `BUILD_TESTING` cache entry off. The optional
