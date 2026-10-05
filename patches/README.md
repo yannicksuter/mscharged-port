@@ -54,6 +54,10 @@ Patch 0115 shares Main's original Options action. The native adapter queues the
 actual source scene pop, hides navigation, plays its cue and starts the original
 transition script. Missing transition services remain explicit.
 
+Patch 0116 shares Audio Options' original save feedback while leaving the Wii
+save call intact. Its selected native owner now uses the scene stack's single
+base update and original input lock, with separately scoped preference saving.
+
 The selected camera sources include original authored playback (0056) and
 desktop DebugCam controls (0057). Patch 0058 shares the original frontend
 camera catalog between the console factory and native loading code.

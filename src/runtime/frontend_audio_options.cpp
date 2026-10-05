@@ -32,6 +32,7 @@ struct Step
     FrontendAnimationPlayback& playback;const Localization& localization;State value;
     int mOverlayMode=0,mState=value.status.state;
     std::array<int,3> mSettings=value.status.settings,mBackupSettings=value.status.backup;
+    bool mSaveStarted=false;
     struct Instance;
     struct Slide
     {
@@ -117,6 +118,12 @@ struct Step
         Step& s;void SetButtons(unsigned mask,bool enabled){Check(enabled&&(mask==0||mask==0x24),"Audio options NAV request is unsupported");s.Command(mask?FrontendAudioOptionsCommandKind::ShowBackAndDone:FrontendAudioOptionsCommandKind::HideNavigation,mask);}
         void SetDoneButtonText(int value){Check(value==1,"Audio options done label request is unsupported");s.Command(FrontendAudioOptionsCommandKind::DoneText,1);}
     } navigation{*this};
+    struct SaveButton
+    {
+        Step& owner;
+        void SetActiveSlide(const char* name,bool reset,bool preserve)
+        {Check(std::string_view(name)=="down"&&reset&&!preserve,"Audio options done feedback differs");owner.Command(FrontendAudioOptionsCommandKind::DoneDown);}
+    } saveButton{*this};SaveButton* mSaveButton=&saveButton;
     State Result()
     {
         value.status.settings=mSettings;value.status.state=mState;
@@ -132,9 +139,11 @@ struct FrontendAudioOptions::Implementation
 {
     std::shared_ptr<FrontendSession> session;FrontendInput& input;std::shared_ptr<FrontendAudio> audio;AudioCategoryVolumes::Handle volumes;
     unsigned& seed;unsigned controller;const std::thread::id thread=std::this_thread::get_id();
-    FrontendSession::Handle current;State state;FrontendPointerHost host;std::unique_ptr<FrontendHandler> handler;
+    FrontendSession::Handle current;State state;FrontendPointerHost host;std::shared_ptr<FrontendHandler> handler;
+    std::shared_ptr<NativePreferences> native_save;
     std::array<std::shared_ptr<FrontendPointerRegion>,6> regions{};std::vector<Pending> pending;std::vector<FrontendAudioHandle> sounds;
-    bool busy=false,failed=false;
+    bool busy=false,failed=false,stack_attached=false,stack_update=false,input_window=false;
+    FrontendSession::Handle input_source;
     Implementation(std::shared_ptr<FrontendSession> s,FrontendInput& i,std::shared_ptr<FrontendAudio> a,AudioCategoryVolumes::Handle v,unsigned& rng,unsigned c)
         :session(std::move(s)),input(i),audio(std::move(a)),volumes(std::move(v)),seed(rng),controller(c),host(i,c)
     {
@@ -145,17 +154,25 @@ struct FrontendAudioOptions::Implementation
         state.status.settings=state.status.backup=volumes->Snapshot().settings;pending.reserve(32);
     }
     void Ready()const{Check(thread==std::this_thread::get_id()&&session&&!failed,"Audio options require their live nonfailed owning thread");}
-    void Expected(const FrontendSession::Handle& f)const{Ready();Check(!busy&&!nlGetCurrentAsyncRead()&&f&&f==current&&f==session->Current(),"Audio options require their exact idle current frame");}
+    void Mutable()const{Ready();Check(!busy&&!nlGetCurrentAsyncRead()&&(!stack_attached||stack_update),"Audio options mutation requires its idle owner or controlled stack update");}
+    void Expected(const FrontendSession::Handle& f,bool acknowledge=false)const
+    {if(acknowledge){Ready();Check(!busy&&!stack_update&&!nlGetCurrentAsyncRead(),"Cannot acknowledge Audio options during update");}else Mutable();Check(f&&f==current&&f==session->Current(),"Audio options require their exact current frame");}
+    FrontendSession::Handle Presented()const{return input_window?input_source:current;}
+    void InputExpected(const FrontendSession::Handle& frame)const
+    {Expected(current);Check(frame&&frame==Presented(),"Audio input requires its last acknowledged stack frame");}
     bool Interactive()const{return state.status.state==1&&state.status.initialized;}
+    bool RegionsPresented()const{return std::all_of(regions.begin(),regions.end(),[&](const auto& region){return region&&region->Current()==Presented();});}
     void Queue(FrontendPointerCallback kind,unsigned item,unsigned index,const FrontendSession::Handle& f)
     {if(kind==FrontendPointerCallback::Enter||kind==FrontendPointerCallback::Leave||kind==FrontendPointerCallback::Press){Check(pending.size()<32,"Audio options pointer event budget exceeded");pending.push_back({kind,item,index,f});}}
     void Play(const std::vector<std::uint32_t>& cues)
     {const auto live=audio->Handles();std::erase_if(sounds,[&](auto h){return std::find(live.begin(),live.end(),h)==live.end();});sounds.reserve(sounds.size()+cues.size());for(auto cue:cues){auto h=audio->Play(cue,seed);Check(bool(h),"Audio options authored cue is unavailable");sounds.push_back(*h);}}
 };
 FrontendAudioOptions::FrontendAudioOptions(std::shared_ptr<FrontendSession> session,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,AudioCategoryVolumes::Handle volumes,unsigned& seed,unsigned controller)
+    :FrontendAudioOptions(std::move(session),input,std::move(audio),std::move(volumes),seed,{},controller){}
+FrontendAudioOptions::FrontendAudioOptions(std::shared_ptr<FrontendSession> session,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,AudioCategoryVolumes::Handle volumes,unsigned& seed,std::shared_ptr<FrontendHandler> base,unsigned controller)
     :impl_(std::make_unique<Implementation>(std::move(session),input,std::move(audio),std::move(volumes),seed,controller))
 {
-    auto& s=*impl_;s.handler=std::make_unique<FrontendHandler>(s.session,input);State next;
+    auto& s=*impl_;Check(!base||base->Binds(s.session),"Audio options shared handler belongs to another session");s.handler=base?std::move(base):std::make_shared<FrontendHandler>(s.session,input);State next;
     s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);
         step.Command(FrontendAudioOptionsCommandKind::HideNavigation);step.Command(FrontendAudioOptionsCommandKind::BindBack,4);step.Command(FrontendAudioOptionsCommandKind::BindDone,0x20);
         for(unsigned i=0;i<4;++i)step.Command(FrontendAudioOptionsCommandKind::PointerWaiting,i);
@@ -168,10 +185,15 @@ FrontendAudioOptionsStatus FrontendAudioOptions::Status()const
 {auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&s.session,"Audio options status requires its owning thread");auto result=s.state.status;result.failed=s.failed;return result;}
 void FrontendAudioOptions::AdvanceVisual(const FrontendSession::Handle& frame,float delta)
 {
-    auto& s=*impl_;s.Expected(frame);if(s.input.InputLocked())return;Check(s.pending.empty(),"Audio options pointer events are pending");
+    auto& s=*impl_;Check(!s.stack_attached,"Stack owns the only Audio options base update");s.Expected(frame);if(s.input.InputLocked())return;Check(s.pending.empty(),"Audio options pointer events are pending");
+    AfterBaseUpdate(s.handler->UpdateOnce(frame,delta));
+}
+void FrontendAudioOptions::AfterBaseUpdate(FrontendHandler::UpdateProof&& proof)
+{
+    auto& s=*impl_;s.Mutable();s.current=s.handler->ConsumeUpdate(std::move(proof),s.current);
     try
     {
-        s.handler->Update(frame,delta);s.current=s.session->Current();State next;
+        State next;
         s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();
             const bool ready=FrontendAudioOptionsGate(step,[&]{return &step.navigation;},[&](int i){step.Command(FrontendAudioOptionsCommandKind::PointerWaiting,i);},[&](int id){Check(id==13,"Audio options transition scene differs");step.Command(FrontendAudioOptionsCommandKind::PushOptions,id);},[](int){throw UnsupportedResource("Overlay audio options are unavailable");});
             if(ready){if(!step.value.status.initialized){FrontendAudioOptionsBind<Step::Instance,Position,Step::Finder>(step);step.value.status.initialized=true;}for(unsigned i=0;i<4;++i)step.Command(i==s.controller?FrontendAudioOptionsCommandKind::PointerCursor:FrontendAudioOptionsCommandKind::PointerWaiting,i);}
@@ -180,7 +202,7 @@ void FrontendAudioOptions::AdvanceVisual(const FrontendSession::Handle& frame,fl
 }
 void FrontendAudioOptions::Acknowledge(const FrontendSession::Handle& frame,FrontendPointerViewport viewport)
 {
-    auto& s=*impl_;s.Expected(frame);
+    auto& s=*impl_;s.Expected(frame,true);
     try
     {
         if(s.state.status.initialized)
@@ -192,7 +214,7 @@ std::array<FrontendPointerBounds,6> FrontendAudioOptions::Bounds()const
 {impl_->Ready();std::array<FrontendPointerBounds,6> out;for(unsigned i=0;i<6;++i){Check(bool(impl_->regions[i]),"Audio options bounds await presentation");out[i]=impl_->regions[i]->Bounds();}return out;}
 void FrontendAudioOptions::ApplyPending()
 {
-    auto& s=*impl_;s.Expected(s.current);if(s.pending.empty())return;Busy guard(s.busy);
+    auto& s=*impl_;s.Expected(s.current);if(s.pending.empty())return;const auto presented=s.Presented();Busy guard(s.busy);
     try
     {
         auto events=std::move(s.pending);s.pending.clear();s.pending.reserve(32);State next;struct Effect{bool cue;std::uint32_t value;AudioCategory category;};std::vector<Effect> effects;
@@ -204,7 +226,7 @@ void FrontendAudioOptions::ApplyPending()
                 void ApplyMusicVolume(){effects.push_back({false,unsigned(MusicVolume),AudioCategory::Music});}void ApplySFXVolume(){effects.push_back({false,unsigned(SFXVolume),AudioCategory::Sfx});}void ApplyVoiceVolume(){effects.push_back({false,unsigned(VoiceVolume),AudioCategory::Voice});}
             }settings{effects,step.mSettings[0],step.mSettings[1],step.mSettings[2]};
             auto play=[&](unsigned long cue,const void* a,void* b,bool restart){Check(cue<=UINT32_MAX&&!a&&!b&&restart,"Audio options cue contract differs");effects.push_back({true,std::uint32_t(cue),AudioCategory::Music});};
-            for(const auto& event:events){Check(event.frame==s.current&&event.item<6&&event.index<4,"Audio options event is stale or invalid");if(step.mState!=1)break;
+            for(const auto& event:events){Check(event.frame==presented&&event.item<6&&event.index<4,"Audio options event is stale or invalid");if(step.mState!=1)break;
                 if(event.kind==FrontendPointerCallback::Enter)FrontendAudioOptionsEnter(step,event.index,event.item,play);
                 else if(event.kind==FrontendPointerCallback::Leave)FrontendAudioOptionsLeave(step,event.index,event.item);
                 else FrontendAudioOptionsPress(step,event.index,event.item,[&]{return &settings;},play,[](int,unsigned long,const void*,void*){throw UnsupportedResource("Overlay voice preview is unavailable");});}
@@ -214,31 +236,69 @@ void FrontendAudioOptions::ApplyPending()
 }
 void FrontendAudioOptions::DeliverPointer(const FrontendSession::Handle& frame,const FrontendPointerEvent& event)
 {
-    auto& s=*impl_;s.Expected(frame);Check(s.host.Current()&&s.host.Current()->Frame()==frame&&event.index<4,"Audio options input requires actual presentation");if(!s.Interactive())return;
+    auto& s=*impl_;s.InputExpected(frame);Check(s.host.Current()&&s.host.Current()->Frame()==frame&&event.index<4,"Audio options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return;
     try{for(auto& region:s.regions)region->Deliver(frame,event);ApplyPending();}catch(...){s.failed=true;throw;}
 }
 FrontendPointerDispatch FrontendAudioOptions::Route(const FrontendPointerDesktopSample& sample)
-{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.current,"Audio options input requires actual presentation");if(!s.Interactive())return{};try{auto out=s.host.Route(s.host.Current(),sample);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
+{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"Audio options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return{};try{auto out=s.host.Route(s.host.Current(),sample);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
 FrontendPointerDispatch FrontendAudioOptions::Poll(SDL_Window* window,bool capture)
-{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.current,"Audio options input requires actual presentation");if(!s.Interactive())return{};try{auto out=s.host.Poll(s.host.Current(),window,capture);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
+{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"Audio options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return{};try{auto out=s.host.Poll(s.host.Current(),window,capture);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
 void FrontendAudioOptions::NotifyBackButton(const FrontendSession::Handle& frame)
 {
-    auto& s=*impl_;s.Expected(frame);Check(s.Interactive()&&s.host.Current()&&s.host.Current()->Frame()==frame,"Audio options back requires its genuinely presented interactive frame");Busy guard(s.busy);State next;
+    auto& s=*impl_;s.InputExpected(frame);Check(s.Interactive()&&s.RegionsPresented()&&s.host.Current()&&s.host.Current()->Frame()==frame,"Audio options back requires its genuinely presented interactive frame");Busy guard(s.busy);State next;
     std::array<int,3> restored{};std::vector<std::uint32_t> cues;
-    try{s.session->HandlerTransaction(frame,[&](auto& p){
-        Step step(p,*frame->visuals->localization,s.state);step.value.status.commands.clear();
+    try{s.session->HandlerTransaction(s.current,[&](auto& p){
+        Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();
         struct Settings{int MusicVolume=0,SFXVolume=0,VoiceVolume=0;std::array<int,3>& restored;void ApplySettings(){restored={MusicVolume,SFXVolume,VoiceVolume};}}settings{0,0,0,restored};
         FrontendAudioOptionsBack(step,[&]{return &settings;},[&](unsigned long cue,const void* a,void* b,bool restart){Check(cue<=UINT32_MAX&&!a&&!b&&restart,"Audio options back cue contract differs");cues.push_back(cue);},[&]{return &step.navigation;});next=step.Result();
         },[&]{s.volumes->SetAll(restored);s.Play(cues);});s.state=std::move(next);s.current=s.session->Current();}
     catch(...){s.failed=true;throw;}
 }
 void FrontendAudioOptions::Save(const FrontendSession::Handle& frame)
-{impl_->Expected(frame);throw UnsupportedResource("Original audio options SaveLoad::StartSave(false) requires a real save service");}
+{impl_->InputExpected(frame);throw UnsupportedResource("Original audio options SaveLoad::StartSave(false) requires a real save service");}
+void FrontendAudioOptions::SaveNativePreferences(const FrontendSession::Handle& frame,std::shared_ptr<NativePreferences> preferences)
+{
+    auto& s=*impl_;s.InputExpected(frame);
+    Check(s.Interactive()&&s.RegionsPresented()&&s.host.Current()&&s.host.Current()->Frame()==frame&&!s.state.status.native_save_admitted,"Native audio save requires its presented interactive frame");
+    Check(bool(preferences),"Native audio save requires actual preferences ownership");
+    const auto status=preferences->Status();
+    Check((status.state==NativePreferencesState::Ready||status.state==NativePreferencesState::Missing)&&status.save_enabled&&!status.host_pending,"Native preferences load must finish before saving Audio options");
+    Check(s.volumes->Snapshot().settings==s.state.status.settings,"Audio settings changed outside their selected owner");
+    auto values=*preferences->Current();values.audio=s.state.status.settings;resources::ValidateNativePreferences(values);
+    Busy guard(s.busy);State next;std::vector<std::uint32_t> cues;
+    try
+    {
+        s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();
+            FrontendAudioOptionsSaveVisual(step,[&]{return &step.navigation;},[&](unsigned long cue,const void* name,void* context,bool restart){Check(cue<=UINT32_MAX&&!name&&!context&&restart,"Audio save cue contract differs");cues.push_back(cue);});
+            Check(step.mSaveStarted,"Original audio save visual did not mark its request");step.value.status.native_save_admitted=true;next=step.Result();
+        },[&]{s.Play(cues);preferences->StartSave(values);});
+        s.native_save=std::move(preferences);s.state=std::move(next);s.current=s.session->Current();
+    }
+    catch(...){s.failed=true;throw;}
+}
+std::shared_ptr<FrontendSession> FrontendAudioOptions::StackSession()const{impl_->Ready();return impl_->session;}
+std::shared_ptr<FrontendHandler> FrontendAudioOptions::StackHandler()const{impl_->Ready();return impl_->handler;}
+unsigned FrontendAudioOptions::StackScene()const{return 14;}
+bool FrontendAudioOptions::CanUpdateStack()const
+{auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update&&!s.busy&&!nlGetCurrentAsyncRead(),"Audio pre-base admission requires its idle retained stack owner");return !s.input.InputLocked();}
+void FrontendAudioOptions::AttachStack()
+{auto& s=*impl_;s.Mutable();Check(!s.stack_attached,"Audio visual already belongs to a stack");s.stack_attached=true;}
+void FrontendAudioOptions::UpdateStack(FrontendHandler::UpdateProof&& proof,const FrontendSession::Handle& presented,const std::function<void()>& input)
+{
+    auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update&&!s.busy&&!nlGetCurrentAsyncRead(),"Audio stack update requires its idle retained owner");
+    Check(presented&&presented==s.current&&proof.Before()==presented&&proof.After()==s.session->Current(),"Audio stack proof/presentation differs");
+    s.stack_update=true;s.input_source=presented;
+    struct Reset{Implementation& s;~Reset(){s.input_window=false;s.input_source.reset();s.stack_update=false;}}reset{s};
+    try{AfterBaseUpdate(std::move(proof));s.input_window=true;if(input)input();Check(s.current==s.session->Current(),"Stack input mutated outside its selected Audio owner");}
+    catch(...){s.failed=true;throw;}
+}
+void FrontendAudioOptions::ReleaseStack()
+{auto& s=*impl_;Check(!s.stack_update&&!s.busy,"Cannot remove an active Audio update");s.stack_attached=false;Release();}
 void FrontendAudioOptions::Release()
 {
-    auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"Audio options teardown requires its idle owning thread");if(!s.session)return;Busy guard(s.busy);
+    auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"Audio options teardown requires its idle owning thread");if(!s.session)return;Check(!s.stack_attached,"Stack owns selected Audio visual teardown");Busy guard(s.busy);
     std::exception_ptr failure;try{s.host.Release();}catch(...){failure=std::current_exception();}s.regions={};s.pending.clear();
     if(s.audio->Loaded()){const auto live=s.audio->Handles();for(auto h:s.sounds)if(std::find(live.begin(),live.end(),h)!=live.end())try{s.audio->Cancel(h);}catch(...){if(!failure)failure=std::current_exception();}}
-    s.sounds.clear();s.handler.reset();s.current.reset();s.session.reset();s.audio.reset();s.volumes.reset();if(failure)std::rethrow_exception(failure);
+    s.sounds.clear();if(s.handler&&s.handler.use_count()==1)s.handler->Release();s.handler.reset();s.native_save.reset();s.current.reset();s.session.reset();s.audio.reset();s.volumes.reset();if(failure)std::rethrow_exception(failure);
 }
 }
