@@ -136,3 +136,4 @@
 0152-temporary-original-game-data-and-compiler-interfaces.patch
 0148-original-texture-inventory-pool-abi.patch
 0153-preserve-native-string-block-storage.patch
+0151-original-frontend-source-lifecycle.patch

@@ -33,6 +33,7 @@ target_link_libraries(charged_original_frontend_records PUBLIC
 # BaseGameSceneManager still needs the native Mii/SDK declaration boundary.
 add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/BaseSceneHandler.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feScene.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feSceneManager.cpp"
