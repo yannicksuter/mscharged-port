@@ -71,7 +71,15 @@ struct Step
         }
     };
     void Command(FrontendTitleCommandKind kind,unsigned value=0)
-    {CheckTitle(this->value.status.commands.size()<32,"Title command budget exceeded");this->value.status.commands.push_back({kind,value});}
+    {
+        CheckTitle(this->value.status.commands.size()<32,"Title command budget exceeded");
+        this->value.status.commands.push_back({kind,value});
+        this->value.status.operations.push_back({FrontendTitleOperationKind::Command,{kind,value},0});
+    }
+    void AudioOperation(FrontendTitleOperationKind kind,unsigned argument=0)
+    {CheckTitle(value.status.operations.size()<64,"Title operation budget exceeded");value.status.operations.push_back({kind,{},argument});}
+    void NewOperations()
+    {value.status.commands.clear();value.status.operations.clear();value.status.admitted_operations=0;}
     void Pointer(int i,const char* name)
     {
         CheckTitle(i>=0&&i<4,"Title global pointer exceeds four");
@@ -104,7 +112,7 @@ struct FrontendTitle::Implementation
         CheckTitle(!nlGetCurrentAsyncRead()&&session&&audio&&audio->Loaded()&&music,"Title requires retained scene/audio/music and idle NL services");
         CheckTitle(o.controller<4&&o.movement<=2&&o.device==FrontendTitleDevice::DesktopWithoutWiiServices,"Unsupported Title control profile");
         current=session->Current();CheckTitle(current&&current->request.animate&&current->request.image_profile==FrontendImageProfile::Main,"Title requires animated Main resources");
-        CheckTitle(music->Status().load!=FrontendMusicLoadState::Loading,"Title cannot replace another pending music request");pending.reserve(8);
+        CheckTitle(o.deferred_services||music->Status().load!=FrontendMusicLoadState::Loading,"Standalone Title cannot replace another pending music request");pending.reserve(8);
     }
     void Ready()const{CheckTitle(thread==std::this_thread::get_id()&&session&&!failed,"Title requires its live nonfailed owner thread");}
     void Mutable()const{Ready();CheckTitle(!busy&&!nlGetCurrentAsyncRead()&&(!stack_attached||stack_update),"Title mutation requires idle owner or controlled stack update");}
@@ -114,7 +122,8 @@ struct FrontendTitle::Implementation
         CheckTitle(f&&f==current&&f==session->Current(),"Title requires its exact current frame");
     }
     FrontendSession::Handle Presented()const{return input_window?input_source:current;}
-    bool CanRoute()const{return state.status.initialized&&!state.status.departure&&region&&region->Current()==Presented();}
+    bool PendingOperations()const{return options.deferred_services&&state.status.admitted_operations<state.status.operations.size();}
+    bool CanRoute()const{return state.status.initialized&&!state.status.departure&&(!PendingOperations()||(stack_update&&input_window))&&region&&region->Current()==Presented();}
     void Queue(FrontendPointerCallback kind,unsigned index,const FrontendSession::Handle& f)
     {if(kind==FrontendPointerCallback::Enter||kind==FrontendPointerCallback::Leave||kind==FrontendPointerCallback::Press){CheckTitle(pending.size()<8,"Title callback budget exceeded");pending.push_back({kind,index,f});}}
     void Play(const std::vector<std::uint32_t>& cues)
@@ -146,9 +155,9 @@ FrontendTitle::FrontendTitle(std::shared_ptr<FrontendSession> session,FrontendIn
         s.session->HandlerTransaction(s.current,[&](auto& playback){
             Step step(playback,{},options.movement);step.Command(FrontendTitleCommandKind::Dimming,2);
             FrontendTitleCreated<Step::Instance,Step::Finder,Step::Slide>(step,[&]{return options.widescreen;},[&](int i,const char* name){step.Pointer(i,name);},
-                [&](int index){CheckTitle(index==0,"Title music index differs");select_music=true;},[&](bool v){step.Command(FrontendTitleCommandKind::PointerEnabled,v);},
-                [&]{step.Command(FrontendTitleCommandKind::ResetNavigation);},[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));});next=step.Result();
-        },[&]{if(select_music){admitted_music=true;s.music->BeginSelect(0,s.seed);}s.Play(cues);});
+                [&](int index){CheckTitle(index==0,"Title music index differs");select_music=true;step.AudioOperation(FrontendTitleOperationKind::SelectMusic,0);},[&](bool v){step.Command(FrontendTitleCommandKind::PointerEnabled,v);},
+                [&]{step.Command(FrontendTitleCommandKind::ResetNavigation);},[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));step.AudioOperation(FrontendTitleOperationKind::PlayCue,std::uint32_t(cue));});next=step.Result();
+        },[&]{if(!s.options.deferred_services){if(select_music){admitted_music=true;s.music->BeginSelect(0,s.seed);}s.Play(cues);next.status.admitted_operations=next.status.operations.size();}});
         s.state=std::move(next);s.current=s.session->Current();
     }
     catch(...){if(admitted_music)s.music->CancelPending();s.CancelSounds();throw;}
@@ -156,7 +165,37 @@ FrontendTitle::FrontendTitle(std::shared_ptr<FrontendSession> session,FrontendIn
 FrontendTitle::~FrontendTitle(){try{Release();}catch(...){std::terminate();}}
 FrontendSession::Handle FrontendTitle::Current()const{impl_->Ready();return impl_->current;}
 FrontendTitleStatus FrontendTitle::Status()const{auto& s=*impl_;CheckTitle(s.thread==std::this_thread::get_id()&&s.session,"Title status requires its owner thread");auto out=s.state.status;out.failed=s.failed;return out;}
+bool FrontendTitle::AdmitOperations(const std::function<bool(FrontendTitleCommand,const FrontendSession::Handle&)>& command)
+{
+    auto& s=*impl_;s.Ready();
+    CheckTitle(s.options.deferred_services&&command&&!s.busy&&!s.stack_update&&!nlGetCurrentAsyncRead(),"Title service admission requires its idle deferred owner");
+    CheckTitle(s.current==s.session->Current(),"Title service admission lost its resource generation");
+    Busy guard(s.busy);
+    try
+    {
+        auto& status=s.state.status;const auto source=status.source?status.source:s.current;
+        while(status.admitted_operations<status.operations.size())
+        {
+            const auto operation=status.operations[status.admitted_operations];
+            switch(operation.kind)
+            {
+            case FrontendTitleOperationKind::Command:if(!command(operation.command,source))return false;break;
+            case FrontendTitleOperationKind::PlayCue:s.Play({operation.argument});break;
+            case FrontendTitleOperationKind::SelectMusic:CheckTitle(operation.argument==0,"Title stream index differs");s.music->BeginSelect(0,s.seed);break;
+            case FrontendTitleOperationKind::StopMusic:s.music->Stop();break;
+            }
+            ++status.admitted_operations;
+        }
+        return true;
+    }
+    catch(...){s.failed=true;throw;}
+}
 FrontendPointerBounds FrontendTitle::Bounds()const{impl_->Ready();CheckTitle(bool(impl_->region),"Title hit bounds require presented initialized frame");return impl_->region->Bounds();}
+std::vector<FrontendAudioHandle> FrontendTitle::TransferAudioOwnership()
+{
+    auto& s=*impl_;s.Ready();CheckTitle(s.options.deferred_services&&!s.busy&&!s.stack_update&&!nlGetCurrentAsyncRead(),"Title audio transfer requires its idle integrated owner");
+    auto result=std::move(s.sounds);s.sounds.clear();return result;
+}
 void FrontendTitle::Acknowledge(const FrontendSession::Handle& frame,FrontendPointerViewport viewport)
 {
     auto& s=*impl_;s.Expected(frame,true);
@@ -182,12 +221,12 @@ void FrontendTitle::ApplyPending()
     try
     {
         auto events=std::move(s.pending);s.pending={};s.pending.reserve(8);State next;std::vector<std::uint32_t> cues;
-        s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state,s.options.movement);step.value.status.commands.clear();
-            const auto play=[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));};
+        s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state,s.options.movement);if(!(s.options.deferred_services&&s.stack_update&&s.PendingOperations()))step.NewOperations();
+            const auto play=[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));step.AudioOperation(FrontendTitleOperationKind::PlayCue,std::uint32_t(cue));};
             for(const auto& e:events){CheckTitle(e.frame==shown,"Title pointer callback is stale");if(step.value.status.departure)break;
                 if(e.kind==FrontendPointerCallback::Enter)FrontendTitleEnter(step,int(e.index),play);
                 else if(e.kind==FrontendPointerCallback::Leave)FrontendTitleLeave(step,int(e.index));else s.Press(step,e.index,shown,play);}
-            next=step.Result();},[&]{s.Play(cues);});s.state=std::move(next);s.current=s.session->Current();
+            next=step.Result();},[&]{if(!s.options.deferred_services){s.Play(cues);next.status.admitted_operations=next.status.operations.size();}});s.state=std::move(next);s.current=s.session->Current();
     }
     catch(...){s.failed=true;throw;}
 }
@@ -201,7 +240,7 @@ FrontendPointerDispatch FrontendTitle::Route(const FrontendPointerDesktopSample&
 FrontendPointerDispatch FrontendTitle::Poll(SDL_Window* window,bool capture)
 {auto& s=*impl_;s.Expected(s.current);CheckTitle(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"Title poll requires acknowledged frame");if(!s.CanRoute())return {};try{auto event=s.host.Poll(s.host.Current(),window,capture);ApplyPending();return event;}catch(...){s.failed=true;throw;}}
 void FrontendTitle::AdvanceVisual(const FrontendSession::Handle& frame,float delta)
-{auto& s=*impl_;CheckTitle(!s.stack_attached,"Stack owns Title base update");s.Expected(frame);if(s.state.status.departure)return;AfterBaseUpdate(s.handler->UpdateOnce(frame,delta));}
+{auto& s=*impl_;CheckTitle(!s.stack_attached,"Stack owns Title base update");s.Expected(frame);if(s.state.status.departure||s.PendingOperations())return;AfterBaseUpdate(s.handler->UpdateOnce(frame,delta));}
 void FrontendTitle::AfterBaseUpdate(FrontendHandler::UpdateProof&& proof)
 {
     auto& s=*impl_;s.Mutable();const auto shown=s.input_source?s.input_source:s.current;const auto dt=proof.Delta();s.current=s.handler->ConsumeUpdate(std::move(proof),s.current);if(s.state.status.departure)return;
@@ -213,23 +252,23 @@ void FrontendTitle::AfterBaseUpdate(FrontendHandler::UpdateProof&& proof)
         // handler validates published snapshots and cannot query an uncommitted clone.
         s.input.Focus(s.handler.get());
         s.session->HandlerTransaction(s.current,[&](auto& playback){
-            Step step(playback,s.state,s.options.movement);step.value.status.commands.clear();
+            Step step(playback,s.state,s.options.movement);step.NewOperations();
             CheckTitle(std::isfinite(step.m_fTimeElapsed+dt),"Title clock overflow");
-            bool base_seen=false;const auto play=[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));};
+            bool base_seen=false;const auto play=[&](unsigned long cue,const char*,void*,bool){cues.push_back(std::uint32_t(cue));step.AudioOperation(FrontendTitleOperationKind::PlayCue,std::uint32_t(cue));};
             if(FrontendTitleBeginUpdate(step,dt,[&](float d){CheckTitle(!base_seen&&d==dt,"Title base proof differs");base_seen=true;},[&]{FrontendTitleBind(step);step.value.measured_bounds=MeasureFrontendPointerBounds(s.current,step.mControllerComponent.binding);},[&](int i,const char* name){step.Pointer(i,name);}))
             {
                 // Explicit retail desktop profile: soak/smoke are not enabled.
                 for(int pad=0;pad<4;++pad)
                 {
                     if(unsigned(pad)!=s.options.controller){step.Pointer(pad,"waiting");continue;}
-                    if(FrontendTitleIdle(step,[&]{stop_music=true;},[&](bool v){step.Command(FrontendTitleCommandKind::PointerEnabled,v);},[&]{step.Command(FrontendTitleCommandKind::IntroMovie,22);step.value.status.departure=FrontendTitleCommandKind::IntroMovie;step.value.status.source=shown;}))break;
+                    if(FrontendTitleIdle(step,[&]{stop_music=true;step.AudioOperation(FrontendTitleOperationKind::StopMusic);},[&](bool v){step.Command(FrontendTitleCommandKind::PointerEnabled,v);},[&]{step.Command(FrontendTitleCommandKind::IntroMovie,22);step.value.status.departure=FrontendTitleCommandKind::IntroMovie;step.value.status.source=shown;}))break;
                     FrontendTitlePadInput(step,pad,[&]{step.Pointer(pad,"A");},[&](int p,int action,bool remap,void* found){CheckTitle(remap&&!found,"Title FE query profile differs");return s.input.Button(static_cast<FrontendAction>(action),FrontendButtonQuery::Pressed,p);},[&](int p){s.Press(step,unsigned(p),shown,play);});
                     // Desktop backend class is -1, so the original Wii type2
                     // acceleration/unlock branch is not executed or synthesized.
                 }
             }
             CheckTitle(base_seen,"Title source skipped base update");next=step.Result();
-        },[&]{if(stop_music)s.music->Stop();s.Play(cues);});
+        },[&]{if(!s.options.deferred_services){if(stop_music)s.music->Stop();s.Play(cues);next.status.admitted_operations=next.status.operations.size();}});
         s.state=std::move(next);s.current=s.session->Current();
     }
     catch(...){s.failed=true;throw;}
@@ -243,7 +282,7 @@ bool FrontendTitle::CanUpdateStack() const
     CheckTitle(s.current&&s.current==s.session->Current(), "Title update requires exact source frame");
     // A typed departure has reached the selected owner boundary. The actual
     // coordinator must admit the VM/scene service before this owner advances.
-    return !s.state.status.departure.has_value();
+    return !s.state.status.departure.has_value()&&!s.PendingOperations();
 }
 void FrontendTitle::AttachStack(){auto& s=*impl_;s.Mutable();CheckTitle(!s.stack_attached,"Title already belongs to stack");s.stack_attached=true;}
 void FrontendTitle::UpdateStack(FrontendHandler::UpdateProof&& proof,const FrontendSession::Handle& shown,const std::function<void()>& input)

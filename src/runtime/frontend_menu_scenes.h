@@ -5,6 +5,8 @@
 #include "runtime/frontend_visual_navigation.h"
 #include "runtime/native_preferences.h"
 #include "runtime/frontend_credits.h"
+#include "runtime/frontend_title.h"
+#include "runtime/frontend_title_dimming.h"
 
 namespace mscharged
 {
@@ -25,6 +27,10 @@ struct FrontendMenuScenesStatus
     std::optional<FrontendMainSelection> main_selection;
     FrontendMenuTransitionStatus transition;
     std::optional<FrontendCreditsStatus> credits;
+    std::optional<FrontendTitleStatus> title;
+    std::optional<FrontendTransitionStatus> title_transition;
+    std::optional<FrontendTitleCommandKind> pending_title_service;
+    bool pending_main_music=false;
     bool pointer_enabled = true;
 };
 struct FrontendMenuCreditsServices
@@ -35,6 +41,13 @@ struct FrontendMenuCreditsServices
     FrontendMovieOptions movie_options;
     bool widescreen = false;
     unsigned video_mode = 0;
+};
+struct FrontendMenuTitleServices
+{
+    std::shared_ptr<FrontendMusic> music;
+    std::shared_ptr<FrontendTitleDimming> dimming;
+    unsigned controller=0;
+    bool widescreen=false;
 };
 // Actual Main/Options source actions, queue ownership and presentation barrier.
 // Input/NL, cameras, music/audio and preferences outlive this owner. The supplied
@@ -53,7 +66,8 @@ public:
         std::function<bool(unsigned)> stadium_effect, std::function<void()> drain,
         unsigned initial_scene = 1, FrontendLanguage = FrontendLanguage::English,
         AudioCategoryVolumes::Handle = {}, FrontendVisualSettings::Handle = {},
-        std::optional<FrontendMenuCreditsServices> = {});
+        std::optional<FrontendMenuCreditsServices> = {},
+        std::optional<FrontendMenuTitleServices> = {});
     ~FrontendMenuScenes();
     FrontendMenuScenes(const FrontendMenuScenes&) = delete;
     FrontendMenuScenes& operator=(const FrontendMenuScenes&) = delete;

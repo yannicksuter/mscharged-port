@@ -13,11 +13,21 @@ enum class FrontendTitleCommandKind
     ResetNavigation, PopScene, TransitionTitleToMain, IntroMovie
 };
 struct FrontendTitleCommand { FrontendTitleCommandKind kind; unsigned argument=0; };
+enum class FrontendTitleOperationKind { Command, PlayCue, SelectMusic, StopMusic };
+struct FrontendTitleOperation
+{
+    FrontendTitleOperationKind kind;
+    FrontendTitleCommand command{FrontendTitleCommandKind::ResetNavigation};
+    unsigned argument=0;
+};
 struct FrontendTitleOptions
 {
     unsigned controller=0, movement=0;
     bool widescreen=false;
     FrontendTitleDevice device=FrontendTitleDevice::DesktopWithoutWiiServices;
+    // Integrated hosts admit audio and external requests in source order.
+    // The standalone owner retains its existing immediate real audio path.
+    bool deferred_services=false;
 };
 struct FrontendTitleStatus
 {
@@ -27,6 +37,8 @@ struct FrontendTitleStatus
     std::array<int,4> pointer_states{};
     // Ordered requests from the latest source step, not host-service readiness.
     std::vector<FrontendTitleCommand> commands;
+    std::vector<FrontendTitleOperation> operations;
+    std::size_t admitted_operations=0;
     std::optional<FrontendTitleCommandKind> departure;
     FrontendSession::Handle source;
     // This selected desktop profile has no Wii motion/battery/banner provider.
@@ -60,6 +72,14 @@ public:
     FrontendTitle& operator=(const FrontendTitle&)=delete;
     FrontendSession::Handle Current() const override;
     FrontendTitleStatus Status() const;
+    // False leaves this exact operation pending. Already admitted operations
+    // are never replayed; the host must not apply side effects while returning
+    // false. Audio operations are real retained music/cue services in this owner.
+    bool AdmitOperations(const std::function<bool(FrontendTitleCommand,const FrontendSession::Handle&)>&);
+    // Original FE audio belongs to its persistent manager. A coordinator keeps
+    // these admitted handles across the source Pop and releases them at its
+    // own teardown; ordinary standalone Release still cancels owned handles.
+    std::vector<FrontendAudioHandle> TransferAudioOwnership();
     FrontendPointerBounds Bounds() const;
     void Acknowledge(const FrontendSession::Handle&,FrontendPointerViewport);
     void DeliverPointer(const FrontendSession::Handle&,const FrontendPointerEvent&);
