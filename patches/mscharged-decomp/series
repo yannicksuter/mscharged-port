@@ -140,3 +140,4 @@
 0155-record-native-original-allocation-ownership.patch
 0154-original-thp-data-abi.patch
 0159-original-frontend-input-pointer-audio.patch
+0156-original-localization-data-abi.patch
