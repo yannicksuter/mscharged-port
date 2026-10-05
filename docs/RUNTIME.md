@@ -133,6 +133,9 @@ mouse/Enter hover and selection, sound effects and streamed music. This is an
 unfinished menu diagnostic: selected actions report their pending services;
 saves, scene transitions and the full game startup are still being implemented.
 
+Use `--experimental-scene --frontend-options` for the original Options screen,
+button feedback, intro/outro and music. Back navigation and submenus are in progress.
+
 For a stored image/text layout, use
 `--frontend-frame /Art/fe/game_summary.fen --frontend-slide Slide1 --frontend-images ingame`
 instead. This loads the original in-game image bundles and renders supported

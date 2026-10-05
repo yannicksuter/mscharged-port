@@ -29,6 +29,7 @@ struct SceneOptions
     bool frontend_animate = false; // Checked authored timeline; no scene handlers or menu transitions.
     bool frontend_boot = false; // Retail boot handler through its qualified service boundary.
     bool frontend_main = false; // Original Main visual/pointer/sound kernels; external menu services pending.
+    bool frontend_options = false; // Original Options controls and intro/outro; navigation/submenus pending.
     bool character_shock = false; // Authored Bowser shock mesh and FE bone animation diagnostic.
     bool particles = false; // Qualified authored controller groups; no complete effects manager.
     bool debug_camera = false; // Original DebugCam with diagnostic desktop controls.
