@@ -61,6 +61,8 @@ add_library(charged_views STATIC
     "${MSCHARGED_PREPARED}/src/NL/gl/glViewMath.cpp"
     src/runtime/views.cpp src/runtime/targets.cpp)
 add_dependencies(charged_views verify_prepared)
+# Preview lifetime/state checks belong only to this legacy graph.
+target_compile_definitions(charged_views PUBLIC MSCHARGED_DIAGNOSTIC_VIEWS=1)
 target_include_directories(charged_views PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 target_link_libraries(charged_views PUBLIC charged_materials PRIVATE aurora::gx)
 target_compile_features(charged_views PUBLIC cxx_std_20)

@@ -30,6 +30,10 @@ target_include_directories(charged_graphics_memory PUBLIC src
 target_compile_features(charged_graphics_memory PRIVATE cxx_std_17)
 set_target_properties(charged_graphics_memory PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 target_compile_definitions(charged_graphics_memory PRIVATE TARGET_PC=1)
+# Every legacy graphics consumer must see the same diagnostic GLView layout,
+# including material units below the view library in the dependency graph.
+# Original source object targets use their independent, unextended view ABI.
+target_compile_definitions(charged_graphics_memory PUBLIC MSCHARGED_DIAGNOSTIC_VIEWS=1)
 target_link_libraries(charged_graphics_memory PUBLIC charged_decomp_startup aurora::mtx)
 # Charged's selected mtx44.c owns the projection entry points. Aurora's mtx.c
 # also contains them alongside the 3x4 skin operations now needed by the port.
