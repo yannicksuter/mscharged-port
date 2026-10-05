@@ -44,7 +44,8 @@ class FrontendSession
     struct Implementation;
     std::unique_ptr<Implementation> impl_;
     friend class FrontendBootLoading;
-    void BootTransaction(const std::shared_ptr<const FrontendSessionFrame>&,
+    friend class FrontendMainMenu;
+    void HandlerTransaction(const std::shared_ptr<const FrontendSessionFrame>&,
         const std::function<void(resources::FrontendAnimationPlayback&)>&,
         const std::function<void()>& before_publish = {});
 public:
