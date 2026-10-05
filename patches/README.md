@@ -19,6 +19,11 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0140 selects the existing float-UV text writer and scissored GX material.
+Native frontend packets now retain the authored clipping rectangle; original
+visibility and Credits scrolling logic are unchanged. Clipping, mixed draw
+order and scissor restoration are checked with actual Vulkan pixels.
+
 Patch 0132 shares the original weighted-skin influence gathering and retains
 authored seven-stream Specular resources. Weights retain their original bits
 and order; decoding alone does not install an NPC, pose or draw a character.

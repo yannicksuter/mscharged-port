@@ -1,7 +1,8 @@
 include_guard(GLOBAL)
 # Original short-UV, vertex-colour mesh writer shared by particles and fonts.
 add_library(charged_colour_mesh STATIC
-    "${MSCHARGED_PREPARED}/src/Game/GL/GLTexturedColourMeshWriter.cpp")
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLTexturedColourMeshWriter.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp")
 add_dependencies(charged_colour_mesh verify_prepared)
 target_link_libraries(charged_colour_mesh PUBLIC charged_shadows)
 target_compile_features(charged_colour_mesh PUBLIC cxx_std_20)

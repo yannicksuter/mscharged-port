@@ -19,12 +19,13 @@ add_library(charged_materials STATIC
     "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgramRender.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialProgram.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialAlphaState.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialParameterArray.cpp"
     "${MSCHARGED_PREPARED}/src/Game/GameObjectLightingCore.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Render/LightingLookupNative.cpp"
     src/runtime/materials.cpp src/runtime/material_gx.cpp src/runtime/material_texture.cpp
     src/runtime/gpu_readback.cpp src/runtime/lighting.cpp src/runtime/skin_material.cpp
     "${MSCHARGED_PREPARED}/src/NL/glx/glxSkinMatrix.cpp")
-foreach(program UnlitTexture VertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend ScrollingSpecular CameraScrolledOverlay MaskedDetailBlend ScrollingMaskedDetailBlend ScrollingCameraOverlay CharacterSkinCustom FloatTexturedColour ConstantColour)
+foreach(program UnlitTexture VertexColourTexture ScissoredVertexColourTexture ScrollingDiffuse MaskedSpecularFresnel ShadowVolume SpecularDetailBlend ScrollingSpecular CameraScrolledOverlay MaskedDetailBlend ScrollingMaskedDetailBlend ScrollingCameraOverlay CharacterSkinCustom FloatTexturedColour ConstantColour)
     target_sources(charged_materials PRIVATE
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgram.cpp"
         "${MSCHARGED_PREPARED}/src/NL/glx/GX${program}MaterialProgramRender.cpp")
