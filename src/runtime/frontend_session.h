@@ -46,6 +46,7 @@ class FrontendSession
     friend class FrontendBootLoading;
     friend class FrontendMainMenu;
     friend class FrontendOptions;
+    friend class FrontendNavigation;
     void HandlerTransaction(const std::shared_ptr<const FrontendSessionFrame>&,
         const std::function<void(resources::FrontendAnimationPlayback&)>&,
         const std::function<void()>& before_publish = {});
