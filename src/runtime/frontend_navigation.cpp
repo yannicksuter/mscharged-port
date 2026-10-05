@@ -4,6 +4,7 @@
 #include "Game/FE/FrontendNavigationSteps.h"
 #include "Game/FE/FrontendNavigationTransitionSteps.h"
 #include "Game/FE/FrontendMainMenuSteps.h"
+#include "Game/FE/FrontendDoneButtonSteps.h"
 #include "NL/nlFileGC.h"
 #include "NL/nlMath.h"
 #include <algorithm>
@@ -206,6 +207,45 @@ void FrontendNavigation::SetButtons(const FrontendSession::Handle& frame,unsigne
 {
     auto& s=*impl_;s.Expected(frame);CheckNav(mask<=255,"NAV mask exceeds eight original buttons");State next;
     s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state);FrontendNavigationSetButtons<Step::Node,Step::Node,Step::Finder>(step,int(mask),enabled);next=step.Result();});s.state=std::move(next);s.current=s.session->Current();
+}
+void FrontendNavigation::SetDoneButtonText(const FrontendSession::Handle& frame,unsigned value)
+{
+    auto& s=*impl_;s.Expected(frame);CheckNav(value<=1,"NAV Done label is unsupported");
+    s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state);
+        CheckNav(step.mDoneButton->root.id&&step.mDoneButton->Value().type==4,"NAV Done component is absent");
+        for(const char* slide:{"off","over","down"})
+        {auto* text=Step::Finder<Step::Node,3>::Find(step.mDoneButton,slide,"Group","done");CheckNav(text&&text->root.id&&text->Value().type==3,"NAV Done label is absent or mistyped");}
+        step.SetDoneButtonText(int(value));});s.current=s.session->Current();
+}
+void FrontendNavigation::SetDoneButtonSlide(const FrontendSession::Handle& frame,FrontendNavigationDoneSlide value)
+{
+    auto& s=*impl_;s.Expected(frame);
+    CheckNav(value==FrontendNavigationDoneSlide::Off||value==FrontendNavigationDoneSlide::Over||value==FrontendNavigationDoneSlide::Down,"NAV Done slide is unsupported");
+    const char* name=value==FrontendNavigationDoneSlide::Off?"off":value==FrontendNavigationDoneSlide::Over?"over":"down";
+    s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state);
+        const auto& node=step.mDoneButton->Value();CheckNav(step.mDoneButton->root.id&&node.type==4&&node.library,"NAV Done component is absent or mistyped");
+        CheckNav(playback.SelectComponent(*node.library,name,true,false),"NAV Done feedback slide is absent");});s.current=s.session->Current();
+}
+void FrontendNavigation::CheckDoneInput(const FrontendSession::Handle& frame)const
+{
+    auto& s=*impl_;s.Ready();CheckNav(!s.busy&&frame&&s.input_source==frame&&s.host.Current()&&s.host.Current()->Frame()==frame,
+        "Done routing requires NAV's exact presented-input window");
+}
+FrontendNavigationDoneBinding FrontendNavigation::DoneButton(const FrontendSession::Handle& frame)const
+{
+    auto& s=*impl_;s.Ready();
+    CheckNav(frame&&s.host.Current()&&s.host.Current()->Frame()==frame,"NAV Done binding requires its actual acknowledged frame");
+    const auto component=s.state.buttons[5];
+    const auto it=std::find_if(frame->graph.instances.begin(),frame->graph.instances.end(),[&](const auto& n){return n.offset==component;});
+    CheckNav(component&&it!=frame->graph.instances.end()&&it->type==4&&it->library,"NAV Done binding has no authored component");
+    struct Bounds
+    {
+        FrontendPointerBounds value;
+        void SetBounds(float x0,float x1,float y1,float y0){value.min_x=x0;value.max_x=x1;value.max_y=y1;value.min_y=y0;}
+    } bounds;
+    const auto library=std::find_if(frame->graph.library.begin(),frame->graph.library.end(),[&](const auto& n){return n.offset==*it->library;});
+    CheckNav(library!=frame->graph.library.end()&&library->type==3,"NAV Done component library is absent");
+    FrontendDoneButtonBounds(&bounds,0);return{frame,component,bounds.value,it->visible&&library->attributes.visible};
 }
 void FrontendNavigation::SetPointerSlide(const FrontendSession::Handle& frame,unsigned index,FrontendNavigationPointer value)
 {

@@ -115,7 +115,7 @@ struct Step
     {Check(value.status.commands.size()<32,"Audio options command budget exceeded");value.status.commands.push_back({kind,argument});}
     struct Navigation
     {
-        Step& s;void SetButtons(unsigned mask,bool enabled){Check(enabled&&(mask==0||mask==0x24),"Audio options NAV request is unsupported");s.Command(mask?FrontendAudioOptionsCommandKind::ShowBackAndDone:FrontendAudioOptionsCommandKind::HideNavigation,mask);}
+        Step& s;void SetButtons(unsigned mask,bool enabled){Check(enabled&&(mask==0||mask==0x24),"Audio options NAV request is unsupported");s.Command(mask?FrontendAudioOptionsCommandKind::ShowBackAndDone:FrontendAudioOptionsCommandKind::ResetNavigation,mask);}
         void SetDoneButtonText(int value){Check(value==1,"Audio options done label request is unsupported");s.Command(FrontendAudioOptionsCommandKind::DoneText,1);}
     } navigation{*this};
     struct SaveButton

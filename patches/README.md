@@ -70,6 +70,12 @@ task; the complete game task loop remains pending. Matching Wii code and a
 strictly applicable patch series do not establish a complete native game;
 see [the entry and runtime scope](../docs/RUNTIME.md#experimental-original-startup).
 
+Patch 0118 shares the original Audio/Visual Done hover callbacks and fixed
+button bounds. Native submenu input uses the retained NAV components and
+explicit host preference persistence; full Wii save and haptic services remain
+separate work.
+
+
 | Patch | Reason | Current validation |
 | --- | --- | --- |
 | `0001-use-standard-fabs-in-nlMath-header.patch` | The shared math header uses CodeWarrior's undeclared `__fabs`; native Clang rejects `nlRandom.cpp`. Use the standard float overload. | Native compilation; finite, signed-zero, infinity, and NaN checks. |

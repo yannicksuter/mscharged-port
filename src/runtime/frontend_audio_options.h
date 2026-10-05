@@ -6,7 +6,7 @@
 #include "runtime/frontend_pointer_host.h"
 namespace mscharged
 {
-enum class FrontendAudioOptionsCommandKind { HideNavigation,BindBack,BindDone,PointerWaiting,PointerCursor,ShowBackAndDone,DoneText,PushOptions,HoverRumble,DoneDown };
+enum class FrontendAudioOptionsCommandKind { HideNavigation,BindBack,BindDone,PointerWaiting,PointerCursor,ShowBackAndDone,DoneText,PushOptions,HoverRumble,DoneDown,ResetNavigation };
 struct FrontendAudioOptionsCommand {FrontendAudioOptionsCommandKind kind;unsigned argument=0;};
 struct FrontendAudioOptionsStatus
 {
