@@ -96,18 +96,18 @@ struct FrontendCredits::Implementation
 {
     std::shared_ptr<FrontendSession> session;FrontendInput& input;std::shared_ptr<FrontendAudio> audio;
     unsigned& seed;Services services;bool wide;unsigned video;
-    std::unique_ptr<FrontendHandler> handler;Frame current;FrontendCreditsStatus state;
+    std::shared_ptr<FrontendHandler> handler;Frame current;FrontendCreditsStatus state;
     std::vector<FrontendAudioHandle> sounds;const std::thread::id thread=std::this_thread::get_id();
-    bool busy=false,restoration_needed=false;
+    bool busy=false,restoration_needed=false,stack_attached=false,stack_update=false,input_window=false;Frame input_source;
     Implementation(std::shared_ptr<FrontendSession> s,FrontendInput& i,std::shared_ptr<FrontendAudio> a,unsigned& rng,Services f,bool w,unsigned v)
         :session(std::move(s)),input(i),audio(std::move(a)),seed(rng),services(std::move(f)),wide(w),video(v)
     {
         Check(session&&audio&&audio->Loaded()&&services&&video<=2,"Credits requires retained scene/audio and explicit host services");
         current=session->Current();Check(current&&current->request.animate&&current->request.image_profile==FrontendImageProfile::Main,"Credits requires animated Main resources");
-        handler=std::make_unique<FrontendHandler>(session,input);
+
     }
     void Ready()const{Check(thread==std::this_thread::get_id()&&session&&!state.failed&&!busy&&!nlGetCurrentAsyncRead(),"Credits requires its idle live owner thread");}
-    void Expected(const Frame& frame)const{Ready();Check(frame&&frame==current&&frame==session->Current(),"Credits requires its exact retained current frame");}
+    void Expected(const Frame& frame)const{Ready();Check((!stack_attached||stack_update)&&frame&&frame==current&&frame==session->Current(),"Credits requires its controlled exact retained current frame");}
     void Service(FrontendCreditsCommand command)
     {
         services(command);Check(session->Current()==current,"Credits service changed the session during publication");
@@ -136,15 +136,19 @@ struct FrontendCredits::Implementation
         {
             const auto live=audio->Handles();for(auto h:sounds)if(std::find(live.begin(),live.end(),h)!=live.end())attempt([&]{audio->Cancel(h);});
         }
-        sounds.clear();if(handler)attempt([&]{handler->Release();});handler.reset();current.reset();session.reset();audio.reset();services={};
+        sounds.clear();if(handler&&handler.use_count()==1)attempt([&]{handler->Release();});handler.reset();current.reset();session.reset();audio.reset();services={};
         if(error)std::rethrow_exception(error);
     }
 };
 FrontendCredits::FrontendCredits(std::shared_ptr<FrontendSession> s,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,
     unsigned& seed,Services services,bool wide,unsigned video)
+    :FrontendCredits(std::move(s),input,std::move(audio),seed,std::move(services),{},wide,video){}
+FrontendCredits::FrontendCredits(std::shared_ptr<FrontendSession> s,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,
+    unsigned& seed,Services services,std::shared_ptr<FrontendHandler> base,bool wide,unsigned video)
     :impl_(std::make_unique<Implementation>(std::move(s),input,std::move(audio),seed,std::move(services),wide,video))
 {
-    auto& owner=*impl_;Guard guard(owner.busy);
+    auto& owner=*impl_;Check(!base||base->Binds(owner.session),"Credits shared handler belongs to another session");
+    owner.handler=base?std::move(base):std::make_shared<FrontendHandler>(owner.session,input);Guard guard(owner.busy);
     try
     {
         owner.restoration_needed=true;owner.Service({FrontendCreditsCommandKind::PointerEnabled,0});
@@ -160,21 +164,52 @@ FrontendCreditsStatus FrontendCredits::Status()const
 {auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&s.session,"Credits status requires live owner thread");return s.state;}
 void FrontendCredits::Update(const Frame& expected,float delta)
 {
-    auto& s=*impl_;s.Expected(expected);Check(std::isfinite(delta)&&delta>=0&&delta<=60,"Credits delta exceeds original bounded profile");
+    auto& s=*impl_;Check(!s.stack_attached,"Stack owns the only Credits base update");s.Expected(expected);Check(std::isfinite(delta)&&delta>=0&&delta<=60,"Credits delta exceeds original bounded profile");
     Check(s.state.boundary==FrontendCreditsBoundary::None,"Credits requires actual THP presentation/audio completion; decoded EOF is not movie completion");
-    Guard guard(s.busy);
+    AfterBaseUpdate(s.handler->UpdateOnce(expected,delta));
+}
+void FrontendCredits::AfterBaseUpdate(FrontendHandler::UpdateProof&& proof)
+{
+    auto& s=*impl_;s.Ready();Check(!s.stack_attached||s.stack_update,"Credits proof requires its controlled stack update");
+    const float delta=proof.Delta();s.current=s.handler->ConsumeUpdate(std::move(proof),s.current);Guard guard(s.busy);
     try
     {
-        // Original CreditScene::Update phase0 executes exactly one BaseUpdate.
-        s.handler->Update(s.current,delta);s.current=s.session->Current();FrontendCreditsStatus next;std::vector<Effect> effects;
+        FrontendCreditsStatus next;std::vector<Effect> effects;
         s.session->HandlerTransaction(s.current,[&](auto& playback){Step step(playback,s.state,s.wide,s.video);FrontendCreditsUpdateNintendoLogo(step,delta);next=std::move(step.value);effects=std::move(step.effects);},[&]{s.Effects(effects);});
         s.state=std::move(next);s.current=s.session->Current();
     }
     catch(...){s.state.failed=true;throw;}
 }
+bool FrontendCredits::Button(const Frame& expected,FrontendAction action,FrontendButtonQuery query,int pad)
+{
+    auto& s=*impl_;s.Expected(s.current);
+    Check(expected&&expected==(s.input_window?s.input_source:s.current)&&(!s.stack_attached||s.input_window),
+        "Credits button query requires its exact presented input window");
+    return s.handler->Button(s.current,action,query,pad);
+}
+std::shared_ptr<FrontendSession> FrontendCredits::StackSession()const{impl_->Ready();return impl_->session;}
+std::shared_ptr<FrontendHandler> FrontendCredits::StackHandler()const{impl_->Ready();return impl_->handler;}
+unsigned FrontendCredits::StackScene()const{return 23;}
+bool FrontendCredits::CanUpdateStack()const
+{
+    auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update,"Credits pre-base admission requires its idle stack");
+    // CreditScene itself has no early lock return. Only a missing real movie
+    // provider stops this selected scope before additional base updates.
+    return s.state.boundary==FrontendCreditsBoundary::None;
+}
+void FrontendCredits::AttachStack(){auto& s=*impl_;s.Expected(s.current);Check(!s.stack_attached,"Credits already belongs to a stack");s.stack_attached=true;}
+void FrontendCredits::UpdateStack(FrontendHandler::UpdateProof&& proof,const Frame& presented,const std::function<void()>& input)
+{
+    auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update&&presented&&presented==s.current&&proof.Before()==presented&&proof.After()==s.session->Current(),"Credits stack proof/presentation differs");
+    s.stack_update=true;s.input_source=presented;
+    struct Reset{Implementation& s;~Reset(){s.input_window=false;s.input_source.reset();s.stack_update=false;}}reset{s};
+    try{AfterBaseUpdate(std::move(proof));s.input_window=true;if(input)input();Check(s.current==s.session->Current(),"Stack input mutated outside its selected Credits owner");}
+    catch(...){s.state.failed=true;throw;}
+}
+void FrontendCredits::ReleaseStack(){auto& s=*impl_;Check(!s.stack_update&&!s.busy,"Cannot remove an active Credits update");s.stack_attached=false;Release();}
 void FrontendCredits::Release()
 {
     auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"Credits teardown requires its idle owner thread");
-    if(!s.session)return;Guard guard(s.busy);s.Cleanup();
+    if(!s.session)return;Check(!s.stack_attached&&!s.stack_update,"Stack owns Credits teardown");Guard guard(s.busy);s.Cleanup();
 }
 }
