@@ -1,4 +1,8 @@
 include(cmake/NativeRuntime.cmake)
+include(cmake/GamePrint.cmake)
+include(cmake/OriginalBundles.cmake)
+include(cmake/OriginalFonts.cmake)
+include(cmake/OriginalFrontend.cmake)
 include(cmake/EffectsVertexRendering.cmake)
 include(cmake/FrameTiming.cmake)
 include(cmake/AnimatedCamera.cmake)
