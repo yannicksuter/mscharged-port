@@ -148,10 +148,11 @@ struct FrontendVisualOptions::Implementation
     std::shared_ptr<FrontendSession> session;FrontendInput& input;std::shared_ptr<FrontendAudio> audio;FrontendVisualSettings::Handle settings;
     unsigned& seed;unsigned controller;const std::thread::id thread=std::this_thread::get_id();
     FrontendVisualSettingsSnapshot expected;
-    FrontendSession::Handle current;State state;FrontendPointerHost host;std::unique_ptr<FrontendHandler> handler;
+    FrontendSession::Handle current;State state;FrontendPointerHost host;std::shared_ptr<FrontendHandler> handler;
     std::array<std::shared_ptr<FrontendPointerRegion>,7> regions{};std::vector<Pending> pending;std::vector<FrontendAudioHandle> sounds;
     std::shared_ptr<NativePreferences> save;
-    bool busy=false,failed=false;
+    bool busy=false,failed=false,stack_attached=false,stack_update=false,input_window=false;
+    FrontendSession::Handle input_source;
     Implementation(std::shared_ptr<FrontendSession> s,FrontendInput& i,std::shared_ptr<FrontendAudio> a,FrontendVisualSettings::Handle v,unsigned& rng,unsigned c)
         :session(std::move(s)),input(i),audio(std::move(a)),settings(std::move(v)),seed(rng),controller(c),expected(settings?settings->Snapshot():FrontendVisualSettingsSnapshot{false,0,0}),host(i,c)
     {
@@ -161,8 +162,19 @@ struct FrontendVisualOptions::Implementation
         Check(it!=current->graph.slides.end()&&it->name=="OPTIONS_IN","Visual options require the authored OPTIONS_IN presentation");pending.reserve(32);
     }
     void Ready()const{Check(thread==std::this_thread::get_id()&&session&&!failed,"Visual options require their live nonfailed owning thread");}
-    void Expected(const FrontendSession::Handle& f)const{Ready();Check(!busy&&!nlGetCurrentAsyncRead()&&f&&f==current&&f==session->Current(),"Visual options require their exact idle current frame");Check(settings->Snapshot()==expected,"Visual options settings changed outside this owner");}
+    void Mutable()const{Ready();Check(!busy&&!nlGetCurrentAsyncRead()&&(!stack_attached||stack_update),"Visual options mutation requires its idle owner or controlled stack update");}
+    void Expected(const FrontendSession::Handle& f,bool acknowledge=false)const
+    {
+        if(acknowledge){Ready();Check(!busy&&!stack_update&&!nlGetCurrentAsyncRead(),"Cannot acknowledge Visual options during update");}
+        else Mutable();
+        Check(f&&f==current&&f==session->Current(),"Visual options require their exact current frame");
+        Check(settings->Snapshot()==expected,"Visual options settings changed outside this owner");
+    }
+    FrontendSession::Handle Presented()const{return input_window?input_source:current;}
+    void InputExpected(const FrontendSession::Handle& frame)const
+    {Expected(current);Check(frame&&frame==Presented(),"Visual input requires its last acknowledged stack frame");}
     bool Interactive()const{return state.status.state==1&&state.status.initialized&&!input.InputLocked();}
+    bool RegionsPresented()const{return std::all_of(regions.begin(),regions.end(),[&](const auto& region){return region&&region->Current()==Presented();});}
     void Queue(FrontendPointerCallback kind,unsigned item,unsigned index,const FrontendSession::Handle& f)
     {if(kind==FrontendPointerCallback::Enter||kind==FrontendPointerCallback::Leave||kind==FrontendPointerCallback::Press){Check(pending.size()<32,"Visual options pointer budget exceeded");pending.push_back({kind,item,index,f});}}
     void Play(std::uint32_t cue)
@@ -181,9 +193,11 @@ struct FrontendVisualOptions::Implementation
     }
 };
 FrontendVisualOptions::FrontendVisualOptions(std::shared_ptr<FrontendSession> session,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,FrontendVisualSettings::Handle settings,unsigned& seed,unsigned controller)
+    :FrontendVisualOptions(std::move(session),input,std::move(audio),std::move(settings),seed,{},controller){}
+FrontendVisualOptions::FrontendVisualOptions(std::shared_ptr<FrontendSession> session,FrontendInput& input,std::shared_ptr<FrontendAudio> audio,FrontendVisualSettings::Handle settings,unsigned& seed,std::shared_ptr<FrontendHandler> base,unsigned controller)
     :impl_(std::make_unique<Implementation>(std::move(session),input,std::move(audio),std::move(settings),seed,controller))
 {
-    auto& s=*impl_;s.handler=std::make_unique<FrontendHandler>(s.session,input);State next;
+    auto& s=*impl_;Check(!base||base->Binds(s.session),"Visual options shared handler belongs to another session");s.handler=base?std::move(base):std::make_shared<FrontendHandler>(s.session,input);State next;
     s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);
         struct Visual{bool mIsAutoZoomCamera;float mCameraZoomLevel;}values{s.expected.auto_zoom,s.expected.zoom};FrontendVisualOptionsInitialize(step,values);
         step.Command(FrontendVisualOptionsCommandKind::HideNavigation);step.Command(FrontendVisualOptionsCommandKind::BindBack,4);step.Command(FrontendVisualOptionsCommandKind::BindDone,0x20);
@@ -196,10 +210,15 @@ FrontendVisualOptionsStatus FrontendVisualOptions::Status()const
 {auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&s.session,"Visual options status requires its owning thread");auto result=s.state.status;result.failed=s.failed;return result;}
 void FrontendVisualOptions::AdvanceVisual(const FrontendSession::Handle& frame,float delta)
 {
-    auto& s=*impl_;s.Expected(frame);if(s.input.InputLocked())return;Check(s.pending.empty(),"Visual options pointer events are pending");
+    auto& s=*impl_;Check(!s.stack_attached,"Stack owns the only Visual options base update");s.Expected(frame);if(s.input.InputLocked())return;Check(s.pending.empty(),"Visual options pointer events are pending");
+    AfterBaseUpdate(s.handler->UpdateOnce(frame,delta));
+}
+void FrontendVisualOptions::AfterBaseUpdate(FrontendHandler::UpdateProof&& proof)
+{
+    auto& s=*impl_;s.Mutable();s.current=s.handler->ConsumeUpdate(std::move(proof),s.current);
     try
     {
-        s.handler->Update(frame,delta);s.current=s.session->Current();State next;
+        State next;
         s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();
             const bool ready=FrontendVisualOptionsGate(step,[&]{return &step.navigation;},[&](int i){step.Command(FrontendVisualOptionsCommandKind::PointerWaiting,i);},[&](int id){Check(id==13,"Visual options transition scene differs");step.Command(FrontendVisualOptionsCommandKind::PushOptions,id);},[](int){throw UnsupportedResource("Overlay visual options are unavailable");});
             if(ready){if(!step.value.status.initialized){FrontendVisualOptionsBind<Step::Instance,Position,Step::Finder>(step);step.value.status.initialized=true;}for(unsigned i=0;i<4;++i)step.Command(i==s.controller?FrontendVisualOptionsCommandKind::PointerCursor:FrontendVisualOptionsCommandKind::PointerWaiting,i);}
@@ -208,7 +227,7 @@ void FrontendVisualOptions::AdvanceVisual(const FrontendSession::Handle& frame,f
 }
 void FrontendVisualOptions::Acknowledge(const FrontendSession::Handle& frame,FrontendPointerViewport viewport)
 {
-    auto& s=*impl_;s.Expected(frame);
+    auto& s=*impl_;s.Expected(frame,true);
     try
     {
         if(s.state.status.initialized)
@@ -220,7 +239,7 @@ std::array<FrontendPointerBounds,7> FrontendVisualOptions::Bounds()const
 {impl_->Ready();std::array<FrontendPointerBounds,7> out;for(unsigned i=0;i<7;++i){Check(bool(impl_->regions[i]),"Visual options bounds await presentation");out[i]=impl_->regions[i]->Bounds();}return out;}
 void FrontendVisualOptions::ApplyPending()
 {
-    auto& s=*impl_;s.Expected(s.current);if(s.pending.empty())return;Busy guard(s.busy);
+    auto& s=*impl_;s.Expected(s.current);if(s.pending.empty())return;const auto presented=s.Presented();Busy guard(s.busy);
     try
     {
         auto events=std::move(s.pending);s.pending.clear();s.pending.reserve(32);State next;std::vector<Effect> effects;
@@ -228,7 +247,7 @@ void FrontendVisualOptions::ApplyPending()
             auto play=[&](unsigned long cue,const void* a,void* b,bool restart){Check(cue<=UINT32_MAX&&!a&&!b&&restart,"Visual options cue contract differs");effects.push_back({EffectKind::Cue,std::uint32_t(cue)});};
             for(const auto& event:events)
             {
-                Check(event.frame==s.current&&event.item<7&&event.index<4,"Visual options event is stale or invalid");if(step.mState!=1)break;
+                Check(event.frame==presented&&event.item<7&&event.index<4,"Visual options event is stale or invalid");if(step.mState!=1)break;
                 if(event.item<5)
                 {
                     if(event.kind==FrontendPointerCallback::Enter)FrontendVisualOptionsLevelEnter(step,event.index,event.item,play);
@@ -248,38 +267,60 @@ void FrontendVisualOptions::ApplyPending()
 }
 void FrontendVisualOptions::DeliverPointer(const FrontendSession::Handle& frame,const FrontendPointerEvent& event)
 {
-    auto& s=*impl_;s.Expected(frame);Check(s.host.Current()&&s.host.Current()->Frame()==frame&&event.index<4,"Visual options input requires actual presentation");if(!s.Interactive())return;
+    auto& s=*impl_;s.InputExpected(frame);Check(s.host.Current()&&s.host.Current()->Frame()==frame&&event.index<4,"Visual options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return;
     try{for(auto& region:s.regions)region->Deliver(frame,event);ApplyPending();}catch(...){s.failed=true;throw;}
 }
 FrontendPointerDispatch FrontendVisualOptions::Route(const FrontendPointerDesktopSample& sample)
-{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.current,"Visual options input requires actual presentation");if(!s.Interactive())return{};try{auto out=s.host.Route(s.host.Current(),sample);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
+{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"Visual options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return{};try{auto out=s.host.Route(s.host.Current(),sample);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
 FrontendPointerDispatch FrontendVisualOptions::Poll(SDL_Window* window,bool capture)
-{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.current,"Visual options input requires actual presentation");if(!s.Interactive())return{};try{auto out=s.host.Poll(s.host.Current(),window,capture);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
+{auto& s=*impl_;s.Expected(s.current);Check(s.host.Current()&&s.host.Current()->Frame()==s.Presented(),"Visual options input requires actual presentation");if(!s.Interactive()||!s.RegionsPresented())return{};try{auto out=s.host.Poll(s.host.Current(),window,capture);ApplyPending();return out;}catch(...){s.failed=true;throw;}}
 void FrontendVisualOptions::NotifyBackButton(const FrontendSession::Handle& frame)
 {
-    auto& s=*impl_;s.Expected(frame);Check(s.Interactive(),"Visual options back requires interactive source state");Busy guard(s.busy);State next;std::vector<Effect> effects;
-    try{s.session->HandlerTransaction(frame,[&](auto& p){Step step(p,*frame->visuals->localization,s.state);step.value.status.commands.clear();VisualProxy visual{effects,effects};
+    auto& s=*impl_;s.InputExpected(frame);Check(s.Interactive()&&s.RegionsPresented()&&s.host.Current()&&s.host.Current()->Frame()==frame,"Visual options back requires its genuinely presented interactive frame");Busy guard(s.busy);State next;std::vector<Effect> effects;
+    try{s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();VisualProxy visual{effects,effects};
         FrontendVisualOptionsBack(step,[&]() -> VisualProxy& {return visual;},[&](unsigned long cue,const void* a,void* b,bool restart){Check(cue<=UINT32_MAX&&!a&&!b&&restart,"Visual options back cue contract differs");effects.push_back({EffectKind::Cue,std::uint32_t(cue)});},[&]{return &step.navigation;});next=step.Result();
         },[&]{s.Effects(effects);});s.state=std::move(next);s.current=s.session->Current();}
     catch(...){s.failed=true;throw;}
 }
 void FrontendVisualOptions::Save(const FrontendSession::Handle& frame)
-{impl_->Expected(frame);throw UnsupportedResource("Original visual options SaveLoad::StartSave(false) requires a full game-save service");}
+{impl_->InputExpected(frame);throw UnsupportedResource("Original visual options SaveLoad::StartSave(false) requires a full game-save service");}
 void FrontendVisualOptions::SaveNativePreferences(const FrontendSession::Handle& frame,std::shared_ptr<NativePreferences> preferences)
 {
-    auto& s=*impl_;s.Expected(frame);Check(s.Interactive()&&preferences,"Visual options native save requires interactive state and retained service");
+    auto& s=*impl_;s.InputExpected(frame);Check(s.Interactive()&&s.RegionsPresented()&&s.host.Current()&&s.host.Current()->Frame()==frame&&!s.state.status.native_save_admitted&&preferences,"Visual options native save requires its presented interactive frame and retained service");
     const auto status=preferences->Status();Check(status.save_enabled&&!status.host_pending&&(status.state==NativePreferencesState::Ready||status.state==NativePreferencesState::Missing),"Native preferences must finish loading before save admission");
     Busy guard(s.busy);State next;std::vector<Effect> effects;
-    try{s.session->HandlerTransaction(frame,[&](auto& p){Step step(p,*frame->visuals->localization,s.state);step.value.status.commands.clear();
+    try{s.session->HandlerTransaction(s.current,[&](auto& p){Step step(p,*s.current->visuals->localization,s.state);step.value.status.commands.clear();
         FrontendVisualOptionsSave(step,[&]{return &step.navigation;},[&](unsigned long cue,const void* a,void* b,bool restart){Check(cue<=UINT32_MAX&&!a&&!b&&restart,"Visual options save cue contract differs");effects.push_back({EffectKind::Cue,std::uint32_t(cue)});},[&](bool online){Check(!online,"Visual options requested online save");effects.push_back({EffectKind::NativeSave});});next=step.Result();
         },[&]{s.Effects(effects,preferences);});s.save=std::move(preferences);s.state=std::move(next);s.current=s.session->Current();}
     catch(...){s.failed=true;throw;}
 }
+std::shared_ptr<FrontendSession> FrontendVisualOptions::StackSession()const{impl_->Ready();return impl_->session;}
+std::shared_ptr<FrontendHandler> FrontendVisualOptions::StackHandler()const{impl_->Ready();return impl_->handler;}
+unsigned FrontendVisualOptions::StackScene()const{return 15;}
+bool FrontendVisualOptions::CanUpdateStack()const
+{
+    auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update&&!s.busy&&!nlGetCurrentAsyncRead(),"Visual pre-base admission requires its idle retained stack owner");
+    Check(s.settings->Snapshot()==s.expected,"Visual options settings changed outside this owner");
+    return !s.input.InputLocked();
+}
+void FrontendVisualOptions::AttachStack()
+{auto& s=*impl_;s.Mutable();Check(!s.stack_attached,"Visual owner already belongs to a stack");s.stack_attached=true;}
+void FrontendVisualOptions::UpdateStack(FrontendHandler::UpdateProof&& proof,const FrontendSession::Handle& presented,const std::function<void()>& input)
+{
+    auto& s=*impl_;s.Ready();Check(s.stack_attached&&!s.stack_update&&!s.busy&&!nlGetCurrentAsyncRead(),"Visual stack update requires its idle retained owner");
+    Check(presented&&presented==s.current&&proof.Before()==presented&&proof.After()==s.session->Current(),"Visual stack proof/presentation differs");
+    s.stack_update=true;s.input_source=presented;
+    struct Reset{Implementation& s;~Reset(){s.input_window=false;s.input_source.reset();s.stack_update=false;}}reset{s};
+    try{AfterBaseUpdate(std::move(proof));s.input_window=true;if(input)input();Check(s.current==s.session->Current(),"Stack input mutated outside its selected Visual owner");}
+    catch(...){s.failed=true;throw;}
+}
+void FrontendVisualOptions::ReleaseStack()
+{auto& s=*impl_;Check(!s.stack_update&&!s.busy,"Cannot remove an active Visual update");s.stack_attached=false;Release();}
 void FrontendVisualOptions::Release()
 {
-    auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"Visual options teardown requires its idle owning thread");if(!s.session)return;Busy guard(s.busy);
+    auto& s=*impl_;Check(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"Visual options teardown requires its idle owning thread");if(!s.session)return;Check(!s.stack_attached,"Stack owns selected Visual teardown");Busy guard(s.busy);
     std::exception_ptr failure;try{s.host.Release();}catch(...){failure=std::current_exception();}s.regions={};s.pending.clear();
     if(s.audio->Loaded()){const auto live=s.audio->Handles();for(auto h:s.sounds)if(std::find(live.begin(),live.end(),h)!=live.end())try{s.audio->Cancel(h);}catch(...){if(!failure)failure=std::current_exception();}}
-    s.sounds.clear();s.handler.reset();s.current.reset();s.session.reset();s.audio.reset();s.settings.reset();s.save.reset();if(failure)std::rethrow_exception(failure);
+    s.sounds.clear();if(s.handler&&s.handler.use_count()==1)s.handler->Release();s.handler.reset();s.current.reset();s.session.reset();s.audio.reset();s.settings.reset();s.save.reset();if(failure)std::rethrow_exception(failure);
 }
 }

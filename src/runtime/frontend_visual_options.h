@@ -1,5 +1,6 @@
 #pragma once
 #include "runtime/frontend_audio.h"
+#include "runtime/frontend_stack_visual.h"
 #include "runtime/frontend_pointer_host.h"
 #include "runtime/frontend_visual_settings.h"
 #include "runtime/native_preferences.h"
@@ -27,13 +28,25 @@ struct FrontendVisualOptionsStatus
 // NAV/DPD/haptics/manager publication/gameplay camera remain explicit requests.
 // Source Save() stays unavailable; SaveNativePreferences is an explicit separate
 // scope using real113 persistence, never original NormalSaveLoaded/readiness.
-class FrontendVisualOptions
+class FrontendVisualOptions : public FrontendStackVisual
 {
     struct Implementation;std::unique_ptr<Implementation> impl_;
     void ApplyPending();
+    void AfterBaseUpdate(FrontendHandler::UpdateProof&&);
+    std::shared_ptr<FrontendSession> StackSession() const override;
+    std::shared_ptr<FrontendHandler> StackHandler() const override;
+    unsigned StackScene() const override;
+    bool CanUpdateStack() const override;
+    void AttachStack() override;
+    void UpdateStack(FrontendHandler::UpdateProof&&,const FrontendSession::Handle&,
+        const std::function<void()>&) override;
+    void ReleaseStack() override;
 public:
     FrontendVisualOptions(std::shared_ptr<FrontendSession>,FrontendInput&,
         std::shared_ptr<FrontendAudio>,FrontendVisualSettings::Handle,unsigned& caller_seed,unsigned controller=0);
+    FrontendVisualOptions(std::shared_ptr<FrontendSession>,FrontendInput&,
+        std::shared_ptr<FrontendAudio>,FrontendVisualSettings::Handle,unsigned& caller_seed,
+        std::shared_ptr<FrontendHandler>,unsigned controller=0);
     ~FrontendVisualOptions();
     FrontendVisualOptions(const FrontendVisualOptions&)=delete;
     FrontendVisualOptions& operator=(const FrontendVisualOptions&)=delete;
