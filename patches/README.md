@@ -19,6 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0141 compiles the complete original NL bundle reader with exact Wii data
+words, native callback contexts and owning game allocations. Original searches,
+read requests and completion decisions remain in the source TU. Generated and
+owned font bundles qualify real NL I/O and callback lifetimes; full original
+FontManager and game startup remain separate integration work.
+
 Patch 0140 selects the existing float-UV text writer and scissored GX material.
 Native frontend packets now retain the authored clipping rectangle; original
 visibility and Credits scrolling logic are unchanged. Clipping, mixed draw
