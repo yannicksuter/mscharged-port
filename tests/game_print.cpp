@@ -25,8 +25,9 @@ int main()
     bytes.fill('!');
     if (nlSNPrintf(bytes.data(), bytes.size(), "%cX", 0) != 2
         || bytes[0] != 0 || bytes[1] != 'X' || bytes[2] != 0
-        || bytes[3] != '!' || bytes[6] != '!' || bytes[7] != '!') return 6;
-    if (nlSNPrintf(nullptr, 0, "%s_%d", "prefix", 1) != 8) return 7;
+        || bytes[3] != '!' || bytes[6] != '!' || bytes[7] != 0) return 6;
+    // The source wrapper unconditionally indexes size-1; zero capacity is not
+    // a valid wrapper call. The separate host-service qualifier covers count 0.
     // This call must reach the native adapter even when the console header
     // provides an inline no-op for the original game's weak definition.
     constexpr char expected[] = "Native diagnostics: camera 37 0x2a\n";
