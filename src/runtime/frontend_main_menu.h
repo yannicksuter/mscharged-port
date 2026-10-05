@@ -1,6 +1,7 @@
 #pragma once
 #include "runtime/frontend_audio.h"
 #include "runtime/frontend_pointer_host.h"
+#include "runtime/frontend_stack_visual.h"
 #include <optional>
 
 namespace mscharged
@@ -27,14 +28,25 @@ struct FrontendMainMenuStatus
 // A source Select request stops input at its real ApplyItem/online dependency;
 // no successful menu transition or game-ready flag is synthesized.
 // Audio and caller RNG must outlive this owner. Destroy before input/SDL/NL.
-class FrontendMainMenu
+class FrontendMainMenu : public FrontendStackVisual
 {
     struct Implementation;
     std::unique_ptr<Implementation> impl_;
     void ApplyPending();
+    void AfterBaseUpdate(FrontendHandler::UpdateProof&&);
+    std::shared_ptr<FrontendSession> StackSession() const override;
+    std::shared_ptr<FrontendHandler> StackHandler() const override;
+    unsigned StackScene() const override;
+    void AttachStack() override;
+    void UpdateStack(FrontendHandler::UpdateProof&&, const FrontendSession::Handle&,
+                     const std::function<void()>&) override;
+    void ReleaseStack() override;
 public:
     FrontendMainMenu(std::shared_ptr<FrontendSession>,FrontendInput&,
         std::shared_ptr<FrontendAudio>,unsigned& caller_seed,bool media_build=false);
+    FrontendMainMenu(std::shared_ptr<FrontendSession>,FrontendInput&,
+        std::shared_ptr<FrontendAudio>,unsigned& caller_seed,std::shared_ptr<FrontendHandler>,
+        bool media_build);
     ~FrontendMainMenu();
     FrontendMainMenu(const FrontendMainMenu&)=delete;
     FrontendMainMenu& operator=(const FrontendMainMenu&)=delete;

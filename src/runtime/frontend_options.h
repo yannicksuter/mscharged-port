@@ -1,6 +1,7 @@
 #pragma once
 #include "runtime/frontend_audio.h"
 #include "runtime/frontend_pointer_host.h"
+#include "runtime/frontend_stack_visual.h"
 #include <optional>
 
 namespace mscharged
@@ -39,14 +40,25 @@ struct FrontendOptionsStatus
 // manufacture state6. NAV/global pointers/music remain typed external commands.
 // Input and the caller RNG must outlive this owner; audio is retained. Release
 // before input/SDL/NL teardown. An input frame must be genuinely presented.
-class FrontendOptions
+class FrontendOptions : public FrontendStackVisual
 {
     struct Implementation;
     std::unique_ptr<Implementation> impl_;
     void ApplyPending();
+    void AfterBaseUpdate(FrontendHandler::UpdateProof&&);
+    std::shared_ptr<FrontendSession> StackSession() const override;
+    std::shared_ptr<FrontendHandler> StackHandler() const override;
+    unsigned StackScene() const override;
+    void AttachStack() override;
+    void UpdateStack(FrontendHandler::UpdateProof&&, const FrontendSession::Handle&,
+                     const std::function<void()>&) override;
+    void ReleaseStack() override;
 public:
     FrontendOptions(std::shared_ptr<FrontendSession>,FrontendInput&,
         std::shared_ptr<FrontendAudio>,unsigned& caller_seed,unsigned controller=0);
+    FrontendOptions(std::shared_ptr<FrontendSession>,FrontendInput&,
+        std::shared_ptr<FrontendAudio>,unsigned& caller_seed,std::shared_ptr<FrontendHandler>,
+        unsigned controller);
     ~FrontendOptions();
     FrontendOptions(const FrontendOptions&)=delete;
     FrontendOptions& operator=(const FrontendOptions&)=delete;
