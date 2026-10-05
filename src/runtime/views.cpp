@@ -38,9 +38,6 @@ void Packet(GLView* view, unsigned long flags, const glModelPacket* packet)
 }
 }
 PlatformViewport* glplatGetViewport() { return &viewport; }
-// Logical EFB dimensions; Aurora applies its viewport policy to GXSetScissor.
-u32 glplatGetFrameBufferWidth() { return glGetScreenInfo()->ScreenWidth; }
-u32 glplatGetFrameBufferHeight() { return glGetScreenInfo()->ScreenHeight; }
 
 namespace mscharged
 {

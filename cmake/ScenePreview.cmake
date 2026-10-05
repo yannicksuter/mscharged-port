@@ -15,6 +15,8 @@ endif()
 include(cmake/CompressedAssets.cmake)
 add_library(charged_materials STATIC
     src/runtime/movie_draw_observer.cpp
+    src/runtime/framebuffer_queries.cpp
+    "${MSCHARGED_PREPARED}/src/NL/gl/glStruct.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgram.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgramRender.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialProgram.cpp"
@@ -56,7 +58,6 @@ add_library(charged_views STATIC
     "${MSCHARGED_PREPARED}/src/NL/gl/glView.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glRenderList.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glTarget.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/gl/glStruct.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glViewMath.cpp"
     src/runtime/views.cpp src/runtime/targets.cpp)
 add_dependencies(charged_views verify_prepared)
