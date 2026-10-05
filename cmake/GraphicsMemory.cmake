@@ -18,7 +18,6 @@ add_library(charged_graphics_memory STATIC
     "${MSCHARGED_PREPARED}/src/NL/glx/glxModelMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlMath.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlString.cpp"
     "${MSCHARGED_PREPARED}/src/NL/math.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plane.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plat/platvmath.cpp"

@@ -8,14 +8,14 @@ target_compile_features(charged_original_bundles PUBLIC cxx_std_17)
 target_include_directories(charged_original_bundles PRIVATE
     "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 target_link_libraries(charged_original_bundles PUBLIC
-    charged_decomp_startup charged_game_print)
+    charged_original_core charged_game_print)
 if(BUILD_TESTING)
     add_executable(original_bundle_tests tests/original_bundle.cpp)
     target_compile_features(original_bundle_tests PRIVATE cxx_std_20)
     target_include_directories(original_bundle_tests PRIVATE
         "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
     target_link_libraries(original_bundle_tests PRIVATE
-        charged_original_bundles aurora::dvd aurora::core)
+        charged_original_bundles charged_decomp_startup aurora::dvd aurora::core)
     add_test(NAME original_bundles COMMAND "${Python3_EXECUTABLE}" -B
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_original_bundle.py"
         "$<TARGET_FILE:original_bundle_tests>")
