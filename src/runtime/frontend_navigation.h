@@ -15,6 +15,9 @@ struct FrontendNavigationStatus
 {
     unsigned visible_buttons=0;
     bool widescreen=false, back_initialized=false, failed=false;
+    bool transition_playing=false, transition_pending=false;
+    bool pointer_input_enabled=true, pointer_hidden=false;
+    std::string transition_function;
     std::array<int,4> back_states{};
     std::array<bool,4> back_inside{};
     // Original speaker-context/hover-rumble requests are observed, not executed.
@@ -50,6 +53,12 @@ public:
     void SetPointerSlide(const FrontendSession::Handle&,unsigned,FrontendNavigationPointer);
     void UpdatePointers(const FrontendSession::Handle&,
         const std::array<FrontendNavigationPointerSample,4>&,bool hidden=false);
+    // Retains a real script callback. Source pending update calls it once before
+    // the inclusive0.6-second hide. Callback may query, never mutate/release NAV.
+    // An exception preserves already published source stages and fails this
+    // owner; admitted external script effects are not rewound or replayed.
+    using TransitionCallback=std::function<void(std::string_view)>;
+    void StartTransition(const FrontendSession::Handle&,std::string function_name,TransitionCallback);
     void AdvanceVisual(const FrontendSession::Handle&,float delta);
     FrontendNavigationDispatch Route(const FrontendPointerDesktopSample&);
     FrontendNavigationDispatch Poll(SDL_Window*,bool capture=false);

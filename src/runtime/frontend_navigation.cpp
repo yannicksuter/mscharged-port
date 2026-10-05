@@ -2,6 +2,7 @@
 #include "runtime/frontend_handler.h"
 #include "resources/frontend_animation.h"
 #include "Game/FE/FrontendNavigationSteps.h"
+#include "Game/FE/FrontendNavigationTransitionSteps.h"
 #include "Game/FE/FrontendMainMenuSteps.h"
 #include "NL/nlFileGC.h"
 #include "NL/nlMath.h"
@@ -38,6 +39,8 @@ struct Step
     {
         Step& owner;FrontendNode root;
         Node(Step& s,FrontendNode n):owner(s),root(n){}
+        struct Time {const Node& node;operator float()const
+        {const auto& slides=node.owner.Scene().slides;auto it=std::find_if(slides.begin(),slides.end(),[&](const auto& v){return v.offset==node.root.id;});CheckNav(node.root.kind==FrontendNodeKind::Slide&&it!=slides.end(),"NAV transition slide is absent");return it->time;}} m_time{*this};
         struct Visible {Node& node;void operator=(bool v){node.SetVisible(v);}} m_bVisible{*this};
         const FrontendInstance& Value()const
         {const auto& v=owner.Scene().instances;auto it=std::find_if(v.begin(),v.end(),[&](const auto& n){return n.offset==root.id;});CheckNav(it!=v.end(),"NAV instance is absent");return *it;}
@@ -80,6 +83,7 @@ struct Step
     std::array<Node*,4> mPointerInstances{};
     Node *mPlusButton,*mMinusButton,*mBackButton,*mBreadcrumbs,*mPlayButton,*mDoneButton,*mLowerDoneButton,*mProgressButton,*mTransition,*mHomeWarning,*mTimer;
     unsigned mVisibleButtons;bool mIsWidescreen;
+    bool mTransitionPlaying,mTransitionPending;
     Node* mButtonInstance;Position mButtonPosition;
     bool mPressed,mPushBackScene=false,mPopScene=false,mUnidentifiedCE;
     int mBackScene=-2;float mUnidentifiedB8;
@@ -88,6 +92,7 @@ struct Step
     Step(const FrontendScene& graph,State v):Step(nullptr,&graph,std::move(v)){}
     Step(FrontendAnimationPlayback* p,const FrontendScene* graph,State v):playback(p),snapshot(graph),state(std::move(v)),
         mVisibleButtons(state.status.visible_buttons),mIsWidescreen(state.status.widescreen),
+        mTransitionPlaying(state.status.transition_playing),mTransitionPending(state.status.transition_pending),
         mButtonInstance(Instance(state.back)),mButtonPosition(state.back_position),mPressed(state.pressed),
         mUnidentifiedCE(state.back_ce),mUnidentifiedB8(state.back_time),mPointerInside(state.status.back_inside)
     {
@@ -111,6 +116,7 @@ struct Step
         for(unsigned i=0;i<8;++i)state.buttons[i]=buttons[i]->root.id;
         CheckNav(mBackButton->root.id&&mBackButton->Value().type==4&&mButtonInstance&&mButtonInstance->root.id&&mButtonInstance->Value().type==4,"NAV back component is absent or mistyped");
         state.back=mButtonInstance->root.id;state.back_position=mButtonPosition;state.transition=mTransition->root.id;state.home=mHomeWarning->root.id;state.timer=mTimer->root.id;
+        state.status.transition_playing=mTransitionPlaying;state.status.transition_pending=mTransitionPending;
         state.status.visible_buttons=mVisibleButtons;state.status.widescreen=mIsWidescreen;state.status.back_inside=mPointerInside;
         state.pressed=mPressed;state.back_ce=mUnidentifiedCE;state.back_time=mUnidentifiedB8;return std::move(state);
     }
@@ -123,6 +129,7 @@ struct FrontendNavigation::Implementation
     std::shared_ptr<FrontendSession> session;FrontendInput& input;std::shared_ptr<FrontendAudio> audio;unsigned& seed;
     unsigned controller;bool wide,busy=false,failed=false;std::thread::id thread=std::this_thread::get_id();
     FrontendSession::Handle current;State state;FrontendPointerHost host;std::unique_ptr<FrontendHandler> handler;
+    FrontendNavigation::TransitionCallback transition_callback;
     std::shared_ptr<FrontendPointerRegion> region;std::vector<Pending> pending;std::vector<FrontendAudioHandle> sounds;
     Implementation(std::shared_ptr<FrontendSession> s,FrontendInput& i,std::shared_ptr<FrontendAudio> a,unsigned& r,bool w,unsigned c)
         :session(std::move(s)),input(i),audio(std::move(a)),seed(r),controller(c),wide(w),host(i,c)
@@ -208,10 +215,50 @@ void FrontendNavigation::UpdatePointers(const FrontendSession::Handle& frame,con
     auto& s=*impl_;s.Expected(frame);
     for(const auto& sample:samples)for(float v:sample.position)CheckNav(std::isfinite(v)&&std::abs(v)<=1e7,"NAV pointer position exceeds finite profile");
     s.session->HandlerTransaction(frame,[&](auto& playback){Step step(playback,s.state);for(unsigned i=0;i<4;++i){const auto& p=samples[i];struct Vec{float x,y;} position{p.position[0],p.position[1]};
-        FrontendNavigationPointerPose(step.mPointerInstances[i],position,p.angle,p.valid,hidden,[](unsigned short angle){return AngUnitsToRad_fromUnsignedShort(angle);});}});s.current=s.session->Current();
+        FrontendNavigationPointerPose(step.mPointerInstances[i],position,p.angle,p.valid,hidden,[](unsigned short angle){return AngUnitsToRad_fromUnsignedShort(angle);});}});s.current=s.session->Current();s.state.status.pointer_hidden=hidden;
+}
+void FrontendNavigation::StartTransition(const FrontendSession::Handle& frame,std::string function,TransitionCallback callback)
+{
+    auto& s=*impl_;s.Expected(frame);
+    CheckNav(!s.state.status.transition_playing&&callback&&!function.empty()&&function.size()<=128&&function.find('\0')==std::string::npos,"NAV transition requires a bounded real callback and no active transition");
+    State next;s.session->HandlerTransaction(frame,[&](auto& playback){
+        Step step(playback,s.state);CheckNav(step.mTransition->root.id,"NAV transition component is absent");
+        // Source Find is unchecked. Validate every mandatory original target
+        // before entering the shared body, never substitute an empty component.
+        const auto validate=[&](Step::Node* node){CheckNav(node&&node->root.id&&node->Value().type==4&&node->Value().library,"NAV transition requires its authored component");
+            const auto& libraries=playback.Scene().library;auto it=std::find_if(libraries.begin(),libraries.end(),[&](const auto& v){return v.offset==*node->Value().library;});CheckNav(it!=libraries.end(),"NAV transition library is absent");
+            const auto slide=std::find_if(playback.Scene().slides.begin(),playback.Scene().slides.end(),[&](const auto& v){return v.hash==FrontendLowerHash("Slide1")&&std::find(it->slides.begin(),it->slides.end(),v.offset)!=it->slides.end();});CheckNav(slide!=playback.Scene().slides.end(),"NAV transition Slide1 is absent");};
+        validate(step.mTransition);
+        for(unsigned i=1;i<=8;++i){char name[16];std::snprintf(name,sizeof(name),"door_%u",i);validate(Step::Finder<Step::Node,4>::Find(step.mTransition,"Slide1","Group",name));}
+        FrontendNavigationStartTransition<Step::Node,Step::Node,Step::Finder>(step);step.state.status.transition_function=function;next=step.Result();
+    });
+    s.state=std::move(next);s.current=s.session->Current();s.transition_callback=std::move(callback);
 }
 void FrontendNavigation::AdvanceVisual(const FrontendSession::Handle& frame,float delta)
-{auto& s=*impl_;s.Expected(frame);CheckNav(s.pending.empty(),"NAV pointer callbacks must finish before advancement");s.handler->Update(frame,delta);s.current=s.session->Current();}
+{
+    auto& s=*impl_;s.Expected(frame);CheckNav(s.pending.empty(),"NAV pointer callbacks must finish before advancement");
+    s.handler->Update(frame,delta);s.current=s.session->Current();if(!s.state.status.transition_playing)return;
+    Busy guard(s.busy);
+    try
+    {
+        const bool call=s.state.status.transition_pending;
+        if(call)
+        {
+            State next;s.session->HandlerTransaction(s.current,[&](auto& playback){Step step(playback,s.state);FrontendNavigationShowTransition(step);next=step.Result();});
+            s.state=std::move(next);s.current=s.session->Current();
+        }
+        const auto invoke=[&]{if(call){CheckNav(bool(s.transition_callback),"NAV real transition callback is absent");const auto expected=s.current;s.transition_callback(s.state.status.transition_function);CheckNav(s.session->Current()==expected,"NAV callback mutated its retained session");}};
+        Step inspect(s.current->graph,s.state);
+        if(float(inspect.mTransition->GetActiveSlide()->m_time)>=.6f)
+        {
+            State next;
+            s.session->HandlerTransaction(s.current,[&](auto& playback){Step step(playback,s.state);FrontendNavigationFinishTransition(step,step.state.status.pointer_input_enabled,step.state.status.pointer_hidden);next=step.Result();},invoke);
+            s.state=std::move(next);s.current=s.session->Current();s.transition_callback={};
+        }
+        else invoke();
+    }
+    catch(...){s.failed=true;throw;}
+}
 bool FrontendNavigation::ApplyPending(unsigned index)
 {
     auto& s=*impl_;s.Expected(s.current);CheckNav(index<4,"NAV pointer exceeds four");const auto frame=s.current;Busy guard(s.busy);bool pressed=false;
@@ -266,7 +313,7 @@ FrontendNavigationDispatch FrontendNavigation::Poll(SDL_Window* window,bool capt
 }
 void FrontendNavigation::Release()
 {
-    auto& s=*impl_;CheckNav(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"NAV release requires idle owner thread");if(!s.session)return;
-    s.host.Release();s.region.reset();s.pending.clear();if(s.handler)s.handler->Release();s.handler.reset();s.CancelSounds();s.current.reset();s.session.reset();s.audio.reset();s.state={};
+    auto& s=*impl_;CheckNav(s.thread==std::this_thread::get_id()&&!s.busy&&!nlGetCurrentAsyncRead(),"NAV release requires idle owner thread");if(!s.session)return;Busy guard(s.busy);
+    s.transition_callback={};s.host.Release();s.region.reset();s.pending.clear();if(s.handler)s.handler->Release();s.handler.reset();s.CancelSounds();s.current.reset();s.session.reset();s.audio.reset();s.state={};
 }
 }
