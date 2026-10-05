@@ -4,6 +4,7 @@
 #include "runtime/frontend_audio_navigation.h"
 #include "runtime/frontend_visual_navigation.h"
 #include "runtime/native_preferences.h"
+#include "runtime/frontend_credits.h"
 
 namespace mscharged
 {
@@ -23,13 +24,24 @@ struct FrontendMenuScenesStatus
     std::optional<unsigned> pending_scene;
     std::optional<FrontendMainSelection> main_selection;
     FrontendMenuTransitionStatus transition;
+    std::optional<FrontendCreditsStatus> credits;
+    bool pointer_enabled = true;
+};
+struct FrontendMenuCreditsServices
+{
+    std::function<void()> stop_music;
+    std::function<void(bool)> stadium_rendering;
+    FrontendCredits::MovieFactory movie;
+    FrontendMovieOptions movie_options;
+    bool widescreen = false;
+    unsigned video_mode = 0;
 };
 // Actual Main/Options source actions, queue ownership and presentation barrier.
 // Input/NL, cameras, music/audio and preferences outlive this owner. The supplied
 // music and effect callbacks must genuinely admit their services; no default
 // success provider is installed. Preferences are explicitly113's native scope.
-// Scene14/15 use explicit shared settings authorities; unbound scene23 remains
-// pending. Gameplay camera application and original game saves remain separate.
+// Scene14/15 use explicit shared settings authorities;23 requires actual movie,
+// music-stop and stadium-render services. Gameplay saves remain separate.
 class FrontendMenuScenes
 {
     struct Implementation;
@@ -40,7 +52,8 @@ public:
         std::shared_ptr<NativePreferences>, std::function<void(unsigned)> select_music,
         std::function<bool(unsigned)> stadium_effect, std::function<void()> drain,
         unsigned initial_scene = 1, FrontendLanguage = FrontendLanguage::English,
-        AudioCategoryVolumes::Handle = {}, FrontendVisualSettings::Handle = {});
+        AudioCategoryVolumes::Handle = {}, FrontendVisualSettings::Handle = {},
+        std::optional<FrontendMenuCreditsServices> = {});
     ~FrontendMenuScenes();
     FrontendMenuScenes(const FrontendMenuScenes&) = delete;
     FrontendMenuScenes& operator=(const FrontendMenuScenes&) = delete;
@@ -63,6 +76,9 @@ public:
     std::vector<FrontendPointerBounds> Bounds() const;
     FrontendPointerBounds BackBounds() const;
     FrontendPointerBounds DoneBounds() const;
+    // Idle host integration retains these exact owners for real movie binding.
+    std::shared_ptr<FrontendCredits> Credits() const;
+    std::shared_ptr<FrontendSession> CreditsSession() const;
     void Release();
 };
 }

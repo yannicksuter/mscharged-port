@@ -28,6 +28,7 @@
 #include "runtime/frontend_visual_settings.h"
 #include "runtime/world_effects.h"
 #include "runtime/frontend_music.h"
+#include "runtime/host_retrace_clock.h"
 #include "runtime/frontend_boot_loading.h"
 #include "runtime/frontend_boot_audio.h"
 #include "NL/nlMath.h"
@@ -524,6 +525,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
         std::shared_ptr<FrontendBootAudio> boot_audio;
         std::shared_ptr<FrontendAudio> menu_audio;
         std::unique_ptr<FrontendMusic> menu_music;
+        bool stadium_rendering = true;
+        HostRetraceClock movie_retraces(HostRetraceRate::Ntsc());
+        FrontendMovieImageBinding::Handle credits_movie_binding;
+        std::shared_ptr<FrontendCredits> credits_movie_owner;
         FrontendSession::Handle frontend_published_frame;
         EffectsRegistry::Handle particle_groups;
         std::unique_ptr<ParticleControllers> particles;
@@ -655,7 +660,13 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                             throw resources::UnsupportedResource("Menu transition world-effect emission requires its real world/particle service");
                         if(menu_effects->Trigger(type)!=0)throw std::logic_error("Absent menu effect unexpectedly matched");
                         return true;
-                    },[&]{if(session.gx)DrainGX();},options.frontend_options?13:1,frontend_language,menu_volumes,menu_visual_settings);
+                    },[&]{if(session.gx)DrainGX();},options.frontend_options?13:1,frontend_language,menu_volumes,menu_visual_settings,
+                    FrontendMenuCreditsServices{
+                        [&]{menu_music->Stop();},
+                        [&](bool enabled){stadium_rendering=enabled;},
+                        [](const auto& request,const auto& output,std::uint64_t retrace){
+                            return std::make_shared<FrontendMoviePlayback>(request,output,retrace);
+                        },FrontendMovieOptions{},false,0});
                 while(!frontend_menus->Current().menu||!frontend_menus->Current().navigation)
                 {
                     if(Update())throw std::runtime_error("Menu loading cancelled");
@@ -1253,6 +1264,8 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                     const auto after=frontend_menus->Status();
                     if(after.scene!=before.scene)log("Original menu scene: "+std::to_string(after.scene));
                     if(!before.interactive&&after.interactive)log("Original menu pointer controls are interactive.");
+                    if(after.credits&&(!before.credits||after.credits->phase!=before.credits->phase))
+                        log("Original Credits phase "+std::to_string(after.credits->phase)+"; parsed tokens "+std::to_string(after.credits->parser_tokens));
                     if(after.pending_scene!=before.pending_scene&&after.pending_scene)
                         log("Original menu requests scene "+std::to_string(*after.pending_scene)+"; its service remains in development.");
                     ++animation_updates;
@@ -1412,14 +1425,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 GXSetCopyClear({24,28,34,255}, GX_MAX_Z24);
                 backend.camera_position = cCameraManager::m_cameraPosition;
             }
-            else if (character)
+            else if (character && stadium_rendering)
             {
                 GXSetCopyClear({24,28,34,255}, GX_MAX_Z24);
                 character->Submit(*submitted, view_matrices);
             }
-            else if (native_model) backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
+            else if (native_model && stadium_rendering) backend.camera_position = SubmitModel(*native_model, *submitted, view_matrices, cameras, camera_input, elapsed,
                                                        camera_overlay ? &bounds : nullptr);
-            if (world)
+            if (world && stadium_rendering)
             {
                 const auto frustum = StaticWorldFrustum::FromCamera(view_matrices.view, view_matrices.projection);
                 world_submission = SubmitStaticWorld(*world, *submitted, *world_alpha, frustum, world_culling);
@@ -1427,7 +1440,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 world_visible += world_submission.visible;
                 world_packets += world_submission.opaque_packets + world_submission.alpha_packets;
             }
-            if (particle_renderer)
+            if (particle_renderer && stadium_rendering)
                 particle_submissions += particle_renderer->Submit(*particle_view, particles_visible);
             if (text_view) text_view->Submit();
             if (frame_view)
@@ -1705,7 +1718,10 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 ImGui::SameLine(); if (ImGui::Button("Expand PIP")) pip->SetMode(NisPipMode::Expand);
             }
             if (!frontend_boot) ImGui::TextUnformatted("Complete stadium scenes and playable characters are pending.");
-            ImGui::TextUnformatted(frontend_menus ? "Arrows / D-pad: move. Enter / A: select. Escape / B: back. Close window to exit." : "Escape or close the window to exit."); ImGui::End();
+            ImGui::TextUnformatted(frontend_menus && frontend_menus->Status().credits
+                ? "Enter / A: skip movie. Tab / Start: skip credits. Close window to exit."
+                : frontend_menus ? "Arrows / D-pad: move. Enter / A: select. Escape / B: back. Close window to exit."
+                : "Escape or close the window to exit."); ImGui::End();
             backend.read_colours = (!colour_hits && frames % 15 == 14) || (options.frames && frames + 1 == options.frames);
             },
             [&](float) { timing.StartTimer(1); }
@@ -1766,6 +1782,42 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 menu_frame=frontend_menus->Current();frontend_published_frame=menu_frame.menu;navigation_frame=menu_frame.navigation;
                 // Menu and NAV retain the same permanent registered texture set.
                 frame_packets->Prepare(frontend_published_frame?frontend_published_frame:navigation_frame);
+                // Every operation here runs after the preceding graphics frame drained.
+                // Source Update owns MovieStart/swap/stop; this idle pass owns the
+                // real reader, output and registration between exact publications.
+                const auto raw_ns=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count();
+                if(raw_ns<0)throw std::runtime_error("The host movie clock must be monotonic and nonnegative");
+                const auto retrace=movie_retraces.Observe(static_cast<std::uint64_t>(raw_ns));
+                const auto credits=frontend_menus->Credits();
+                if(credits_movie_binding)
+                {
+                    credits_movie_binding->Playback()->Check();
+                    const auto state=credits_movie_binding->Playback()->Status().state;
+                    if(credits!=credits_movie_owner||state==FrontendMovieState::Cancelled)
+                    {
+                        if(state!=FrontendMovieState::Cancelled)
+                            throw std::logic_error("Credits left its source owner without stopping its movie");
+                        const auto retiring=credits_movie_binding;
+                        frame_packets->RetireMovie();
+                        if(credits==credits_movie_owner)credits->RetireMovieBinding(retiring);
+                        credits_movie_binding.reset();credits_movie_owner.reset();
+                    }
+                }
+                if(credits)
+                {
+                    credits->ServiceMovie(retrace);
+                    if(const auto target=credits->MovieTarget();target&&!credits_movie_binding)
+                    {
+                        const auto owner=frontend_menus->CreditsSession();
+                        if(!owner||owner->Current()!=target->frame)
+                            throw std::logic_error("Credits movie binding crossed its current source frame");
+                        auto binding=frame_packets->BindMovie(owner,target->instance,target->playback);
+                        credits->AttachMovieBinding(binding);
+                        credits_movie_binding=std::move(binding);credits_movie_owner=credits;
+                        log("Original Credits movie generation "+std::to_string(target->request.generation)+": "+target->request.path);
+                    }
+                }
             }
             if (character && animation_reset) { character->Reset(); animation_reset = false; }
             if (particles_reset)
@@ -1896,7 +1948,14 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 +"; shared texture registrations "+std::to_string(frame_packets->Textures()));
             const auto music=menu_music->Status();
             log("Original menu music: "+std::to_string(music.completed_reads)+" NL reads; "+std::to_string(music.submitted_frames)+" submitted stereo frames.");
-            frontend_menus->Release();frontend_menus.reset();menu_cursor.reset();
+            frontend_menus->Release();
+            if(credits_movie_binding)
+            {
+                if(credits_movie_binding->Playback()->Status().state!=FrontendMovieState::Cancelled)
+                    throw std::logic_error("Credits teardown did not cancel its actual movie");
+                frame_packets->RetireMovie();credits_movie_binding.reset();credits_movie_owner.reset();
+            }
+            frontend_menus.reset();menu_cursor.reset();
         }
         menu_frame={};navigation_frame.reset();menu_music.reset();menu_audio.reset();
         menu_volumes.reset();menu_visual_settings.reset();native_preferences.reset();
@@ -1927,6 +1986,7 @@ int RunScenePreview(int argc, char** argv, const std::filesystem::path& config_p
                 + " GX draw calls. Original handler prefix executed; full game startup remains pending.");
         else if (options.character_shock) log("Original Bowser shock rendered: " + std::to_string(frames) + " frames, "
             + std::to_string(draws) + " GX draw calls; animation, skin matrices and original material executed. Full character/gameplay startup remains pending.");
+        else if(menu_preview)log("Native frontend rendered: "+std::to_string(frames)+" frames, "+std::to_string(draws)+" GX draw calls. Original game startup and matches remain pending.");
         else log("Static preview rendered: " + std::to_string(frames) + " frames, " + std::to_string(draws) + " GX draw calls, " + std::to_string(depth_hits) + " geometry depth samples, " + std::to_string(colour_hits) + " visible colour samples. No game scene or gameplay was started.");
         if (world_batch) log("Static world submission totals: " + std::to_string(world_visible)
             + " / " + std::to_string(world_considered) + " objects, " + std::to_string(world_packets) + " packets.");

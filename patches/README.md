@@ -75,7 +75,8 @@ separate work.
 
 Patch 0120 shares the original Credits phase, text and scrolling rules. Its
 selected native owner executes bounded source phase and scrolling behavior.
-Composed Credits menu presentation remains integration work.
+The selected Credits flow is available from Options with actual movie and text
+presentation; complete original startup remains separate.
 
 Patch 0125 shares the original MoviePlayer update order. The native Credits owner
 uses real movie cancellation, retained text parsing and checked movie bindings;

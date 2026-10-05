@@ -1,7 +1,7 @@
 # Experimental runtime
 
 The port is a work in progress alongside the decompilation. Selected original
-initialization, Wii assets, and Main/Options/Audio/Visual menus run on Linux.
+initialization, Wii assets, and Main/Options/Audio/Visual/Credits menus run on Linux.
 **Full game startup and matches remain in development.** These experiments
 currently require a USA `R4QE01` revision 1 ISO/RVZ configured in `mscharged.ini`.
 
@@ -41,7 +41,7 @@ CMAKE_BUILD_PARALLEL_LEVEL=4 cmake --workflow --preset scene
 
 Arrows, D-pad or the left stick move the pointer; Enter/A selects and Escape/B
 goes Back. Options includes Audio and Visual controls with separate native
-preferences. Other menu actions and original game saves remain in development.
+preferences, plus Credits with movie playback and scrolling text. Other menu actions and original game saves remain in development.
 
 Omit `--frontend-main` for the static ball preview, or use `--frontend-options`
 to start at Options. Additional inspectors include `--particles`,

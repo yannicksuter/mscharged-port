@@ -26,6 +26,11 @@ struct FrontendMenuScenes::Implementation
     FrontendLanguage language;
     AudioCategoryVolumes::Handle volumes;
     FrontendVisualSettings::Handle visual_settings;
+    std::optional<FrontendMenuCreditsServices> credits_services;
+    std::shared_ptr<FrontendCredits> credits;
+    std::shared_ptr<FrontendSession> credits_session;
+    std::optional<unsigned> credits_destination;
+    bool pointer_enabled = true;
     const std::thread::id thread = std::this_thread::get_id();
     FrontendSceneStack::Token token = 0, transition_destination = 0;
     unsigned scene = 0;
@@ -46,9 +51,10 @@ struct FrontendMenuScenes::Implementation
     Implementation(FrontendInput& i, std::shared_ptr<FrontendAudio> a, unsigned& rng,
         FrontendCameras& c, resources::Bytes script, std::shared_ptr<NativePreferences> p,
         std::function<void(unsigned)> m, std::function<bool(unsigned)> e, std::function<void()> drain,
-        unsigned initial, FrontendLanguage l, AudioCategoryVolumes::Handle v, FrontendVisualSettings::Handle vs)
+        unsigned initial, FrontendLanguage l, AudioCategoryVolumes::Handle v, FrontendVisualSettings::Handle vs,
+        std::optional<FrontendMenuCreditsServices> cs)
         :input(i),audio(std::move(a)),seed(rng),cameras(c),preferences(std::move(p)),
-         music(std::move(m)),effect(std::move(e)),stack(i,std::move(drain)),transition(script,c,stack),language(l),volumes(std::move(v)),visual_settings(std::move(vs))
+         music(std::move(m)),effect(std::move(e)),stack(i,std::move(drain)),transition(script,c,stack),language(l),volumes(std::move(v)),visual_settings(std::move(vs)),credits_services(std::move(cs))
     {
         Require(audio && audio->Loaded() && preferences && music, "Menu scenes require actual audio, music and native preferences");
         const auto status = preferences->Status();
@@ -56,6 +62,8 @@ struct FrontendMenuScenes::Implementation
             && (status.state==NativePreferencesState::Ready || status.state==NativePreferencesState::Missing),
             "Menu scenes require an observed native preferences file or absence");
         Require(initial==1 || initial==13, "Menu scenes must begin at Main or Options");
+        if(credits_services)Require(credits_services->stop_music&&credits_services->stadium_rendering
+            &&credits_services->movie&&credits_services->video_mode<=2,"Credits requires its genuine selected host services");
         FrontendStackRequest request; request.scene=initial; request.language=language;
         request.initial_slide=initial==1?"MAIN":"in";
         request.resources_mode=FrontendSessionResourcesMode::PermanentMain;
@@ -66,9 +74,10 @@ struct FrontendMenuScenes::Implementation
     void Mutable() const { Ready(); Require(!busy && !input_window, "Recursive menu scenes mutation is unsupported"); }
     void Bind(FrontendSceneStack::Token t, unsigned destination)
     {
-        Require(destination==1 || destination==13 || destination==14 || destination==15, "Menu destination has no selected visual factory");
+        Require(destination==1 || destination==13 || destination==14 || destination==15 || destination==23, "Menu destination has no selected visual factory");
         if(destination==14)Require(volumes&&audio->CategoryVolumes()==volumes,"Audio submenu requires the actual shared live category authority");
         if(destination==15)Require(bool(visual_settings),"Visual submenu requires its explicit settings authority");
+        if(destination==23)Require(bool(credits_services),"Credits has no actual movie and host providers");
         stack.BindVisual(t,[this,destination](auto context)->std::shared_ptr<FrontendStackVisual> {
             if(destination==1)
             {
@@ -85,12 +94,39 @@ struct FrontendMenuScenes::Implementation
                 auto owner=std::make_shared<FrontendAudioOptions>(context.session,input,audio,volumes,seed,context.handler,0);
                 audio_options=owner; scene=destination; return owner;
             }
+            if(destination==23)
+            {
+                const auto& providers=*credits_services;
+                auto owner=std::make_shared<FrontendCredits>(context.session,input,audio,seed,
+                    [this](auto command){CreditCommand(command);},context.handler,
+                    providers.widescreen,providers.video_mode);
+                owner->SetMovieProvider(providers.movie,providers.movie_options);
+                credits=owner;credits_session=context.session;scene=destination;return owner;
+            }
             auto owner=std::make_shared<FrontendVisualOptions>(context.session,input,audio,visual_settings,seed,context.handler,0);
             visual_options=owner; scene=destination; return owner;
         });
     }
     void Retire()
-    { options_nav.reset(); audio_nav.reset(); visual_nav.reset(); main.reset(); options.reset(); audio_options.reset(); visual_options.reset(); scene=0; menu_shown.reset(); input_menu.reset(); pending_scene.reset(); }
+    { options_nav.reset(); audio_nav.reset(); visual_nav.reset(); main.reset(); options.reset(); audio_options.reset(); visual_options.reset(); credits.reset();credits_session.reset();credits_destination.reset();scene=0; menu_shown.reset(); input_menu.reset(); pending_scene.reset(); }
+    void CreditCommand(FrontendCreditsCommand command)
+    {
+        Require(credits_services&&nav,"Credits command requires live retained host/NAV services");
+        switch(command.kind)
+        {
+        case FrontendCreditsCommandKind::PointerEnabled:
+            Require(command.argument<=1,"Credits pointer request is invalid");
+            nav->UpdatePointers(nav->Current(),{},!command.argument);pointer_enabled=bool(command.argument);break;
+        case FrontendCreditsCommandKind::StadiumRendering:
+            Require(command.argument<=1,"Credits stadium request is invalid");
+            credits_services->stadium_rendering(bool(command.argument));break;
+        case FrontendCreditsCommandKind::StopMusic:credits_services->stop_music();break;
+        case FrontendCreditsCommandKind::SelectMusic:music(command.argument);break;
+        case FrontendCreditsCommandKind::ReplaceScene:
+            Require(command.argument==13&&!credits_destination,"Credits replacement must select new Options once");
+            credits_destination=command.argument;break;
+        }
+    }
     void Observe()
     {
         if(token) stack.RethrowFailure(token);
@@ -158,13 +194,14 @@ struct FrontendMenuScenes::Implementation
     {
         // Both original13→child and child→13 use Push(...,0,true): FIFO
         // Pop followed by a new handler/FEN, never an older Options revealed.
-        Require(destination==13||destination==14||destination==15,"Unselected Options destination");
+        Require(destination==13||destination==14||destination==15||destination==23,"Unselected Options destination");
         if(destination==14)Require(volumes&&audio->CategoryVolumes()==volumes,"Audio submenu has no live category authority");
         if(destination==15)Require(bool(visual_settings),"Visual submenu has no desired camera settings authority");
+        if(destination==23)Require(bool(credits_services),"Credits has no actual host/movie providers");
         auto resources=stack.Resources(token);
         stack.QueuePop(token);
         FrontendStackRequest request;request.scene=destination;request.language=language;
-        request.initial_slide=destination==13?"in":"OPTIONS_IN";request.shared_resources=std::move(resources);
+        request.initial_slide=destination==13?"in":destination==23?"NINTENDO":"OPTIONS_IN";request.shared_resources=std::move(resources);
         const auto next=stack.QueuePush(std::move(request));Retire();token=next;Bind(token,destination);
     }
     void Actions()
@@ -187,7 +224,7 @@ struct FrontendMenuScenes::Implementation
                 transition.Begin(FrontendMenuTransitionKind::OptionsToMain,token,request->source,Services());
                 stack.QueuePop(token); Retire(); token=0;
             }
-            else if(request->scene==14||request->scene==15)Replace(unsigned(request->scene));
+            else if(request->scene==14||request->scene==15||(request->scene==23&&credits_services))Replace(unsigned(request->scene));
             else pending_scene=unsigned(request->scene);
         }
         else if(audio_options||visual_options)
@@ -201,9 +238,10 @@ struct FrontendMenuScenes::Implementation
             // Its actual failure/pending state cannot become a successful return.
             if(requested&&!preferences->Status().host_pending){preferences->RethrowFailure();Replace(13);}
         }
+        else if(credits&&credits_destination)Replace(*credits_destination);
     }
     void InputReady() const
-    { Ready(); Require(input_window && input_menu && nav_shown && input_allowed, "Menu input requires its controlled presented interactive window"); }
+    { Ready(); Require(input_window && input_menu && nav_shown && input_allowed && pointer_enabled, "Menu input requires its controlled presented interactive window"); }
     void Pointer(const FrontendPointerDispatch& dispatch)
     {
         std::array<FrontendNavigationPointerSample,4> cursors{};
@@ -215,8 +253,9 @@ struct FrontendMenuScenes::Implementation
 FrontendMenuScenes::FrontendMenuScenes(FrontendInput& input,std::shared_ptr<FrontendAudio> audio,unsigned& seed,
     FrontendCameras& cameras,resources::Bytes script,std::shared_ptr<NativePreferences> preferences,
     std::function<void(unsigned)> music,std::function<bool(unsigned)> effect,std::function<void()> drain,
-    unsigned initial,FrontendLanguage language,AudioCategoryVolumes::Handle volumes,FrontendVisualSettings::Handle visual_settings)
-    :impl_(std::make_unique<Implementation>(input,std::move(audio),seed,cameras,script,std::move(preferences),std::move(music),std::move(effect),std::move(drain),initial,language,std::move(volumes),std::move(visual_settings))){}
+    unsigned initial,FrontendLanguage language,AudioCategoryVolumes::Handle volumes,FrontendVisualSettings::Handle visual_settings,
+    std::optional<FrontendMenuCreditsServices> credits_services)
+    :impl_(std::make_unique<Implementation>(input,std::move(audio),seed,cameras,script,std::move(preferences),std::move(music),std::move(effect),std::move(drain),initial,language,std::move(volumes),std::move(visual_settings),std::move(credits_services))){}
 FrontendMenuScenes::~FrontendMenuScenes(){try{Release();}catch(...){std::terminate();}}
 void FrontendMenuScenes::Service()
 {
@@ -307,7 +346,8 @@ void FrontendMenuScenes::Acknowledge(const FrontendMenuScenesFrame& frame,Fronte
         if(s.main)s.main->Acknowledge(frame.menu,viewport);
         else if(s.options)s.options->Acknowledge(frame.menu,viewport);
         else if(s.audio_options)s.audio_options->Acknowledge(frame.menu,viewport);
-        else s.visual_options->Acknowledge(frame.menu,viewport);
+        else if(s.visual_options)s.visual_options->Acknowledge(frame.menu,viewport);
+        else Require(s.credits&&s.credits->Current()==frame.menu,"Credits publication belongs to another source generation");
         s.menu_shown=frame.menu;
     }
     s.nav->Acknowledge(frame.navigation,viewport);s.nav_shown=frame.navigation;
@@ -319,6 +359,7 @@ FrontendMenuScenesStatus FrontendMenuScenes::Status()const
     const auto& s=*impl_;Require(s.thread==std::this_thread::get_id()&&!s.released,"Menu status requires its owner thread");
     FrontendMenuScenesStatus status;status.scene=s.scene;status.failed=s.failed;status.loading=!s.nav||!s.scene;
     status.pending_scene=s.pending_scene;status.transition=s.transition.Status();
+    status.pointer_enabled=s.pointer_enabled;if(s.credits)status.credits=s.credits->Status();
     if(!s.failed){status.interactive=s.Interactive();if(s.main)status.main_selection=s.main->Status().selection;if(s.options)status.state=s.options->Status().state;
         if(s.audio_options)status.state=s.audio_options->Status().state;
         if(s.visual_options)status.state=s.visual_options->Status().state;}
@@ -341,8 +382,14 @@ FrontendPointerBounds FrontendMenuScenes::DoneBounds()const
 void FrontendMenuScenes::Release()
 {
     auto& s=*impl_;Require(s.thread==std::this_thread::get_id()&&!s.busy&&!s.input_window&&!nlGetCurrentAsyncRead(),"Menu teardown requires its idle owner thread");
-    if(s.released)return;s.transition.Release();s.options_nav.reset();s.audio_nav.reset();s.visual_nav.reset();if(s.nav)s.nav->Release();
-    s.stack.Release();s.main.reset();s.options.reset();s.audio_options.reset();s.visual_options.reset();s.nav.reset();if(s.nav_session)s.nav_session->Pop();
+    if(s.released)return;s.transition.Release();s.options_nav.reset();s.audio_nav.reset();s.visual_nav.reset();
+    // Credits destruction executes real pointer/stadium restoration through NAV.
+    // The stack must retire its concrete owners before that shared service.
+    s.stack.Release();s.main.reset();s.options.reset();s.audio_options.reset();s.visual_options.reset();s.credits.reset();s.credits_session.reset();if(s.nav)s.nav->Release();s.nav.reset();if(s.nav_session)s.nav_session->Pop();
     s.nav_session.reset();s.menu_shown.reset();s.nav_shown.reset();s.audio.reset();s.preferences.reset();s.released=true;
 }
+std::shared_ptr<FrontendCredits> FrontendMenuScenes::Credits()const
+{auto& s=*impl_;s.Ready();return s.credits;}
+std::shared_ptr<FrontendSession> FrontendMenuScenes::CreditsSession()const
+{auto& s=*impl_;s.Ready();return s.credits_session;}
 }

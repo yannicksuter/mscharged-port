@@ -176,7 +176,7 @@ target_link_libraries(charged_scene_preview PRIVATE charged_frontend_main_menu c
 target_link_libraries(charged_scene_preview PRIVATE charged_frontend_navigation charged_frontend_stack)
 target_link_libraries(charged_scene_preview PRIVATE charged_frontend_options_navigation)
 target_link_libraries(charged_scene_preview PRIVATE charged_frontend_music)
-target_link_libraries(charged_scene_preview PRIVATE charged_frontend_menu_scenes charged_frontend_menu_input charged_world_effects charged_frontend_visual_options)
+target_link_libraries(charged_scene_preview PRIVATE charged_frontend_menu_scenes charged_frontend_menu_input charged_world_effects charged_frontend_visual_options charged_host_retrace_clock)
 target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_SCENE_PREVIEW=1)
 if(BUILD_TESTING)
     include(cmake/Tasks.cmake)
@@ -199,6 +199,8 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
     # This executable takes a caller-owned disc INI; retail data is not a CI fixture.
     add_executable(frontend_menu_scene_tests tests/frontend_menu_scene.cpp)
     target_link_libraries(frontend_menu_scene_tests PRIVATE charged_scene_preview charged_frontend_menu_scenes SDL3::SDL3)
+    add_executable(frontend_menu_credits_scene_tests tests/frontend_menu_credits_scene.cpp)
+    target_link_libraries(frontend_menu_credits_scene_tests PRIVATE charged_scene_preview charged_frontend_menu_scenes SDL3::SDL3)
     add_test(NAME frontend_movie_pipeline COMMAND frontend_movie_pipeline_tests)
     set_tests_properties(frontend_movie_pipeline PROPERTIES TIMEOUT 120 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;SDL_AUDIODRIVER=dummy" RESOURCE_LOCK gx_check
