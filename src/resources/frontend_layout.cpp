@@ -177,7 +177,7 @@ class Builder
             entry.priority=instance.priority;entry.name=instance.name;entry.image=resource.native_movie;
             entry.uv=object.attributes.uv;
             for(unsigned i=0;i<4;++i){if(instance.overload_flags&(0x40u<<i))entry.uv[i]=instance.attributes.uv[i];Scalar(entry.uv[i]);}
-            entry.transform={matrix.m11,-matrix.m12,0,0,matrix.m21,-matrix.m22,0,0,0,0,1,0,
+            entry.transform={matrix.m11,-matrix.m12,0,0,matrix.m21,-matrix.m22,0,0,0,0,matrix.m33,0,
                 matrix.m41+scene_view_.m41+320,240-(matrix.m42+scene_view_.m42),0,1};
             entry.colour=colour;
             if(!entry.image)++result_.unavailable["movie image awaiting actual provider"];
@@ -272,7 +272,15 @@ class Builder
         if(!ValidTime(time,instance.start,instance.duration)||!instance.visible||!object.attributes.visible)
         {++result_.hidden;active_.erase(id);return;}
         const auto attributes=Effective(instance,object);
-        if(attributes.rotation[0]!=0||attributes.rotation[1]!=0||attributes.position[2]!=0||attributes.pivot[2]!=0||attributes.scale[2]!=1)
+        // Original movie callback submits XY vertices with z=0. A pure,
+        // bounded Z scale (owned Credits4:3 uses .752083) is therefore planar
+        // for this exact path. Retain it in the source matrix; other profiles
+        // keep their existing unit-Z admission rule.
+        const bool movie=instance.type==2&&instance.resource&&resources_.contains(*instance.resource)
+            &&(resources_.at(*instance.resource)->native_movie
+                ||resources_.at(*instance.resource)->hash==FrontendNameHash("movie"));
+        if(attributes.rotation[0]!=0||attributes.rotation[1]!=0||attributes.position[2]!=0||attributes.pivot[2]!=0
+            ||(attributes.scale[2]!=1&&!movie))
         {++result_.unavailable["nonplanar instance branch"];active_.erase(id);return;}
         const auto matrix=Combine(attributes,parent);
         for(unsigned i=0;i<4;++i)colour[i]=(attributes.colour[i]*colour[i])/255.f;
