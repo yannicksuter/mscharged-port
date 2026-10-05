@@ -19,6 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0127 shares the original Title initialization, timing and input steps.
+The selected native owner uses real frontend music/cues and checked presentation
+ownership. Its external scene, navigation and Wii services require explicit
+providers; full original startup remains separate.
+
+
 The current base is `b072ce3e7719c2a0ef738f01594eda2035f666dd`, adopted from
 published upstream main. It remains an incomplete development snapshot. The
 update links original Wii input, quaternion math, screen transition, lighting
