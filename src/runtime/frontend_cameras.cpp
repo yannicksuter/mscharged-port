@@ -262,9 +262,15 @@ FrontendCameras::Camera& FrontendCameras::Selected(const FrontendCameraSelection
 }
 FrontendCameraSelectionHandle FrontendCameras::Selection() const
 {
-    Ready(); auto* camera = Owned(cCameraManager::PeekCamera());
-    if (!camera || cCameraManager::m_transition != eCT_NONE)
+    Ready();
+    if (cCameraManager::m_transition != eCT_NONE)
         throw std::logic_error("Frontend selection requires an owned unblended current camera");
+    return CurrentSelection();
+}
+FrontendCameraSelectionHandle FrontendCameras::CurrentSelection() const
+{
+    Ready(); auto* camera = Owned(cCameraManager::PeekCamera());
+    if (!camera) throw std::logic_error("Frontend selection requires its owned current camera");
     return camera->selection;
 }
 bool FrontendCameras::IsCurrent(const FrontendCameraSelectionHandle& identity) const

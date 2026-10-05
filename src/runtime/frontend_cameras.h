@@ -72,6 +72,9 @@ public:
     // wrapper and old time/view but invalidates prior selection handles. Current
     // selection requires an owned top camera with no active manager transition.
     FrontendCameraSelectionHandle Selection() const;
+    // Same exact owned top identity during a manager blend. It does not allow
+    // seeking or replacing the animation while the original blend is active.
+    FrontendCameraSelectionHandle CurrentSelection() const;
     FrontendCameraSelectionHandle Select(const FrontendCameraSelectionHandle& expected,
         const std::string& alias, bool cyclic, std::function<void()> on_end = {});
     void Seek(const FrontendCameraSelectionHandle&, float normalized_time);
