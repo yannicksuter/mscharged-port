@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0132 shares the original weighted-skin influence gathering and retains
+authored seven-stream Specular resources. Weights retain their original bits
+and order; decoding alone does not install an NPC, pose or draw a character.
+
 Patch 0133 selects the original Specular material and its GX render program.
 The native transport preserves signed-short UVs, original lighting and alpha
 passes. Fractional skinning requires separately retained software pose output;

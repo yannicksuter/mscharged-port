@@ -120,6 +120,7 @@ target_link_libraries(charged_frontend_layout_gx PUBLIC charged_frontend_layout 
 include(cmake/FrontendAnimation.cmake)
 include(cmake/FrontendSession.cmake)
 include(cmake/Hierarchy.cmake)
+include(cmake/WeightedSkin.cmake)
 include(cmake/EffectsBundle.cmake)
 include(cmake/SAnimAssets.cmake)
 include(cmake/AnimationBundle.cmake)
