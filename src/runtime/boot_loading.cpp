@@ -45,6 +45,9 @@ struct BootLoading::Implementation
     std::string error;
     std::vector<unsigned> calls;
     GLResourcePool* pool = nullptr;
+    BootEffectsBinding::Handle effects;
+    bool effects_started=false;
+    BootLoadingMemory memory;
     bool busy = false, dispatched = false;
     const std::size_t trace_limit;
     std::function<std::uint32_t()> ticker;
@@ -53,9 +56,11 @@ struct BootLoading::Implementation
     InterpreterFlow flow = InterpreterFlow::Continue;
     std::size_t instructions = 0, host_calls = 0;
 
-    Implementation(resources::Bytes bytes, InterpreterLimits limits, std::function<std::uint32_t()> clock)
-        : interpreter(bytes, limits), trace_limit(limits.host_calls), ticker(clock ? std::move(clock) : nlGetTicker)
+    Implementation(resources::Bytes bytes, InterpreterLimits limits, std::function<std::uint32_t()> clock, BootEffectsBinding::Handle effects_binding, BootLoadingMemory native_memory)
+        : interpreter(bytes, limits), effects(std::move(effects_binding)), memory(native_memory), trace_limit(limits.host_calls), ticker(clock ? std::move(clock) : nlGetTicker)
     {
+        if((memory.headers==0)!=(memory.resources==0)||memory.headers>64*1024*1024||memory.resources>64*1024*1024)
+            throw std::invalid_argument("Native boot pool needs two nonzero bounded capacities or original defaults");
         // Validate the entry before a pool or runtime side effect is possible.
         const auto script = resources::ReadScriptBytecode(bytes);
         const auto entry = std::find_if(script->functions.begin(), script->functions.end(),
@@ -70,7 +75,13 @@ struct BootLoading::Implementation
             if (id == 49 || id == 61) call.arguments = {InterpreterValueKind::Word};
             interpreter.Bind(std::move(call));
         }
+        if(effects)
+        {
+            if(effects->owner_) throw std::logic_error("Effects binding is already retained by another boot owner");
+            effects->owner_=this;
+        }
     }
+    ~Implementation(){if(effects&&effects->owner_==this)effects->owner_=nullptr;}
     void Ready() const
     {
         if (thread != std::this_thread::get_id()) throw std::logic_error("Boot loading requires its owner thread");
@@ -83,6 +94,9 @@ struct BootLoading::Implementation
     }
     void Release()
     {
+        busy=true;
+        struct ReleaseGuard{bool& value;~ReleaseGuard(){value=false;}} release_guard{busy};
+        if (effects_started) { effects->release_(); effects_started=false; }
         if (!pool) return;
         // Only this owner destroys the pool; callers receive a const observation.
         glDestroyResourcePool(pool);
@@ -115,10 +129,28 @@ struct BootLoading::Implementation
             if (pool) throw std::logic_error("Persistent boot resource pool already exists");
             RequireGraphics();
             fn_80111654(4); // Original empty debug marker, selected from FixedUpdateTask.
-            const auto requirements = gPersistentResourceRequirements;
+            auto requirements = gPersistentResourceRequirements;
+            if(memory.headers)
+            {
+                requirements.entries[0]={GLM_Header,memory.headers};
+                requirements.entries[1]={GLM_TextureData,memory.resources};
+            }
             pool = glCreateResourcePool(requirements.entries, std::size(requirements.entries), "PersistentResourcePool");
             break;
         }
+        case 41:
+            if (!effects) throw UnqualifiedService(id, ServiceDescription(id));
+            if (!pool || effects_started) throw std::logic_error("Effects begin requires this boot's persistent pool exactly once");
+            effects_started=true; // Retain partial read/registration ownership on failure.
+            effects->start_(*pool);
+            FinishAsyncLoadingStep(this, nlGetTickerDifference(mStageStartTick, ticker()), g_fYieldScriptBlockingTimeMS);
+            break;
+        case 28:
+            if (!effects) throw UnqualifiedService(id, ServiceDescription(id));
+            if (!effects_started) throw std::logic_error("Effects finalize requires an admitted begin");
+            FinishAsyncLoadingStepOrUndo(this, effects->finish_(),
+                nlGetTickerDifference(mStageStartTick, ticker()), g_fYieldScriptBlockingTimeMS);
+            break;
         case 48: case 83: // Original explicit empty cases.
         case 49: case 61: // Original discarded numeric argument; VM performs typed pop.
             break;
@@ -139,7 +171,9 @@ struct BootLoading::Implementation
     }
 };
 BootLoading::BootLoading(resources::Bytes bytes, InterpreterLimits limits, std::function<std::uint32_t()> ticker)
-    : impl_(std::make_unique<Implementation>(bytes, limits, std::move(ticker))) {}
+    :BootLoading(bytes,limits,std::move(ticker),{}){}
+BootLoading::BootLoading(resources::Bytes bytes, InterpreterLimits limits, std::function<std::uint32_t()> ticker, BootEffectsBinding::Handle effects, BootLoadingMemory memory)
+    : impl_(std::make_unique<Implementation>(bytes, limits, std::move(ticker), std::move(effects), memory)) {}
 BootLoading::~BootLoading()
 {
     try { impl_->Ready(); impl_->Release(); } catch (...) { std::terminate(); }
