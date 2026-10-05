@@ -1,4 +1,5 @@
 include(cmake/NativeRuntime.cmake)
+include(cmake/EffectsVertexRendering.cmake)
 include(cmake/FrameTiming.cmake)
 include(cmake/AnimatedCamera.cmake)
 include(cmake/DebugCamera.cmake)
