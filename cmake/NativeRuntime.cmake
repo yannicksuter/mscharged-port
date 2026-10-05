@@ -2,6 +2,7 @@
 # Keep their extracted entry and setup/check helpers out of the core library.
 include_guard(GLOBAL)
 include(cmake/OriginalCore.cmake)
+include(cmake/OriginalGraphics.cmake)
 add_library(charged_decomp_startup STATIC
     "${MSCHARGED_PREPARED}/src/Game/Startup.cpp"
     src/runtime/startup_animation.cpp

@@ -5,8 +5,8 @@ Upstream-base: 443164c91fded218656a8443432e642fdad57838
 Select original textured short-UV glPoly2 construction and attachment with
 native bounds and exception-safe matrix restoration. Float/scissor, untextured
 white fallback and utility polygon paths remain unselected on native builds.
-Share original DrawString raster setup and the unchanged glHasQuads capability
-without linking unrelated full graphics startup. No FontManager publication
+Share original DrawString raster setup and add a separate glHasQuads copy for
+selected-source diagnostics, leaving the original gl.cpp body unchanged. No FontManager publication
 or full original font service is supplied by this selection.
 
 diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
@@ -105,21 +105,6 @@ diff --git a/src/NL/gl/glDraw2.cpp b/src/NL/gl/glDraw2.cpp
  void glPoly2::SetColour(const nlColour& col)
  {
      m_colour[0] = col;
-diff --git a/src/NL/gl/gl.cpp b/src/NL/gl/gl.cpp
---- a/src/NL/gl/gl.cpp
-+++ b/src/NL/gl/gl.cpp
-@@ -60,10 +60,7 @@
- }
- #endif
- 
--bool glHasQuads()
--{
--    return true;
--}
-+#include "glQuadSupport.cpp"
- 
- #ifndef MSCHARGED_NATIVE
- void glBeginFrame()
 diff --git a/src/NL/gl/glQuadSupport.cpp b/src/NL/gl/glQuadSupport.cpp
 new file mode 100644
 --- /dev/null

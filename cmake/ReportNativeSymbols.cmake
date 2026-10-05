@@ -1,6 +1,6 @@
 if(NOT NM OR NOT EXISTS "${OBJECT}")
-    message(FATAL_ERROR "A symbol tool and compiled game entry object are required")
+    message(FATAL_ERROR "A symbol tool and compiled original source object are required")
 endif()
 execute_process(COMMAND "${NM}" -u -C "${OBJECT}"
     OUTPUT_FILE "${OUTPUT}" COMMAND_ERROR_IS_FATAL ANY)
-message(STATUS "Original entry unit compiled; unresolved references are in ${OUTPUT}")
+message(STATUS "Original source unit compiled; unresolved references are in ${OUTPUT}")
