@@ -38,7 +38,7 @@ add_dependencies(charged_original_core verify_prepared)
 target_include_directories(charged_original_core PUBLIC
     "${MSCHARGED_PREPARED}/include" "${CMAKE_CURRENT_SOURCE_DIR}/src"
     PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
-target_compile_definitions(charged_original_core PUBLIC MSCHARGED_NATIVE=1)
+target_compile_definitions(charged_original_core PUBLIC MSCHARGED_NATIVE=1 TARGET_PC=1)
 target_compile_features(charged_original_core PRIVATE cxx_std_17)
 target_link_libraries(charged_original_core PRIVATE charged_foundation charged_native_allocator
     charged_sanim_decode aurora::dvd aurora::os aurora::vi aurora::core)
