@@ -22,6 +22,7 @@ add_library(charged_original_game_module_sources OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/nlPrint.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlInit.cpp"
     "${MSCHARGED_PREPARED}/src/Game/main.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Game.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlAVLTree.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Task/DispatchEventsTask.cpp"
     src/platform/game_allocation_ownership.cpp
