@@ -24,3 +24,4 @@
 0027-scope-native-video-to-explicit-source-integration.patch
 0026-native-vi-shared-interrupt-line.patch
 0029-native-gx-scissor-box-offset.patch
+0030-native-gx-misc-state-requests.patch
