@@ -204,3 +204,4 @@
 0248-original-main-loading-diagnostic-and-sdk-abi.patch
 0253-restore-original-vm-data-and-address-abi.patch
 0257-restore-original-boot-title-presentation.patch
+0258-native-registry-scalar-words.patch
