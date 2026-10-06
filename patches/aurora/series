@@ -25,3 +25,4 @@
 0026-native-vi-shared-interrupt-line.patch
 0029-native-gx-scissor-box-offset.patch
 0030-native-gx-misc-state-requests.patch
+0031-native-gx-blocking-pipelines.patch
