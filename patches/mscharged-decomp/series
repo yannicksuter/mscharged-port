@@ -159,3 +159,4 @@
 0180-native-original-rlg-record-transport.patch
 0184-original-temporary-string-manager.patch
 0187-native-member-binding-selector-provider.patch
+0183-share-canonical-native-cache-declarations.patch
