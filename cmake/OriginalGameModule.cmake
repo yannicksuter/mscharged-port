@@ -95,3 +95,5 @@ include(cmake/OriginalAudioSource.cmake)
 include(cmake/OriginalViewLayers.cmake)
 
 include(cmake/OriginalInterpreter.cmake)
+
+include(cmake/OriginalBootSceneSources.cmake)

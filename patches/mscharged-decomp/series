@@ -203,3 +203,4 @@
 0251-restore-whole-original-async-loading.patch
 0248-original-main-loading-diagnostic-and-sdk-abi.patch
 0253-restore-original-vm-data-and-address-abi.patch
+0257-restore-original-boot-title-presentation.patch
