@@ -211,3 +211,4 @@
 0270-keep-legacy-diagnostic-event-marker.patch
 0252-diagnostic-original-main-frontend-input.patch
 0256-diagnostic-original-credits-copyright-phase.patch
+0260-native-signed-registry-scalar.patch
