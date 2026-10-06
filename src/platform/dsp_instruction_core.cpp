@@ -108,7 +108,8 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
                (last&0xffe0)==0x0060)width=2;
             else if(last==0 || (last&0xfff8)==0x1200 || (last&0xfff8)==0x1300 ||
                     (last>=0x8a00 && last<=0x8f00 && !(last&0xff)) ||
-                    last==0x8100 || last==0x8900 || (last&0xfefc)==0x0218)width=1;
+                    last==0x8100 || last==0x8900 || (last&0xfefc)==0x0218 ||
+                    (last&0xfc00)==0x1c00)width=1;
             else throw DSPUnsupportedInstruction(pc,opcode,last);
             // Counter0 skips the endpoint instruction, including its operand.
             // Unknown instruction sizes remain an explicit decoder gap.
@@ -129,6 +130,38 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
                  ((word&0x8000)?0xff00000000ULL:0ULL);
         } else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
         next.address[source]=static_cast<std::uint16_t>(next.address[source]+1);
+    } else if ((opcode&0xfc00)==0x1c00) {
+        const auto destination=static_cast<unsigned>((opcode>>5)&31);
+        const auto source=static_cast<unsigned>(opcode&31);
+        const auto supported=[](unsigned reg) {return reg<12 || reg==0x1e || reg==0x1f;};
+        // These are the address/index/wrap and accumulator-middle cells used
+        // by the source init prefix. General stack/product/AX/high/low register
+        // moves need their own qualified read/write effects, never a zero cell.
+        if(!supported(source))throw DSPUnsupportedInstruction(pc,opcode,source);
+        if(!supported(destination))throw DSPUnsupportedInstruction(pc,opcode,destination);
+        std::uint16_t word;
+        if(source<4)word=next.address[source];
+        else if(source<8)word=next.index[source-4];
+        else if(source<12)word=next.wrap[source-8];
+        else {
+            const auto cell=next.accumulator[source-0x1e];
+            const auto value=static_cast<std::int64_t>(cell)-
+                ((cell&0x8000000000ULL)?0x10000000000LL:0LL);
+            if((next.status&0x4000) && value>0x7fffffffLL)word=0x7fff;
+            else if((next.status&0x4000) && value<(-0x80000000LL))word=0x8000;
+            else word=static_cast<std::uint16_t>(cell>>16);
+        }
+        // Read before writing, including self moves. A middle-word destination
+        // performs the same hardware SXM extension as other qualified loads.
+        if(destination<4)next.address[destination]=word;
+        else if(destination<8)next.index[destination-4]=word;
+        else if(destination<12)next.wrap[destination-8]=word;
+        else {
+            auto& cell=next.accumulator[destination-0x1e];
+            if(next.status&0x4000)cell=(static_cast<std::uint64_t>(word)<<16) |
+                ((word&0x8000)?0xff00000000ULL:0ULL);
+            else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
+        }
     } else if (opcode==0x029f) {
         // Unconditional immediate jump used by the original OS DSP init
         // vector. Invalid destinations remain real next-fetch failures.

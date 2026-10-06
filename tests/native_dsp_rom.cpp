@@ -198,6 +198,95 @@ void InstructionReadGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,s
     auto expected=context;expected.pc=0x103;++expected.instructions;
     Same(skipped.Step(),expected); // Known size only; no read, write or wrap request occurred.
 }
+void RegisterMoveGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+                      NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    const auto Mover=[&](unsigned destination,unsigned source) {
+        PutWord(backing,0,static_cast<std::uint16_t>(0x1c00u+destination*32u+source));
+        DSPInstructionCore core(mailboxes,control);
+        core.LoadInstructionMemory(memory,physical,2,0x100);return core;
+    };
+    DSPInstructionRegisters input{0x100,0x19ad,0xa3,{0x0012345678ULL,0xff87654321ULL},5,
+        {0x1111,0x2222,0x3333,0x4444},{0x5555,0x6666,0x7777,0x8888},
+        {0x9999,0xaaaa,0xbbbb,0xcccc}};
+    input.stack={0xbeef,0xabcd,0x1234,0};
+    // Independently authored raw register words and a destination permutation
+    // exercise every qualified source/destination bit field in both modes.
+    constexpr std::array<unsigned,14> registers{0,1,2,3,4,5,6,7,8,9,10,11,30,31};
+    constexpr std::array<std::uint16_t,14> words{
+        0x1111,0x2222,0x3333,0x4444,0x5555,0x6666,0x7777,0x8888,
+        0x9999,0xaaaa,0xbbbb,0xcccc,0x1234,0x8765};
+    const auto Expected=[&](DSPInstructionRegisters context,unsigned destination,std::uint16_t word) {
+        ++context.pc;++context.instructions;
+        if(destination<4)context.address[destination]=word;
+        else if(destination<8)context.index[destination-4]=word;
+        else if(destination<12)context.wrap[destination-8]=word;
+        else context.accumulator[destination-30]=LoadedCell(
+            context.accumulator[destination-30],word,(context.status&0x4000)!=0);
+        return context;
+    };
+    for(bool extend:{false,true})for(unsigned i=0;i<registers.size();++i) {
+        auto context=input;if(extend)context.status|=0x4000;
+        const auto destination=registers[(i*5u+3u)%registers.size()];
+        auto core=Mover(destination,registers[i]);core.BeginExecution(context);
+        Same(core.Step(),Expected(context,destination,words[i]));
+    }
+    struct Boundary {std::uint64_t cell;std::uint16_t saturated;};
+    // Literal signed40 boundary oracle, independent of the decoder's signed
+    // conversion and comparisons; raw words are used directly in16-bit mode.
+    constexpr std::array<Boundary,12> boundaries{{
+        {0x0000000000ULL,0},{0x0000000001ULL,0},{0x007fffffffULL,0x7fff},
+        {0x0080000000ULL,0x7fff},{0x0100000000ULL,0x7fff},{0x7fffffffffULL,0x7fff},
+        {0x8000000000ULL,0x8000},{0xff00000000ULL,0x8000},{0xff7fffffffULL,0x8000},
+        {0xff80000000ULL,0x8000},{0xfffffffffeULL,0xffff},{0xffffffffffULL,0xffff}}};
+    for(unsigned selected=0;selected<2;++selected)for(bool extend:{false,true})
+        for(const auto boundary:boundaries) {
+            auto context=input;if(extend)context.status|=0x4000;
+            context.accumulator[selected]=boundary.cell;
+            const auto word=extend?boundary.saturated:static_cast<std::uint16_t>(boundary.cell/65536u);
+            auto core=Mover(3,30+selected);core.BeginExecution(context);
+            Same(core.Step(),Expected(context,3,word));
+            // Self moves must read/saturate before overwriting their source,
+            // and can clear low/high cells only in the real40-bit mode.
+            auto self=Mover(30+selected,30+selected);self.BeginExecution(context);
+            Same(self.Step(),Expected(context,30+selected,word));
+        }
+    for(unsigned selected=0;selected<2;++selected)for(bool extend:{false,true})
+        for(auto word:std::array<std::uint16_t,5>{0,1,0x7fff,0x8000,0xffff}) {
+            auto context=input;if(extend)context.status|=0x4000;context.index[0]=word;
+            auto core=Mover(30+selected,4);core.BeginExecution(context);
+            Same(core.Step(),Expected(context,30+selected,word));
+        }
+    // Unmodeled real register families stay explicit. Never invent their
+    // stack pop/push, product, auxiliary or high/low/control/status effects.
+    for(unsigned unqualified:{12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29})
+        for(bool source:{false,true}) {
+            auto core=Mover(source?0:unqualified,source?unqualified:0);
+            core.BeginExecution(input);bool held=false;
+            try{core.Step();}catch(const DSPUnsupportedInstruction& gap) {
+                held=gap.pc==0x100 && gap.operand==unqualified;
+            }
+            Check(held,"unqualified MRR register family silently ran or lost exact operand");
+            Same(core.Registers(),input);
+        }
+    // Known MRR width is enough for a zero-count skip. This unsupported stack
+    // read must not execute or acquire guessed history merely to skip it.
+    PutWord(backing,0,0x0064);PutWord(backing,1,0x0102);PutWord(backing,2,0x1c0c);
+    DSPInstructionCore skip(mailboxes,control);skip.LoadInstructionMemory(memory,physical,6,0x100);
+    auto context=input;context.index[0]=0;skip.BeginExecution(context);
+    auto expected=context;expected.pc=0x103;++expected.instructions;Same(skip.Step(),expected);
+    // A real MRR can be the inclusive BLOOP endpoint without eager execution
+    // or source counter mutation. The second visit copies the original source.
+    PutWord(backing,0,0x0064);PutWord(backing,1,0x0102);PutWord(backing,2,0x1c1e);
+    DSPInstructionCore loop(mailboxes,control);loop.LoadInstructionMemory(memory,physical,6,0x100);
+    context=input;context.index[0]=2;loop.BeginExecution(context);
+    auto state=loop.Step();Check(state.pc==0x102 && state.stack[3]==2,"MRR endpoint loop setup differs");
+    state=loop.Step();Check(state.pc==0x102 && state.stack[3]==1 && state.address[0]==0x1234 &&
+        state.index==context.index && state.status==context.status,"MRR endpoint repeat/order differs");
+    state=loop.Step();expected=Expected(context,0,0x1234);expected.pc=0x103;
+    expected.instructions=context.instructions+3;expected.loop_stack[0]={0xbeef,0x1234,0};
+    Same(state,expected);
+}
+
 void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
                          NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
     // This generated bank is hardware test input, not Nintendo/FreeDSP ROM.
@@ -229,9 +318,12 @@ void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,s
           "actual source4096-word IROM walk wrapped within the wrong bank or altered authored count");
     state=walk.Step();Check(state.pc==0x1f && state.instructions==8202 && state.accumulator[0]==0 &&
           state.status==0xe1e4,"original source clear after IROM walker differs");
+    state=walk.Step();Check(state.pc==0x20 && state.instructions==8203 && state.address[0]==0 &&
+          state.accumulator[0]==0 && state.status==0xe1e4 && state.index[0]==0x1000,
+          "original MRR did not copy the cleared middle word into AR0 with source flags/count intact");
     const auto before=walk.Registers();bool held=false;
-    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x1f && gap.opcode==0x1c1e;}
-    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated later MRR/source readiness");
+    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x20 && gap.opcode==0x0044;}
+    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated later LOOP/source readiness");
     Same(walk.Registers(),before);
 }
 
@@ -343,6 +435,7 @@ void Run(int argc,char** argv) {
     bool missing_rom=false;try{init.Step();}catch(const std::out_of_range&) {missing_rom=true;}
     Check(missing_rom && !DSPCheckMailFromDSP(), "actual ILRRI invented absent IROM bytes");
     Same(init.Registers(),loop_hold);
+    RegisterMoveGate(backing,memory,physical,mailboxes,control);
     GeneratedSourceWalk(backing,memory,physical,mailboxes,control);
     LoopGate(backing,memory,physical,mailboxes,control);
     InstructionReadGate(backing,memory,physical,mailboxes,control);
@@ -388,7 +481,7 @@ void Run(int argc,char** argv) {
     OSRestoreInterrupts(TRUE);
     DetachNativeDSPControl();DetachNativeDSPMailboxes();ShutdownNativeInterruptController();
     ReleaseNativeDSPMemory(pin);DetachNativeDSPMEM1();
-    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk reachesMRR; ROM/reset/task boot remains unavailable\n";
+    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk executesMRR/reachesLOOP; ROM/reset/task boot remains unavailable\n";
 }
 } // namespace
 int main(int argc,char** argv) {
