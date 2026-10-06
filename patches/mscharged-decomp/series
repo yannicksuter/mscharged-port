@@ -208,3 +208,4 @@
 0259-native-audio-config-live-values.patch
 0255-restore-original-effects-initialization.patch
 0254-native-compressed-file-byte-ownership.patch
+0270-keep-legacy-diagnostic-event-marker.patch
