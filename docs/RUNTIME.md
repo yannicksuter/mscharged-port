@@ -26,11 +26,13 @@ For a host check without game data, build preset `aurora` and run
 With the Linux/Vulkan prerequisites below:
 
 ```sh
-cmake --preset graphics -DMSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC=ON
-cmake --build --preset graphics --target mscharged-original-main-credits-check -j 3
-./build/graphics/mscharged-original-main-credits-check --disc ./game/R4QE01.rvz --window
+cmake --preset graphics -DMSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC=ON -DMSCHARGED_BUILD_LAUNCHER=ON
+cmake --build --preset graphics --target mscharged -j 3
+./build/graphics/mscharged --experimental-credits --disk ./game/R4QE01.rvz --window
 ```
 
+The launcher also offers **Try Credits**. The separate
+`mscharged-original-main-credits-check` target uses the same original-main driver.
 The test also accepts `--config FILE`, `--disc FILE` (`--disk`), `--window`,
 `--fullscreen`, and `--size WIDTHxHEIGHT`; command-line values override the INI
 for this run without saving. `--window` or `--fullscreen` keeps it open.

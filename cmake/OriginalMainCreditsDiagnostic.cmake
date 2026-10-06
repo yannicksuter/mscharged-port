@@ -250,34 +250,51 @@ target_compile_definitions(mscharged_original_main_credits_vi PRIVATE
 target_compile_options(mscharged_original_main_credits_vi PRIVATE -ffunction-sections -fdata-sections)
 target_link_libraries(mscharged_original_main_credits_vi PRIVATE aurora::vi)
 
-add_executable(mscharged-original-main-credits-check
-    tests/diagnostics/original_main_credits_window.cpp
+add_library(charged_original_main_credits_host OBJECT
+    src/runtime/original_main_credits.cpp
     src/platform/os.cpp src/platform/host_metadata.cpp src/platform/string_format.cpp
     src/platform/report.cpp src/platform/thread.cpp)
-add_dependencies(mscharged-original-main-credits-check mscharged_original_main_credits_module)
-target_compile_features(mscharged-original-main-credits-check PRIVATE cxx_std_20)
-target_include_directories(mscharged-original-main-credits-check BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
-target_include_directories(mscharged-original-main-credits-check PRIVATE
-    "${MSCHARGED_AURORA_PREPARED}/lib" src
+add_dependencies(charged_original_main_credits_host mscharged_original_main_credits_module)
+target_compile_features(charged_original_main_credits_host PRIVATE cxx_std_20)
+target_include_directories(charged_original_main_credits_host BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
+target_include_directories(charged_original_main_credits_host PUBLIC src)
+target_include_directories(charged_original_main_credits_host PRIVATE
+    "${MSCHARGED_AURORA_PREPARED}/lib"
     "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
-target_compile_definitions(mscharged-original-main-credits-check PRIVATE
+target_compile_definitions(charged_original_main_credits_host PRIVATE
     MSCHARGED_NATIVE=1 TARGET_PC=1 AURORA_WII_CLOCK=1
     MSCHARGED_ORIGINAL_MAIN_CREDITS_MODULE_FILENAME="$<TARGET_FILE_NAME:mscharged_original_main_credits_module>")
-target_compile_options(mscharged-original-main-credits-check PRIVATE
+target_compile_options(charged_original_main_credits_host PRIVATE
     -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off)
-target_link_options(mscharged-original-main-credits-check PRIVATE
-    -Wl,--gc-sections -Wl,--export-dynamic
-    "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
-set_property(TARGET mscharged-original-main-credits-check APPEND PROPERTY LINK_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
-set_property(TARGET mscharged-original-main-credits-check PROPERTY LINK_LIBRARY_OVERRIDE
-    "WHOLE_ARCHIVE,aurora_gx,aurora_mtx,aurora_os")
-target_link_libraries(mscharged-original-main-credits-check PRIVATE
-    mscharged_original_main_credits_vi
+target_link_libraries(charged_original_main_credits_host PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm
     charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
     charged_native_video_output_device Threads::Threads ${CMAKE_DL_LIBS})
+
+function(mscharged_link_original_main_credits target)
+    add_dependencies(${target} mscharged_original_main_credits_module)
+    target_link_libraries(${target} PRIVATE charged_original_main_credits_host
+        mscharged_original_main_credits_vi aurora::core)
+    target_link_options(${target} PRIVATE
+        -Wl,--gc-sections -Wl,--export-dynamic
+        "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
+    set_property(TARGET ${target} PROPERTY LINK_LIBRARY_OVERRIDE
+        "WHOLE_ARCHIVE,aurora_gx,aurora_mtx,aurora_os")
+endfunction()
+
+add_executable(mscharged-original-main-credits-check
+    tests/diagnostics/original_main_credits_window.cpp)
+mscharged_link_original_main_credits(mscharged-original-main-credits-check)
+
+# The user opts into this combined executable by enabling both existing options.
+# The graphics preset's ordinary launcher-OFF preference is never changed here.
+if(TARGET mscharged)
+    target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_ORIGINAL_CREDITS=1)
+    mscharged_link_original_main_credits(mscharged)
+endif()
 
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
     add_test(NAME original_main_credits_vulkan COMMAND mscharged-original-main-credits-check

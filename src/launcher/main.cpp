@@ -14,6 +14,9 @@
 #include "runtime/startup.h"
 #endif
 #include "runtime/scene.h"
+#ifdef MSCHARGED_HAS_ORIGINAL_CREDITS
+#include "runtime/original_main_credits.h"
+#endif
 #include <charconv>
 #include <cmath>
 
@@ -27,6 +30,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using namespace mscharged;
@@ -49,6 +53,8 @@ struct Options
     bool smoke_test = false;
     bool experimental_startup = false;
     bool experimental_scene = false;
+    bool experimental_credits = false;
+    bool credits_arguments = false;
     bool scene_arguments = false;
     bool standalone_assets = false;
     bool page_selected = false;
@@ -120,6 +126,7 @@ class Launcher
 {
 public:
     const std::optional<ResolvedLaunch>& StartupLaunch() const { return startup_launch_; }
+    const std::optional<ResolvedLaunch>& CreditsLaunch() const { return credits_launch_; }
 
     ResolvedLaunch EffectiveLaunch() const { return ResolveLaunch(file_, options_.launch, &draft_); }
     std::string DiscSelection() const { return PathUtf8(EffectiveLaunch().disc_path); }
@@ -583,6 +590,8 @@ private:
         Paragraph("This build includes the launcher, settings, controller detection, and ISO/RVZ disc checks. The game is not playable yet.");
 #ifdef MSCHARGED_HAS_GAME_STARTUP
         Paragraph("Try startup enters the available original initialization code and reports its first missing service. This prototype cannot run a match yet.");
+#elif defined(MSCHARGED_HAS_ORIGINAL_CREDITS)
+        Paragraph("Try Credits enters original main and runs the original scrolling Credits scene, movie and native audio with temporary startup omissions. Full game startup is still in development.");
 #else
         Paragraph("The decompilation is still incomplete. Game startup, Aurora rendering, audio, and Wii input adaptation are the next integration steps.");
 #endif
@@ -648,6 +657,15 @@ private:
         ImGui::EndDisabled();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Experimental startup for USA revision 1. Uses run settings without saving, closes the launcher, and reports the first missing game service in the terminal and startup log.");
+#elif defined(MSCHARGED_HAS_ORIGINAL_CREDITS)
+        const bool credits_ready = config_ok_ && !pending_ && check_.info
+            && check_.selection == DiscSelection() && check_.info->game_id == "R4QE01" && check_.info->revision == 1;
+        ImGui::BeginDisabled(!credits_ready);
+        if (ImGui::Button("Try Credits", {104, 32}))
+        { credits_launch_ = EffectiveLaunch(); quit = true; }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("Original-main Credits test for USA revision 1. Uses run settings without saving and closes the launcher before the game window opens. Full startup and gameplay remain pending.");
 #else
         ImGui::BeginDisabled();
         ImGui::Button("Play game", {104, 32});
@@ -691,6 +709,7 @@ private:
 
     Options options_;
     std::optional<ResolvedLaunch> startup_launch_;
+    std::optional<ResolvedLaunch> credits_launch_;
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
     SDL_Texture* header_ = nullptr;
@@ -735,6 +754,9 @@ int main(int argc, char** argv)
 #ifdef MSCHARGED_HAS_GAME_STARTUP
             std::cout << "Original startup prototype: --experimental-startup [--config FILE] (not playable)\n";
 #endif
+#ifdef MSCHARGED_HAS_ORIGINAL_CREDITS
+            std::cout << "Original-main Credits test: --experimental-credits [--disk FILE] [--window] (temporary startup omissions)\n";
+#endif
 #ifdef MSCHARGED_HAS_SCENE_PREVIEW
             std::cout << "Static Wii asset preview: --experimental-scene [--config FILE] [--frames N [--frame-timeout SECONDS]]\n"
                          "                        [--model /DISC/PATH.rlg] [--textures /DISC/PATH.rlt] [--model-id HEX]\n"
@@ -763,6 +785,8 @@ int main(int argc, char** argv)
         if (arg == "--smoke-test") options.smoke_test = true;
         else if (arg == "--experimental-startup") options.experimental_startup = true;
         else if (arg == "--experimental-scene") options.experimental_scene = true;
+        else if (arg == "--experimental-credits") options.experimental_credits = true;
+        else if (arg == "--native-send" || arg == "--diagnostic-frame" || arg == "--resize-check") options.credits_arguments = true;
         else if (arg == "--frontend-world") { options.scene_arguments = true; options.scene.frontend_world = true; }
         else if (arg == "--frontend-animate") { options.scene_arguments = true; options.scene.frontend_animate = true; }
         else if (arg == "--frontend-boot") { options.scene_arguments = true; options.scene.frontend_boot = true; }
@@ -845,10 +869,13 @@ int main(int argc, char** argv)
     }
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }
     options.config = options.launch.config;
-    if ((options.experimental_startup || options.experimental_scene)
-        && (options.smoke_test || !options.screenshot.empty() || options.page_selected
-            || (options.experimental_startup && options.experimental_scene)))
+    const unsigned runtime_modes = unsigned(options.experimental_startup)
+        + unsigned(options.experimental_scene) + unsigned(options.experimental_credits);
+    if (runtime_modes && (runtime_modes > 1 || options.smoke_test
+        || !options.screenshot.empty() || options.page_selected))
     { std::cerr << "Select one runtime mode; capture/smoke options require the launcher.\n"; return 2; }
+    if (options.credits_arguments && !options.experimental_credits)
+    { std::cerr << "Credits frame/resize options require --experimental-credits.\n"; return 2; }
     if (options.scene_arguments && !options.experimental_scene)
     { std::cerr << "Asset/frame options require --experimental-scene.\n"; return 2; }
     if (options.scene.frame_timeout && !options.scene.frames)
@@ -917,6 +944,21 @@ int main(int argc, char** argv)
     { std::cerr << "Select --world or separate --model/--textures assets.\n"; return 2; }
     try
     {
+        if (options.experimental_credits)
+        {
+#ifdef MSCHARGED_HAS_ORIGINAL_CREDITS
+            // Preserve all shared launch options and diagnostic frame arguments;
+            // remove only the launcher mode selector before the shared driver.
+            std::vector<char*> arguments;
+            for (int i = 0; i < argc; ++i)
+                if (std::string_view(argv[i]) != "--experimental-credits") arguments.push_back(argv[i]);
+            arguments.push_back(nullptr);
+            return RunOriginalMainCredits(static_cast<int>(arguments.size()) - 1, arguments.data());
+#else
+            std::cerr << "Original-main Credits is not in this build. Enable MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC and MSCHARGED_BUILD_LAUNCHER.\n";
+            return 2;
+#endif
+        }
         if (options.experimental_scene)
         {
 #ifdef MSCHARGED_HAS_SCENE_PREVIEW
@@ -950,13 +992,17 @@ int main(int argc, char** argv)
             return 2;
 #endif
         }
-        std::optional<ResolvedLaunch> startup_launch;
+        std::optional<ResolvedLaunch> startup_launch, credits_launch;
         int result;
         {
             Launcher launcher;
             result = launcher.Run(std::move(options));
             startup_launch = launcher.StartupLaunch();
+            credits_launch = launcher.CreditsLaunch();
         } // Destroy the launcher/ImGui/SDL session before Aurora initializes.
+#ifdef MSCHARGED_HAS_ORIGINAL_CREDITS
+        if (credits_launch) return RunOriginalMainCredits(argc, argv, &*credits_launch, true);
+#endif
 #ifdef MSCHARGED_HAS_GAME_STARTUP
         if (startup_launch) return RunGameStartup(argc, argv, *startup_launch);
 #endif
