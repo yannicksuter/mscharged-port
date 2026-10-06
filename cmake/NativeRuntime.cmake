@@ -16,6 +16,7 @@ include(cmake/OriginalTiming.cmake)
 include(cmake/OriginalTweaks.cmake)
 include(cmake/OriginalTaskFlow.cmake)
 include(cmake/OriginalEvents.cmake)
+include(cmake/OriginalGameModule.cmake)
 add_library(charged_decomp_startup STATIC
     "${MSCHARGED_PREPARED}/src/Game/Startup.cpp"
     src/runtime/startup_animation.cpp
