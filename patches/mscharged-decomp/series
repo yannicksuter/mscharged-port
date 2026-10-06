@@ -216,3 +216,4 @@
 0264-preserve-original-effects-native-data-cells.patch
 0262-native-registry-offset-words.patch
 0263-restore-original-camera-scalar-providers.patch
+0267-restore-original-animation-controller-provider.patch
