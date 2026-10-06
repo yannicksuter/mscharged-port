@@ -16,6 +16,13 @@ struct DSPInstructionRegisters {
     std::uint64_t instructions{}; // Executed instructions, not cycle timing.
     // Exact16-bit hardware cells. Defaults are fixture input, not reset values.
     std::array<std::uint16_t,4> address{},index{},wrap{};
+    // Exact16-bit ST0..ST3 cells. Only BLOOP-owned stack transitions are
+    // qualified; general call/data stack instructions remain unsupported.
+    std::array<std::uint16_t,4> stack{};
+    // Saved ST0/ST2/ST3 tops for the four hardware loop levels. Explicit
+    // context metadata is not a hardware reset/ROM initialization claim.
+    std::array<std::array<std::uint16_t,3>,4> loop_stack{};
+    std::uint8_t loop_depth{};
 };
 struct DSPUnsupportedInstruction : std::runtime_error {
     DSPUnsupportedInstruction(std::uint16_t address,std::uint16_t word,std::uint16_t detail);

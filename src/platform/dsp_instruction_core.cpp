@@ -66,6 +66,9 @@ void DSPInstructionCore::BeginExecution(const DSPInstructionRegisters& context) 
     InstructionWord(context.pc);
     if(context.accumulator[0]>0xffffffffffULL || context.accumulator[1]>0xffffffffffULL)
         throw std::out_of_range("DSP register context exceeds a raw 40-bit accumulator");
+    if(context.loop_depth>context.loop_stack.size() ||
+       (context.loop_depth==0 && context.stack[2] && context.stack[3]))
+        throw std::out_of_range("DSP loop context lacks its actual retained stack history");
     registers_=context;running_=true;
 }
 DSPInstructionRegisters DSPInstructionCore::Registers() const {return registers_;}
@@ -77,7 +80,42 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
     auto next=registers_;
     std::uint16_t length=1;
     bool branch=false;
-    if (opcode==0x029f) {
+    if (opcode==0x0000) {
+        // Hardware NOP leaves cells/flags unchanged.
+    } else if ((opcode&0xffe0)==0x0060) {
+        length=2;
+        const auto reg=static_cast<std::uint16_t>(opcode&31);
+        std::uint16_t count;
+        if(reg<4)count=next.address[reg];
+        else if(reg<8)count=next.index[reg-4];
+        else if(reg<12)count=next.wrap[reg-8];
+        else throw DSPUnsupportedInstruction(pc,opcode,reg);
+        const auto endpoint=InstructionWord(static_cast<std::uint16_t>(pc+1));
+        if(count) {
+            if(next.loop_depth==next.loop_stack.size())
+                // STOVF needs genuine exception/ROM execution, which is not
+                // available. Reject this boundary without inventing it.
+                throw DSPUnsupportedInstruction(pc,opcode,0x0002);
+            next.loop_stack[next.loop_depth++]={next.stack[0],next.stack[2],next.stack[3]};
+            next.stack[0]=static_cast<std::uint16_t>(pc+2);
+            next.stack[2]=endpoint;
+            next.stack[3]=count;
+        } else {
+            const auto last=InstructionWord(endpoint);
+            std::uint16_t width;
+            if(last==0x029f || (last&0xffe0)==0x0080 ||
+               last==0x00fe || last==0x00ff || (last&0xff00)==0x1600 ||
+               (last&0xffe0)==0x0060)width=2;
+            else if(last==0 || (last&0xfff8)==0x1200 || (last&0xfff8)==0x1300 ||
+                    (last>=0x8a00 && last<=0x8f00 && !(last&0xff)) ||
+                    last==0x8100 || last==0x8900)width=1;
+            else throw DSPUnsupportedInstruction(pc,opcode,last);
+            // Counter0 skips the endpoint instruction, including its operand.
+            // Unknown instruction sizes remain an explicit decoder gap.
+            next.pc=static_cast<std::uint16_t>(endpoint+width);
+            branch=true;
+        }
+    } else if (opcode==0x029f) {
         // Unconditional immediate jump used by the original OS DSP init
         // vector. Invalid destinations remain real next-fetch failures.
         next.pc=InstructionWord(static_cast<std::uint16_t>(pc+1));
@@ -127,6 +165,15 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
         else throw DSPUnsupportedInstruction(pc,opcode,address);
     } else throw DSPUnsupportedInstruction(pc,opcode,0);
     if (!branch)next.pc=static_cast<std::uint16_t>(pc+length);
+    if(next.loop_depth && next.stack[2] && next.stack[3] &&
+       static_cast<std::uint16_t>(next.pc-1)==next.stack[2]) {
+        --next.stack[3];
+        if(next.stack[3])next.pc=next.stack[0];
+        else {
+            const auto& previous=next.loop_stack[--next.loop_depth];
+            next.stack[0]=previous[0];next.stack[2]=previous[1];next.stack[3]=previous[2];
+        }
+    }
     ++next.instructions;
     registers_=next;return registers_;
 }

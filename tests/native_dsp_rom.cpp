@@ -17,6 +17,7 @@ extern "C" {
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <initializer_list>
 
 namespace {
 using namespace mscharged::platform;
@@ -29,6 +30,115 @@ struct SDKLifetime {bool live{};~SDKLifetime(){if(live)aurora_shutdown();}};
 void PutWord(unsigned char* bytes,std::size_t word,std::uint16_t value) {
     bytes[word*2]=static_cast<unsigned char>(value>>8);bytes[word*2+1]=static_cast<unsigned char>(value);
 }
+void Same(const DSPInstructionRegisters& a,const DSPInstructionRegisters& b) {
+    Check(a.pc==b.pc && a.status==b.status && a.control==b.control && a.accumulator==b.accumulator &&
+          a.instructions==b.instructions && a.address==b.address && a.index==b.index && a.wrap==b.wrap &&
+          a.stack==b.stack && a.loop_stack==b.loop_stack && a.loop_depth==b.loop_depth,
+          "failed hardware loop request changed a retained register/stack cell");
+}
+void LoopGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+              NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    const auto Program=[&](std::initializer_list<std::uint16_t> words) {
+        std::size_t i=0;for(auto word:words)PutWord(backing,i++,word);
+        DSPInstructionCore core(mailboxes,control);
+        core.LoadInstructionMemory(memory,physical,static_cast<std::uint32_t>(i*2),0x100);
+        return core;
+    };
+    DSPInstructionRegisters input{0x100,0xa5a5,0x9c,{0x12abcdef34ULL,0x89fedcba21ULL},7,
+        {0x1111,0x2222,0x3333,0x4444},{0x5555,0x6666,0x7777,0x8888},
+        {0x9999,0xaaaa,0xbbbb,0xcccc}};
+    input.stack={0xbabe,0xdead,0x7777,0};
+    // A single one-word endpoint with independently specified execution trace.
+    for(unsigned reg=0;reg<12;++reg) {
+        auto context=input;
+        if(reg<4)context.address[reg]=3;
+        else if(reg<8)context.index[reg-4]=3;
+        else context.wrap[reg-8]=3;
+        auto single=Program({static_cast<std::uint16_t>(0x0060+reg),0x0103,0,0,0});
+        single.BeginExecution(context);
+        constexpr std::array<std::uint16_t,7> pcs{0x102,0x103,0x102,0x103,0x102,0x103,0x104};
+        constexpr std::array<std::uint16_t,7> counts{3,3,2,2,1,1,0};
+        for(std::size_t i=0;i<pcs.size();++i) {
+            const auto actual=single.Step();
+            Check(actual.pc==pcs[i] && actual.instructions==context.instructions+i+1,
+                  "BLOOP inclusive one-word endpoint/order differs from independent instruction trace");
+            Check(actual.status==context.status && actual.control==context.control &&
+                  actual.accumulator==context.accumulator && actual.address==context.address &&
+                  actual.index==context.index && actual.wrap==context.wrap && actual.stack[1]==context.stack[1],
+                  "BLOOP changed its authored counter register, flags or unrelated hardware cells");
+            if(counts[i])Check(actual.loop_depth==1 && actual.stack[0]==0x102 &&
+                actual.stack[2]==0x103 && actual.stack[3]==counts[i],"BLOOP live stack counter/repeat/endpoint differs");
+            else Check(actual.loop_depth==0 && actual.stack==context.stack,
+                       "BLOOP completion failed to restore actual previous ST0/ST2/ST3 cells");
+        }
+        Check(single.Registers().loop_stack[0]==std::array<std::uint16_t,3>{0xbabe,0x7777,0},
+              "loop backing lost the exact saved previous tops");
+    }
+    // A two-level sequence, authored independently as next-PC/depth/count cells.
+    auto nested=Program({0x0064,0x0106,0x0065,0x0105,0,0,0,0});
+    auto context=input;context.index[0]=2;context.index[1]=3;nested.BeginExecution(context);
+    struct Expected {std::uint16_t pc,count;std::uint8_t depth;};
+    constexpr std::array<Expected,17> trace{{
+        {0x102,2,1},{0x104,3,2},{0x105,3,2},{0x104,2,2},{0x105,2,2},{0x104,1,2},
+        {0x105,1,2},{0x106,2,1},{0x102,1,1},{0x104,3,2},{0x105,3,2},{0x104,2,2},
+        {0x105,2,2},{0x104,1,2},{0x105,1,2},{0x106,1,1},{0x107,0,0}}};
+    for(std::size_t i=0;i<trace.size();++i) {
+        const auto actual=nested.Step();const auto expected=trace[i];
+        Check(actual.pc==expected.pc && actual.loop_depth==expected.depth &&
+              actual.instructions==context.instructions+i+1,"nested hardware loop traversal/pop order differs");
+        if(expected.depth)Check(actual.stack[3]==expected.count &&
+              actual.stack[0]==(expected.depth==2?0x104:0x102) &&
+              actual.stack[2]==(expected.depth==2?0x105:0x106),"nested hardware top/counter differs");
+        else Check(actual.stack==context.stack,"nested loop failed to restore authored baseline");
+        Check(actual.index==context.index && actual.status==context.status && actual.stack[1]==0xdead,
+              "nested loop changed source count registers, flags or data stack");
+    }
+    auto full=Program({0x0064,0x010b,0x0065,0x010a,0x0066,0x0109,0x0067,0x0108,0,0,0,0});
+    context=input;context.index={1,1,1,1};full.BeginExecution(context);
+    for(unsigned i=0;i<4;++i) {
+        const auto actual=full.Step();
+        Check(actual.loop_depth==i+1 && actual.pc==0x102+i*2 && actual.stack[3]==1,
+              "actual four-level hardware capacity/push order differs");
+    }
+    for(unsigned i=0;i<4;++i) {
+        const auto actual=full.Step();
+        Check(actual.loop_depth==3-i && actual.pc==0x109+i,
+              "four-level hardware capacity/pop order differs");
+    }
+    Check(full.Registers().stack==context.stack,"four-level loop lost prior stack cells");
+    // Raw unsigned16-bit counter must not become signed, narrowed or eager iterations.
+    auto maximal=Program({0x0064,0x0102,0,0});context=input;context.index[0]=0xffff;
+    maximal.BeginExecution(context);auto actual=maximal.Step();
+    Check(actual.stack[3]==0xffff && actual.instructions==8,"BLOOP eagerly ran or narrowed max counter");
+    actual=maximal.Step();
+    Check(actual.pc==0x102 && actual.stack[3]==0xfffe && actual.index[0]==0xffff,
+          "hardware endpoint did not decrement exactly one unsigned count");
+    // Counter0 skips the endpoint opcode, respecting one- and two-word sizes;
+    // no skipped LRI write or immediate/operand execution is permitted.
+    for(bool two_words:{false,true}) {
+        auto skip=Program({0x0064,0x0104,0xdead,0xbeef,
+            static_cast<std::uint16_t>(two_words?0x0080:0),0xabcd,0});
+        context=input;context.index[0]=0;skip.BeginExecution(context);actual=skip.Step();
+        auto expected=context;expected.pc=two_words?0x106:0x105;++expected.instructions;Same(actual,expected);
+    }
+    const auto Rejected=[&](DSPInstructionCore& core,const DSPInstructionRegisters& before) {
+        core.BeginExecution(before);Throws([&]{core.Step();},"unsupported loop state/opcode/extent silently ran");
+        Same(core.Registers(),before);
+    };
+    auto unknown_reg=Program({0x006c,0x0102,0});Rejected(unknown_reg,input);
+    auto unknown_size=Program({0x0064,0x0102,0x0218});context=input;context.index[0]=0;Rejected(unknown_size,context);
+    auto missing_end=Program({0x0064,0x0110,0});Rejected(missing_end,context);
+    auto missing_operand=Program({0x0064});Rejected(missing_operand,input);
+    auto overflow=Program({0x0064,0x0102,0});context=input;context.index[0]=1;
+    context.loop_depth=4;context.stack={0x100,0xdead,0x101,1};
+    Rejected(overflow,context);Check(!DSPCheckInit() && !DSPCheckMailFromDSP(),
+          "unsupported STOVF fabricated exception ROM, source initialization or mail");
+    auto invalid=input;invalid.loop_depth=5;Throws([&]{overflow.BeginExecution(invalid);},
+        "invalid externally supplied loop depth was accepted");Same(overflow.Registers(),context);
+    invalid=input;invalid.stack[3]=1;Throws([&]{overflow.BeginExecution(invalid);},
+        "unknown active native stack history was silently invented");Same(overflow.Registers(),context);
+}
+
 void Run(int argc,char** argv) {
     Check(argc==3 && std::strlen(argv[2])==64,"genuine source leaf/hash arguments required");
     const auto directory=std::filesystem::absolute("sdk-data").string();std::filesystem::create_directories(directory);
@@ -128,11 +238,18 @@ void Run(int argc,char** argv) {
     Check(state.pc==0x1a && state.instructions==8 && state.index[0]==0x1000 &&
           state.address[0]==0x8000 && state.wrap[0]==0xffff && state.status==0xe1ff,
           "original LRI IX0 differs from the4096-word IROM walk request");
+    state=init.Step();
+    Check(state.pc==0x1c && state.instructions==9 && state.index[0]==0x1000 &&
+          state.stack[0]==0x1c && state.stack[2]==0x1d && state.stack[3]==0x1000 &&
+          state.loop_depth==1 && state.address[0]==0x8000 && state.wrap[0]==0xffff && state.status==0xe1ff,
+          "actual original BLOOP differs from independent IROM-walk stack/counter request");
+    const auto loop_hold=init.Registers();
     bool unsupported=false;try{init.Step();}catch(const DSPUnsupportedInstruction& gap) {
-        unsupported=gap.pc==0x1a && gap.opcode==0x0064;
+        unsupported=gap.pc==0x1c && gap.opcode==0x0218;
     }
-    Check(unsupported && init.Registers().pc==0x1a && init.Registers().instructions==8 &&
-          !DSPCheckMailFromDSP(), "actual unimplemented hardware-loop request was bypassed");
+    Check(unsupported && !DSPCheckMailFromDSP(), "actual unimplemented ILRRI request was bypassed");
+    Same(init.Registers(),loop_hold);
+    LoopGate(backing,memory,physical,mailboxes,control);
     // Independently authored nonzero context proves each16-bit hardware family
     // cell changes alone, in either SR mode, without guessing reset defaults.
     for(unsigned reg=0;reg<12;++reg) {
@@ -175,7 +292,7 @@ void Run(int argc,char** argv) {
     OSRestoreInterrupts(TRUE);
     DetachNativeDSPControl();DetachNativeDSPMailboxes();ShutdownNativeInterruptController();
     ReleaseNativeDSPMemory(pin);DetachNativeDSPMEM1();
-    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; holds at real BLOOP; ROM/reset/task boot remains unavailable\n";
+    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP setup then holds at real ILRRI; ROM/reset/task boot remains unavailable\n";
 }
 } // namespace
 int main(int argc,char** argv) {
