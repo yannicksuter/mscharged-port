@@ -8,9 +8,7 @@ std::uint16_t QualifiedInstructionWords(std::uint16_t word) {
        (word>=0x8a00 && word<=0x8f00 && !(word&0xff)) ||
        word==0x8100 || word==0x8900 || (word&0xfefc)==0x0218 ||
        (word&0xfc00)==0x1c00 || (word&0xffe0)==0x0040 ||
-       // Exact source SRRI1b1e size only. Its memory/address effects remain
-       // unsupported and cannot be executed by this hardware slice.
-       word==0x1b1e)return 1;
+       (word&0xff80)==0x1b00)return 1;
     return 0;
 }
 }
@@ -171,6 +169,35 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
                  ((word&0x8000)?0xff00000000ULL:0ULL);
         } else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
         next.address[source]=static_cast<std::uint16_t>(next.address[source]+1);
+    } else if ((opcode&0xff80)==0x1b00) {
+        const auto destination=static_cast<unsigned>((opcode>>5)&3);
+        const auto source=static_cast<unsigned>(opcode&31);
+        const auto address=next.address[destination];
+        // The source init clear selects full16-bit linear AR0 addressing and
+        // internal DRAM only. Read-only coefficient banks, IFX and circular
+        // addressing need their own qualified device semantics.
+        if(next.wrap[destination]!=0xffff)
+            throw DSPUnsupportedInstruction(pc,opcode,next.wrap[destination]);
+        if(address>=WORDS)throw DSPUnsupportedInstruction(pc,opcode,address);
+        std::uint16_t word;
+        if(source<4)word=next.address[source];
+        else if(source<8)word=next.index[source-4];
+        else if(source<12)word=next.wrap[source-8];
+        else if(source==0x1e || source==0x1f) {
+            const auto cell=next.accumulator[source-0x1e];
+            const auto value=static_cast<std::int64_t>(cell)-
+                ((cell&0x8000000000ULL)?0x10000000000LL:0LL);
+            if((next.status&0x4000) && value>0x7fffffffLL)word=0x7fff;
+            else if((next.status&0x4000) && value<(-0x80000000LL))word=0x8000;
+            else word=static_cast<std::uint16_t>(cell>>16);
+        } else throw DSPUnsupportedInstruction(pc,opcode,static_cast<std::uint16_t>(source));
+        // Logical native cells retain the exact16-bit device word already
+        // decoded from BE bus transport. Read precedes AR increment, including
+        // source/destination aliasing; every rejection above leaves both banks
+        // and the retained source context unchanged.
+        data_[address]=word;
+        data_valid_[address]=true;
+        next.address[destination]=static_cast<std::uint16_t>(address+1);
     } else if ((opcode&0xfc00)==0x1c00) {
         const auto destination=static_cast<unsigned>((opcode>>5)&31);
         const auto source=static_cast<unsigned>(opcode&31);

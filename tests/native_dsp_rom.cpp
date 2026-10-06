@@ -403,6 +403,104 @@ void SingleInstructionLoopGate(unsigned char* backing,NativeDSPMemoryEndpoint me
     Check(!DSPCheckInit() && !DSPCheckMailFromDSP(),"partial LOOP support fabricated ROM/init/source mail");
 }
 
+void StoreIncrementGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+                        NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    const auto Program=[&](std::initializer_list<std::uint16_t> words) {
+        std::size_t i=0;for(auto word:words)PutWord(backing,i++,word);
+        DSPInstructionCore core(mailboxes,control);
+        core.LoadInstructionMemory(memory,physical,static_cast<std::uint32_t>(i*2),0x100);
+        return core;
+    };
+    DSPInstructionRegisters input{0x100,0xa5a5,0x9c,{0x0012345678ULL,0xff89abcdefULL},7,
+        {0x1111,0x2222,0x3333,0x4444},{0x5555,0x6666,0x7777,0x8888},
+        {0x9999,0xaaaa,0xbbbb,0xcccc}};
+    input.stack={0xbabe,0xdead,0x7777,0};
+    constexpr std::array<unsigned,14> sources{0,1,2,3,4,5,6,7,8,9,10,11,30,31};
+    for(unsigned destination=0;destination<4;++destination)for(unsigned source:sources) {
+        auto context=input;context.address[destination]=0x2fe;context.wrap[destination]=0xffff;
+        auto core=Program({static_cast<std::uint16_t>(0x1b00u+destination*32u+source)});
+        // Genuine BE data transport, including before/after guards and distinct
+        // IRAM at the same numerical address as the target DRAM word.
+        PutWord(backing,0,0x5a7c);PutWord(backing,1,0xabcd);PutWord(backing,2,0x83f1);
+        core.LoadDataMemory(memory,physical,6,0x2fd);
+        PutWord(backing,0,0x1357);core.LoadInstructionMemory(memory,physical,2,0x2fe);
+        std::uint16_t expected_word;
+        if(source<4)expected_word=context.address[source];
+        else if(source<8)expected_word=context.index[source-4];
+        else if(source<12)expected_word=context.wrap[source-8];
+        else expected_word=source==30?0x1234:0x89ab;
+        auto expected=context;expected.address[destination]=0x2ff;expected.pc=0x101;expected.instructions=8;
+        core.BeginExecution(context);Same(core.Step(),expected);
+        Check(core.DataWord(0x2fe)==expected_word && core.DataWord(0x2fd)==0x5a7c &&
+              core.DataWord(0x2ff)==0x83f1,"SRRI word/BE guard/source-before-increment differs");
+        Check(core.InstructionWord(0x2fe)==0x1357,"SRRI data write corrupted equal-address IRAM");
+    }
+    struct AccumulatorCase {std::uint64_t raw;std::uint16_t narrow,saturated;};
+    constexpr std::array<AccumulatorCase,8> cells{{
+        {0x0000000000ULL,0x0000,0x0000},{0x007fffffffULL,0x7fff,0x7fff},
+        {0x0080000000ULL,0x8000,0x7fff},{0x7fabcd4321ULL,0xabcd,0x7fff},
+        {0xff80000000ULL,0x8000,0x8000},{0xff7fffffffULL,0x7fff,0x8000},
+        {0x80abcd4321ULL,0xabcd,0x8000},{0xffffffffffULL,0xffff,0xffff}}};
+    for(unsigned selected=0;selected<2;++selected)for(bool saturated:{false,true})for(const auto& cell:cells) {
+        auto core=Program({static_cast<std::uint16_t>(0x1b1eu+selected)});
+        auto context=input;context.status=saturated?0x4000:0;context.address[0]=0x3a0;context.wrap[0]=0xffff;
+        context.accumulator[selected]=cell.raw;core.BeginExecution(context);
+        auto expected=context;expected.address[0]=0x3a1;expected.pc=0x101;expected.instructions=8;
+        Same(core.Step(),expected);
+        Check(core.DataWord(0x3a0)==(saturated?cell.saturated:cell.narrow),"SRRI raw40/SXM ACM store differs from literal oracle");
+        Throws([&]{core.DataWord(0x3a1);},"SRRI invented an adjacent initialized DRAM cell");
+    }
+    auto last=Program({0x1b1e,0x1b1e});auto context=input;context.address[0]=0xfff;context.wrap[0]=0xffff;
+    last.BeginExecution(context);auto state=last.Step();
+    Check(state.address[0]==0x1000 && last.DataWord(0xfff)==0x1234,"SRRI last DRAM word stride/value differs");
+    const auto boundary=last.Registers();Throws([&]{last.Step();},"SRRI wrote coefficient bank after DRAM boundary");
+    Same(last.Registers(),boundary);Check(last.DataWord(0xfff)==0x1234,"failed SRRI changed last valid DRAM word");
+    // Explicit refusal to invent circular addressing or unsupported source cells.
+    for(unsigned source:std::array<unsigned,18>{12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29}) {
+        auto core=Program({static_cast<std::uint16_t>(0x1b00u+source)});context=input;
+        context.address[0]=0x2fe;context.wrap[0]=0xffff;
+        PutWord(backing,0,0x62c1);core.LoadDataMemory(memory,physical,2,0x2fe);core.BeginExecution(context);
+        Throws([&]{core.Step();},"SRRI invented unsupported source register semantics");Same(core.Registers(),context);
+        Check(core.DataWord(0x2fe)==0x62c1,"unsupported source store changed existing DRAM");
+    }
+    for(std::uint16_t wrap:std::array<std::uint16_t,4>{0,1,0x7ff,0xfffe}) {
+        auto core=Program({0x1b1e});context=input;context.address[0]=0x2fe;context.wrap[0]=wrap;
+        PutWord(backing,0,0x62c1);core.LoadDataMemory(memory,physical,2,0x2fe);core.BeginExecution(context);
+        Throws([&]{core.Step();},"SRRI circular addressing falsely used linear arithmetic");Same(core.Registers(),context);
+        Check(core.DataWord(0x2fe)==0x62c1,"unsupported circular store changed existing DRAM");
+    }
+    for(std::uint16_t address:std::array<std::uint16_t,7>{0x1000,0x1800,0x2000,0xfffb,0xfffc,0xfffd,0xffff}) {
+        auto core=Program({0x1b1e});PutWord(backing,0,0x9134);core.LoadCoefficientROM(memory,physical);
+        context=input;context.address[0]=address;context.wrap[0]=0xffff;core.BeginExecution(context);
+        const auto csr=GetNativeDSPControlStatus().csr;
+        Throws([&]{core.Step();},"SRRI wrote ROM, unmapped data or unqualified IFX");Same(core.Registers(),context);
+        Check(core.DataWord(0x1000)==0x9134 && core.DataWord(0x1800)==0x9134 &&
+              !DSPCheckMailFromDSP() && GetNativeDSPControlStatus().csr==csr,"unqualified write changed ROM/mail/CSR");
+    }
+    auto halted=Program({0x1b1e});context=input;context.address[0]=0x2fe;context.wrap[0]=0xffff;
+    halted.BeginExecution(context);ChargedDSPControlWrite(4);
+    Throws([&]{halted.Step();},"halted device allowed SRRI side effect");Same(halted.Registers(),context);
+    Throws([&]{halted.DataWord(0x2fe);},"halted SRRI initialized DRAM");ChargedDSPControlWrite(0);
+    auto loop=Program({0x0044,0x1b1e,0});context=input;context.address[0]=0x400;context.wrap[0]=0xffff;context.index[0]=3;
+    loop.BeginExecution(context);state=loop.Step();
+    Check(state.pc==0x101 && state.stack[3]==3,"LOOP did not select actual SRRI single-word body");
+    for(unsigned i=0;i<3;++i) {
+        state=loop.Step();Check(state.pc==(i==2?0x102:0x101) && state.instructions==9u+i &&
+            state.address[0]==0x401u+i && state.index[0]==3 && loop.DataWord(static_cast<std::uint16_t>(0x400+i))==0x1234,
+            "LOOP/SRRI source store/increment/repeat order differs from literal trace");
+    }
+    Check(state.loop_depth==0 && state.stack==context.stack,"LOOP/SRRI failed original counter ownership/stack pop");
+    for(bool block:{false,true}) {
+        auto skipped=block?Program({0x0064,0x0102,0x1b1e,0}):Program({0x0044,0x1b1e,0});
+        context=input;context.index[0]=0;context.address[0]=0x400;context.wrap[0]=0xffff;
+        skipped.BeginExecution(context);state=skipped.Step();
+        Check(state.pc==(block?0x103:0x102) && state.instructions==8 && state.address==context.address &&
+            state.loop_depth==0,"zero count skip failed exact SRRI family width or changed AR");
+        Throws([&]{skipped.DataWord(0x400);},"zero-count SRRI skip executed a data write");
+    }
+    Check(!DSPCheckInit() && !DSPCheckMailFromDSP(),"SRRI data transport fabricated source/bootstrap readiness");
+}
+
 void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
                          NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
     // This generated bank is hardware test input, not Nintendo/FreeDSP ROM.
@@ -442,9 +540,23 @@ void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,s
           state.stack[0]==0x21 && state.stack[2]==0x21 && state.stack[3]==0x1000 &&
           state.address[0]==0 && state.index[0]==0x1000 && state.status==0xe1e4,
           "original LOOP setup did not retain actual4096-word DRAM clear request");
+    for(unsigned i=0;i<4096;++i) {
+        state=walk.Step();
+        Check(state.pc==(i==4095?0x22:0x21) && state.instructions==8205u+i &&
+              state.address[0]==i+1 && state.index[0]==0x1000 && state.status==0xe1e4 &&
+              walk.DataWord(static_cast<std::uint16_t>(i))==0,
+              "actual source4096-word DRAM clear store/increment/repeat differs from independent trace");
+    }
+    Check(state.loop_depth==0 && state.stack[3]==0 && state.instructions==12300,
+          "original DRAM clear did not pop original single-word loop state");
+    state=walk.Step();Check(state.pc==0x24 && state.instructions==12301 && state.index[0]==0x800 &&
+          state.address[0]==0x1000,"original nextLRI changed source addresses or request count");
+    state=walk.Step();Check(state.pc==0x26 && state.instructions==12302 && state.loop_depth==1 &&
+          state.stack[0]==0x26 && state.stack[2]==0x27 && state.stack[3]==0x800,
+          "original nextBLOOP lost actual half-DRAM readback request");
     const auto before=walk.Registers();bool held=false;
-    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x21 && gap.opcode==0x1b1e;}
-    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated SRRI/source readiness");
+    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x26 && gap.opcode==0x191e;}
+    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated LRRI/source readiness");
     Same(walk.Registers(),before);
 }
 
@@ -557,6 +669,7 @@ void Run(int argc,char** argv) {
     Check(missing_rom && !DSPCheckMailFromDSP(), "actual ILRRI invented absent IROM bytes");
     Same(init.Registers(),loop_hold);
     RegisterMoveGate(backing,memory,physical,mailboxes,control);
+    StoreIncrementGate(backing,memory,physical,mailboxes,control);
     GeneratedSourceWalk(backing,memory,physical,mailboxes,control);
     SingleInstructionLoopGate(backing,memory,physical,mailboxes,control);
     LoopGate(backing,memory,physical,mailboxes,control);
@@ -603,7 +716,7 @@ void Run(int argc,char** argv) {
     OSRestoreInterrupts(TRUE);
     DetachNativeDSPControl();DetachNativeDSPMailboxes();ShutdownNativeInterruptController();
     ReleaseNativeDSPMemory(pin);DetachNativeDSPMEM1();
-    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk executesMRR/LOOPsetup/reachesSRRI; ROM/reset/task boot remains unavailable\n";
+    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk executesMRR/LOOP/4096actualSRRIstores/reachesLRRI; ROM/reset/task boot remains unavailable\n";
 }
 } // namespace
 int main(int argc,char** argv) {
