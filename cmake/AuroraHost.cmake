@@ -69,6 +69,8 @@ function(mscharged_add_aurora_host)
 endfunction()
 mscharged_add_aurora_host()
 if(TARGET aurora_gx)
+    include(cmake/NativeInterrupts.cmake)
+    target_link_libraries(aurora_gx PRIVATE charged_native_interrupts)
     # GX and core reference one another. Declare the reverse static dependency
     # so even consumers of core alone get the required archive rescans.
     target_link_libraries(aurora_core PUBLIC aurora_gx)

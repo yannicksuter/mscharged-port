@@ -14,3 +14,4 @@
 0013-retain-native-ai-dma-address-width.patch
 0015-supply-native-wii-hardware-clocks.patch
 0016-release-native-configuration-storage.patch
+0017-genuine-gpu-draw-done-completion.patch

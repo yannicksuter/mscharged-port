@@ -1,14 +1,5 @@
 include_guard(GLOBAL)
-find_package(Threads REQUIRED)
-# Actual native SDK interrupt/context and AI device services. Neither library
-# contains a game task, audio manager, movie state, or an AX/DSP replacement.
-add_library(charged_native_interrupts STATIC src/platform/interrupts.cpp)
-add_dependencies(charged_native_interrupts verify_prepared)
-target_include_directories(charged_native_interrupts PUBLIC src
-    "${MSCHARGED_AURORA_PREPARED}/include")
-target_compile_definitions(charged_native_interrupts PUBLIC TARGET_PC=1)
-target_compile_features(charged_native_interrupts PUBLIC cxx_std_17)
-target_link_libraries(charged_native_interrupts PUBLIC Threads::Threads)
+include(cmake/NativeInterrupts.cmake)
 
 add_library(charged_native_ai STATIC src/platform/ai.cpp)
 add_dependencies(charged_native_ai verify_prepared)
