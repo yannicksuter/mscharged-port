@@ -27,14 +27,17 @@ With the Linux/Vulkan prerequisites below:
 
 ```sh
 cmake --preset graphics -DMSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC=ON
-cmake --build --preset graphics --target mscharged-original-credits-check -j 3
-./build/graphics/mscharged-original-credits-check --disc ./game/R4QE01.rvz --window
+cmake --build --preset graphics --target mscharged-original-main-credits-check -j 3
+./build/graphics/mscharged-original-main-credits-check --disc ./game/R4QE01.rvz --window
 ```
 
-This temporary test loads and renders the original Credits handler, assets,
-fonts and frontend code, with live source updates and scrolling. Full startup,
-movie/audio and game input remain pending. Close the window to exit. Omit
+This temporary test enters original `main`, then loads and renders Credits with
+the original fonts, frontend code and live scrolling. It skips blocked startup
+steps; full startup, movie/audio and game input remain pending. Close the window to exit. Omit
 `--window` to save a capture and exit.
+
+The separate `mscharged-original-credits-check` target remains available for
+testing Credits directly.
 
 ## Original movie audio test
 

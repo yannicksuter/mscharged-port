@@ -254,3 +254,6 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|Original Credits gate:")
 endif()
+
+# Same initialized source state, entered through original main.
+include(cmake/OriginalMainCreditsDiagnostic.cmake)
