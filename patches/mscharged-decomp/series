@@ -191,3 +191,4 @@
 0232-diagnostic-thp-audio-only.patch
 0237-restore-original-font-startup-and-native-address-abi.patch
 0238-native-resource-header-quota-and-storage.patch
+0242-native-original-stream-dsp-cached-address.patch
