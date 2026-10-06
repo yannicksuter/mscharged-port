@@ -24,6 +24,8 @@ add_library(charged_original_input OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/plat/DPDData.cpp"
     "${MSCHARGED_PREPARED}/src/RVL_SDK/kpad/KPAD.c"
     "${MSCHARGED_PREPARED}/src/Game/PadActions.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/PadMonkey.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiPadMonkey.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feInput.cpp")
 add_dependencies(charged_original_input verify_prepared)
 set_target_properties(charged_original_input PROPERTIES
