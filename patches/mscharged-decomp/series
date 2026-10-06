@@ -225,3 +225,4 @@
 0265-native-packed-registry-backing.patch
 0283-transport-original-rlg-geometry-bytes.patch
 0286-native-page-control-scalar-context.patch
+0288-restore-original-save-provider.patch

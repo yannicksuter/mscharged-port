@@ -103,3 +103,5 @@ include(cmake/OriginalInterpreter.cmake)
 include(cmake/OriginalBootSceneSources.cmake)
 
 include(cmake/OriginalCharacterLoading.cmake)
+
+include(cmake/OriginalSaveSources.cmake)
