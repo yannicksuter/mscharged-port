@@ -233,3 +233,4 @@
 0272-preserve-original-audio-bank-record-and-relocation-abi.patch
 0278-native-original-audio-slider-and-calculation-data.patch
 0285-original-live-audio-ownership-abi.patch
+0294-original-sound-handle-numeric-compiler-abi.patch
