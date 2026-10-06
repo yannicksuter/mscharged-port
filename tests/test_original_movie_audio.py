@@ -59,7 +59,7 @@ def reference(raw, limit=256):
     return bytes(samples)
 
 
-def verify(capture, original):
+def verify(capture, original, expect_paced=False):
     expected = reference(original)
     blocks = {}
     for index in range(len(expected) // 384):
@@ -75,7 +75,15 @@ def verify(capture, original):
         else:
             unknown.append(index)
     assert indices and not unknown, 'Consumed PCM differs from independent original ADPCM/mix arithmetic'
-    return {'captured_blocks': len(capture) // 384, 'silent_blocks': zeros,
+    strict_sequence = None
+    if expect_paced:
+        raw_blocks = [capture[n:n + 384] for n in range(0, len(capture), 384)]
+        first = next(n for n, block in enumerate(raw_blocks) if block != bytes(384))
+        last = max(n for n, block in enumerate(raw_blocks) if block != bytes(384))
+        played = b''.join(raw_blocks[first:last + 1])
+        strict_sequence = played == expected[:len(played)]
+        assert strict_sequence, 'Timed DMA repeated/skipped/reordered original source PCM'
+    return {'strict_contiguous_source_prefix': strict_sequence, 'captured_blocks': len(capture) // 384, 'silent_blocks': zeros,
             'matched_nonzero_blocks': len(indices), 'unknown_blocks': unknown,
             'distinct_source_blocks': len(set(indices)),
             'source_block_indices': indices,
@@ -93,6 +101,8 @@ def main():
     parser.add_argument('--movie', default='art/movies/credits.thp')
     parser.add_argument('--milliseconds', type=int, default=400)
     parser.add_argument('--evidence', type=Path)
+    parser.add_argument('--expect-paced', action='store_true',
+                        help='Require contiguous original PCM at the source-selected DMA rate')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='charged-original-movie-audio-') as folder:
         folder = Path(folder)
@@ -110,13 +120,19 @@ def main():
                     'stdout': result.stdout, 'stderr': result.stderr}
         if result.returncode == 0:
             if not args.owned or args.raw_oracle:
-                evidence['oracle'] = verify(capture.read_bytes(), raw)
-            evidence['scope'] = 'Original audio-only THP mode0; no AX/mode1/video/main/CRT or DMA rate fidelity acceptance'
+                evidence['oracle'] = verify(capture.read_bytes(), raw, args.expect_paced)
+            evidence['scope'] = 'Original audio-only THP mode0; no AX/mode1/video/main/CRT, arbitrary CPU preemption or reset-to-first-IRQ cycle acceptance'
+            if args.expect_paced:
+                summary = next(json.loads(line) for line in result.stdout.splitlines() if line.startswith('{'))
+                nominal = args.milliseconds * summary['input_rate'] / 96000
+                # Source starts before preload and SDL retains a device-period tail.
+                # Rate acceptance is broad here; native_ai_timing verifies exact cells.
+                assert abs(summary['callbacks'] - nominal) <= max(8, nominal * 0.05), 'Native DMA callback rate differs from source96-frame period'
         if args.evidence:
             args.evidence.write_text(json.dumps(evidence, indent=2) + '\n')
         print(result.stdout + result.stderr)
         assert result.returncode == 0, 'Original movie audio source execution failed'
-        print('Independent original PCM oracle passed; native DMA pacing remains a separate host defect.')
+        print('Independent original PCM oracle passed' + (' with contiguous timed DMA source sequence.' if args.expect_paced else '.'))
 
 
 if __name__ == '__main__':

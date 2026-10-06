@@ -21,6 +21,20 @@ code 3 at the unfinished startup boundary. The launcher exposes **Try startup**.
 For a host check without game data, build preset `aurora` and run
 `./build/aurora/mscharged-aurora-check --window`.
 
+## Original movie audio test
+
+```sh
+cmake --preset startup -DMSCHARGED_BUILD_THP_AUDIO_DIAGNOSTIC=ON
+cmake --build build/startup --target mscharged-thp-audio-check
+SDL_VIDEODRIVER=dummy ./build/startup/mscharged-thp-audio-check \
+  ./build/startup/liboriginal_movie_audio_module.so ./game/R4QE01.rvz \
+  art/movies/credits.thp 5000 ./build/startup/credits.pcm
+```
+
+This opt-in diagnostic runs the original movie decoder and mixer through the
+native audio device. It omits video and full startup; audio can repeat during
+host scheduling delays.
+
 ## Rendering and menu previews
 
 Graphics presets currently require Linux, a desktop, Vulkan GPU/driver,
