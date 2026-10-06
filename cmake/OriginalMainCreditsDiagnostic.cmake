@@ -275,7 +275,7 @@ set_property(TARGET mscharged-original-main-credits-check PROPERTY LINK_LIBRARY_
 target_link_libraries(mscharged-original-main-credits-check PRIVATE
     mscharged_original_main_credits_vi
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
-    aurora::core aurora::dvd charged_wii_string_format charged_native_stm
+    aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm
     charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
     charged_native_video_output_device Threads::Threads ${CMAKE_DL_LIBS})
 

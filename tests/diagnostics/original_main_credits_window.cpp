@@ -1,4 +1,6 @@
 #include <aurora/aurora.h>
+#include "bootstrap/launch_options.h"
+#include "platform/path.h"
 #include <aurora/event.h>
 #include <aurora/gfx.h>
 #include <aurora/gfx.hpp>
@@ -142,39 +144,39 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 int main(int argc, char** argv) {
     try {
         bool interactive=false, nativeSend=true, resizeCheck=false;
+        mscharged::LaunchOptions launchOptions;
         unsigned windowWidth=800, windowHeight=600;
         std::filesystem::path disc;
         for (int i=1;i<argc;++i) {
             const std::string argument=argv[i];
+            if (mscharged::ParseLaunchOption(argc,argv,i,launchOptions)) {
+                if(argument=="--window" || argument=="--fullscreen") interactive=true;
+                continue;
+            }
             if (argument=="--help") {
-                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--size WIDTHxHEIGHT] [--resize-check] [--diagnostic-frame]\n"
+                std::puts("Usage: mscharged-original-main-credits-check [launch settings] [--resize-check] [--diagnostic-frame]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
                           "Full tasks, AX predecessor, physical input and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
                           "Original glSendFrame/swap/VI preserves source geometry at any window size.\n"
                           "--diagnostic-frame selects the transitional unarmed frame comparison.");
+                std::fputs(mscharged::LaunchOptionsHelp.data(),stdout);
+                std::puts("--window or --fullscreen keeps this diagnostic open; without either, save a capture and exit.");
                 return 0;
             }
-            if(argument=="--window")interactive=true;
-            else if(argument=="--native-send")nativeSend=true;
+            if(argument=="--native-send")nativeSend=true;
             else if(argument=="--resize-check")resizeCheck=true;
-            else if(argument=="--size" && i+1<argc) {
-                const std::string value=argv[++i]; std::size_t x=0, y=0;
-                const auto split=value.find('x');
-                Check(split!=std::string::npos, "Window size requires WIDTHxHEIGHT");
-                const auto w=std::stoul(value.substr(0,split),&x);
-                const auto h=std::stoul(value.substr(split+1),&y);
-                Check(x==split && y==value.size()-split-1 && w>0 && h>0 &&
-                      w<=16384 && h<=16384, "Window size outside supported SDL dimensions");
-                windowWidth=static_cast<unsigned>(w);windowHeight=static_cast<unsigned>(h);
-            }
             else if(argument=="--diagnostic-frame")nativeSend=false;
-            else if(argument=="--disc" && i+1<argc)disc=argv[++i];
             else throw std::runtime_error("Unknown or incomplete argument; use --help");
         }
-        Check(!disc.empty() && std::filesystem::is_regular_file(disc),"Supply your own game ISO/RVZ with --disc FILE");
         const auto executable=std::filesystem::absolute(std::filesystem::path(argv[0]));
+        const auto launch=mscharged::LoadLaunch(launchOptions,executable.parent_path());
+        disc=mscharged::PathUtf8(launch.disc_path);
+        windowWidth=launch.settings.width;windowHeight=launch.settings.height;
+        std::printf("%s\n",mscharged::DescribeLaunch(launch).c_str());
+        Check(!disc.empty() && std::filesystem::is_regular_file(launch.disc_path),"Supply your own game ISO/RVZ with --disc FILE or [game] disc in the INI");
+        Check(!resizeCheck || !launch.settings.fullscreen,"--resize-check requires a windowed launch; add --window");
         const auto modulePath=executable.parent_path()/MSCHARGED_ORIGINAL_MAIN_CREDITS_MODULE_FILENAME;
         Check(std::filesystem::is_regular_file(modulePath),"Original-main source module is missing beside the executable");
         // Real host window/device/FIFO owner exists before any original module
@@ -196,6 +198,7 @@ int main(int argc, char** argv) {
         const auto host=aurora_initialize(argc,argv,&config);
         if(!host.window||host.backend!=BACKEND_VULKAN)
             throw std::runtime_error("Actual Vulkan foundation unavailable; no fallback acceptance");
+        Check(SDL_SetWindowFullscreen(host.window,launch.settings.fullscreen), "Requested launch window mode rejected");
         if(nativeSend) {
             // Existing Aurora policy fixes the internal source EFB at 1x.
             // Original SC/VI signal aspect controls independent desktop output.
@@ -270,7 +273,7 @@ int main(int argc, char** argv) {
                     const auto& efb=aurora::webgpu::g_frameBuffer;
                     const unsigned expectedWidth=resizeStage==1?1280:resizeStage==2?600:windowWidth;
                     const unsigned expectedHeight=resizeStage==1?720:resizeStage==2?900:windowHeight;
-                    Check(size.width==expectedWidth && size.height==expectedHeight,
+                    Check(launch.settings.fullscreen || (size.width==expectedWidth && size.height==expectedHeight),
                           "Controlled native window resize did not reach its requested actual size");
                     Check(size.fb_width==640 && size.fb_height==448 &&
                           efb.size.width==640 && efb.size.height==448,

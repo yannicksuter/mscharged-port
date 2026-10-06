@@ -31,11 +31,15 @@ cmake --build --preset graphics --target mscharged-original-main-credits-check -
 ./build/graphics/mscharged-original-main-credits-check --disc ./game/R4QE01.rvz --window
 ```
 
+The test also accepts `--config FILE`, `--disc FILE` (`--disk`), `--window`,
+`--fullscreen`, and `--size WIDTHxHEIGHT`; command-line values override the INI
+for this run without saving. `--window` or `--fullscreen` keeps it open.
+
 This temporary test enters original `main`, then loads and renders Credits with
 the original fonts, frontend code, scrolling and THP movie with native audio.
 It skips blocked startup steps; full startup, game input and full game audio
 remain pending. Playback timing is still experimental. Close the window to exit. Omit
-`--window` to save a capture and exit. The test uses original frame submission
+both `--window` and `--fullscreen` to save a capture and exit. The test uses original frame submission
 and VI framebuffer presentation. The game image keeps its original aspect and
 positioning when the window is resized. Add `--size 1280x720` to choose an initial
 window size; unused space is filled with bars.
