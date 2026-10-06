@@ -172,3 +172,4 @@
 0204-native-camera-effects-wii-word-transport.patch
 0206-native-dsp-task-mem1-addresses.patch
 0210-restore-original-skeleton-source-providers.patch
+0208-restore-original-static-task-providers.patch
