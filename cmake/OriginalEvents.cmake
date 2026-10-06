@@ -1,7 +1,10 @@
 include_guard(GLOBAL)
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OriginalFunctionPools.cmake")
+
 # Complete source/compiler inventory only. Real original registry/function-pool
-# static execution awaits the native game module and source category/slot ABI.
+# static execution awaits the native game module. The reviewed typed pool profile
+# preserves source categories and adapts native physical slot storage only.
 # Do not link the old charged_events/runtime queue replicas as its providers.
 add_library(charged_original_events OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/nlEvent.cpp"
@@ -17,7 +20,8 @@ target_include_directories(charged_original_events PRIVATE
 target_compile_definitions(charged_original_events PRIVATE
     MSCHARGED_NATIVE=1 TARGET_PC=1)
 target_compile_features(charged_original_events PRIVATE cxx_std_17)
-target_link_libraries(charged_original_events PRIVATE aurora::os)
+target_link_libraries(charged_original_events PRIVATE
+    aurora::os charged_original_function_pool_abi)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_original_events PRIVATE
         -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)

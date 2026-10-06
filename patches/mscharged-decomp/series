@@ -149,3 +149,4 @@
 0167-original-frontend-render-packet-abi.patch
 0171-original-slot-pool-allocator-stack.patch
 0173-native-temporary-string-prefix-word.patch
+0172-original-typed-function-pool-abi.patch
