@@ -19,3 +19,4 @@
 0019-owned-native-static-and-mem2-physical-backing.patch
 0022-original-wii-sdk-render-mode-tables.patch
 0020-service-native-owner-hardware.patch
+0025-native-gx-fifo-descriptor-requests.patch
