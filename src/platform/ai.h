@@ -48,4 +48,32 @@ struct NativeAIClockStatus {
 };
 NativeAIClockStatus GetNativeAIClockStatus();
 
+// Optional host observations only. All16 fields are fixed64-bit counters/times;
+// this new return ABI leaves NativeAIStatus/NativeAIClockStatus unchanged.
+// Begin resets observations without resetting source DMA, its epoch or PCM.
+// Callback gaps include intentional playback pauses within the sampled window.
+struct NativeAIObservationStatus {
+    std::uint64_t observation_start_ns{};
+    std::uint64_t observed_elapsed_ns{};
+    std::uint64_t callbacks_started{};
+    std::uint64_t callbacks_completed{};
+    std::uint64_t callbacks_failed{};
+    std::uint64_t first_callback_start_ns{};
+    std::uint64_t last_callback_start_ns{};
+    std::uint64_t maximum_callback_start_gap_ns{};
+    std::uint64_t total_callback_duration_ns{};
+    std::uint64_t maximum_callback_duration_ns{};
+    std::uint64_t sdl_pull_calls{};
+    std::uint64_t last_sdl_pull_ns{};
+    std::uint64_t maximum_sdl_pull_gap_ns{};
+    std::uint64_t total_additional_input_bytes_requested{};
+    std::uint64_t maximum_additional_input_bytes_requested{};
+    std::uint64_t maximum_total_input_bytes_requested{};
+};
+// Begin/end run on the actual AI initialization owner, outside its callback.
+// Observations default off and never supply a source callback or extra PCM.
+void BeginNativeAIObservations();
+void EndNativeAIObservations();
+NativeAIObservationStatus GetNativeAIObservationStatus();
+
 } // namespace mscharged::platform

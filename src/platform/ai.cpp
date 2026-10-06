@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -51,6 +52,9 @@ struct AIState {
     std::uint64_t maximum_service_gap{};
     std::uint64_t last_service{};
     std::vector<u8> fifo;
+    std::atomic_bool observing{};
+    std::uint64_t observation_end_ns{};
+    mscharged::platform::NativeAIObservationStatus observations{};
     char error[256]{};
 };
 
@@ -173,7 +177,26 @@ void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
     for (auto* packet : packets) Queue(state, stream, packet);
 }
 
-void SDLCALL Feed(void* userdata, SDL_AudioStream* stream, int, int) noexcept {
+void SDLCALL Feed(void* userdata, SDL_AudioStream* stream, int additional, int total) noexcept {
+    auto& state = *static_cast<AIState*>(userdata);
+    if (state.observing.load(std::memory_order_relaxed)) {
+        std::lock_guard lock(state.mutex);
+        if (state.observing) {
+            auto& observed = state.observations;
+            const auto now = SDL_GetTicksNS();
+            if (observed.last_sdl_pull_ns)
+                observed.maximum_sdl_pull_gap_ns = std::max(observed.maximum_sdl_pull_gap_ns, now - observed.last_sdl_pull_ns);
+            observed.last_sdl_pull_ns = now;
+            ++observed.sdl_pull_calls;
+            // SDL reports estimates in the unconverted INPUT byte domain.
+            // Neither demand nor a short read is a source DMA completion.
+            const auto extra = static_cast<std::uint64_t>(std::max(additional, 0));
+            observed.total_additional_input_bytes_requested += extra;
+            observed.maximum_additional_input_bytes_requested = std::max(observed.maximum_additional_input_bytes_requested, extra);
+            observed.maximum_total_input_bytes_requested = std::max(observed.maximum_total_input_bytes_requested,
+                static_cast<std::uint64_t>(std::max(total, 0)));
+        }
+    }
     // Device pull granularity can exceed the source's96-frame interval. Only
     // real elapsed DMA transfers enter SDL; demand never repeats a buffer.
     Transfer(*static_cast<AIState*>(userdata), stream);
@@ -389,21 +412,46 @@ bool ServiceNativeAI() {
         static void Run(void* context) {
             auto& call = *static_cast<Call*>(context);
             AIDCallback callback;
+            std::uint64_t observation_start = 0;
             {
                 std::lock_guard lock(call.state.mutex);
                 if (!call.state.running || !call.state.pending || call.state.callback_active || !call.state.callback) return;
                 callback = call.state.callback;
                 call.state.pending = false;
                 call.state.callback_active = true;
+                if (call.state.observing) {
+                    auto& observed = call.state.observations;
+                    observation_start = SDL_GetTicksNS();
+                    if (observed.last_callback_start_ns)
+                        observed.maximum_callback_start_gap_ns = std::max(observed.maximum_callback_start_gap_ns,
+                            observation_start - observed.last_callback_start_ns);
+                    if (!observed.first_callback_start_ns) observed.first_callback_start_ns = observation_start;
+                    observed.last_callback_start_ns = observation_start;
+                    ++observed.callbacks_started;
+                }
             }
             try { callback(); }
             catch (...) {
                 std::lock_guard lock(call.state.mutex);
                 call.state.callback_active = false;
+                if (observation_start) {
+                    auto& observed = call.state.observations;
+                    const auto duration = SDL_GetTicksNS() - observation_start;
+                    ++observed.callbacks_failed;
+                    observed.total_callback_duration_ns += duration;
+                    observed.maximum_callback_duration_ns = std::max(observed.maximum_callback_duration_ns, duration);
+                }
                 throw;
             }
             std::lock_guard lock(call.state.mutex);
             call.state.callback_active = false;
+            if (observation_start) {
+                auto& observed = call.state.observations;
+                const auto duration = SDL_GetTicksNS() - observation_start;
+                ++observed.callbacks_completed;
+                observed.total_callback_duration_ns += duration;
+                observed.maximum_callback_duration_ns = std::max(observed.maximum_callback_duration_ns, duration);
+            }
             ++call.state.dispatched;
             call.invoked = true;
         }
@@ -461,6 +509,42 @@ NativeAIClockStatus GetNativeAIClockStatus() {
             state.epoch_cells};
 }
 
+void BeginNativeAIObservations() {
+    NativeInterruptGuard scope;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    RequireInitialized(state);
+    if (state.owner != std::this_thread::get_id() || state.callback_active)
+        throw std::logic_error("AI observations must start on the idle initialization/game owner");
+    state.observations = {};
+    state.observations.observation_start_ns = SDL_GetTicksNS();
+    state.observation_end_ns = 0;
+    state.observing = true;
+}
+
+void EndNativeAIObservations() {
+    NativeInterruptGuard scope;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    RequireInitialized(state);
+    if (state.owner != std::this_thread::get_id() || state.callback_active)
+        throw std::logic_error("AI observations must end on the idle initialization/game owner");
+    if (state.observing) state.observation_end_ns = SDL_GetTicksNS();
+    state.observing = false;
+}
+
+NativeAIObservationStatus GetNativeAIObservationStatus() {
+    NativeInterruptGuard scope;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    auto observed = state.observations;
+    if (observed.observation_start_ns) {
+        const auto end = state.observing ? SDL_GetTicksNS() : state.observation_end_ns;
+        observed.observed_elapsed_ns = end - observed.observation_start_ns;
+    }
+    return observed;
+}
+
 void ShutdownNativeAI() {
     NativeInterruptGuard scope;
     auto& state = State();
@@ -482,6 +566,8 @@ void ShutdownNativeAI() {
         std::lock_guard lock(state.mutex);
         audio_reference = state.audio_reference;
         state.audio_reference = false;
+        if (state.observing) state.observation_end_ns = SDL_GetTicksNS();
+        state.observing = false;
         state.stream = nullptr;
         state.initialized = false;
         state.callback = nullptr;
