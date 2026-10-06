@@ -13,6 +13,8 @@
 #include <aurora/video.h>
 #include <aurora/dvd.h>
 #include <dolphin/os.h>
+#include <dolphin/vi.h>
+#include "webgpu/gpu.hpp"
 #include "platform/stm_device.h"
 #include "platform/ai.h"
 #include "platform/system.h"
@@ -69,7 +71,7 @@ void ReadSelectedXFB(const void* destination, const std::filesystem::path& outpu
     Check(copy && copy->gpuComplete.load(std::memory_order_acquire),
           "Selected original XFB has no completed source GX copy");
     Check(copy->width==640 && copy->height==448 && copy->stride==1280,
-          "Native selected XFB copy geometry is outside this1:1 diagnostic");
+          "Native selected XFB copy does not preserve original source geometry");
     Check(copy->packedYuyv && copy->packedYuyv->format==wgpu::TextureFormat::RGBA8Unorm &&
           copy->packedYuyv->size.width==copy->width/2 && copy->packedYuyv->size.height==copy->height,
           "Selected XFB does not retain packed source YUYV output");
@@ -139,22 +141,34 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 }
 int main(int argc, char** argv) {
     try {
-        bool interactive=false, nativeSend=true;
+        bool interactive=false, nativeSend=true, resizeCheck=false;
+        unsigned windowWidth=800, windowHeight=600;
         std::filesystem::path disc;
         for (int i=1;i<argc;++i) {
             const std::string argument=argv[i];
             if (argument=="--help") {
-                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--diagnostic-frame]\n"
+                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--size WIDTHxHEIGHT] [--resize-check] [--diagnostic-frame]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
                           "Full tasks, AX predecessor, physical input and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
-                          "Original glSendFrame/swap/VI at physical 640x448 is the default.\n"
+                          "Original glSendFrame/swap/VI preserves source geometry at any window size.\n"
                           "--diagnostic-frame selects the transitional unarmed frame comparison.");
                 return 0;
             }
             if(argument=="--window")interactive=true;
             else if(argument=="--native-send")nativeSend=true;
+            else if(argument=="--resize-check")resizeCheck=true;
+            else if(argument=="--size" && i+1<argc) {
+                const std::string value=argv[++i]; std::size_t x=0, y=0;
+                const auto split=value.find('x');
+                Check(split!=std::string::npos, "Window size requires WIDTHxHEIGHT");
+                const auto w=std::stoul(value.substr(0,split),&x);
+                const auto h=std::stoul(value.substr(split+1),&y);
+                Check(x==split && y==value.size()-split-1 && w>0 && h>0 &&
+                      w<=16384 && h<=16384, "Window size outside supported SDL dimensions");
+                windowWidth=static_cast<unsigned>(w);windowHeight=static_cast<unsigned>(h);
+            }
             else if(argument=="--diagnostic-frame")nativeSend=false;
             else if(argument=="--disc" && i+1<argc)disc=argv[++i];
             else throw std::runtime_error("Unknown or incomplete argument; use --help");
@@ -173,7 +187,7 @@ int main(int argc, char** argv) {
         config.appName="Mario Strikers Charged | original-main Credits diagnostic";
         config.userPath=config.cachePath=dataPath.c_str();
         config.desiredBackend=BACKEND_VULKAN;
-        config.windowWidth=nativeSend?640:800;config.windowHeight=nativeSend?448:600;
+        config.windowWidth=windowWidth;config.windowHeight=windowHeight;
         config.windowPosX=config.windowPosY=-1;
         config.mem1Size=MEM1_DEFAULT_SIZE;
         config.mem2Size=64u*1024u*1024u;
@@ -183,24 +197,16 @@ int main(int argc, char** argv) {
         if(!host.window||host.backend!=BACKEND_VULKAN)
             throw std::runtime_error("Actual Vulkan foundation unavailable; no fallback acceptance");
         if(nativeSend) {
-            // Aurora's default desktop minimum is640x480. Establish actual1:1
-            // backing before source VIConfigure/GXFlush starts native packets.
-            Check(SDL_SetWindowMinimumSize(host.window,640,448), "Native1:1 window minimum rejected");
-            Check(SDL_SetWindowSize(host.window,640,448), "Native1:1 window resize rejected");
-            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
-            bool sized=false;
-            while(std::chrono::steady_clock::now()<deadline) {
-                for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
-                    Check(event->type!=AURORA_EXIT, "Native window closed before source entry");
-                aurora::gfx::synchronize();
-                const auto size=aurora_get_window_size();
-                if(size.fb_width==640 && size.fb_height==448 &&
-                        size.native_fb_width==640 && size.native_fb_height==448) {
-                    sized=true; break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            Check(sized, "Native source-send requires actual1:1 physical640x448 backing");
+            // Existing Aurora policy fixes the internal source EFB at 1x.
+            // Original SC/VI signal aspect controls independent desktop output.
+            Check(SDL_SetWindowMinimumSize(host.window,1,1), "SDL window minimum rejected");
+            Check(SDL_SetWindowSize(host.window,static_cast<int>(windowWidth),static_cast<int>(windowHeight)),
+                  "Requested window size rejected");
+            VISetFrameBufferScale(1.0f);
+            AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+            for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
+                Check(event->type!=AURORA_EXIT, "Native window closed before source entry");
+            aurora::gfx::synchronize();
         }
         OSInit();
         if(!OSGetArenaLo()||!OSGetMEM2ArenaLo())
@@ -237,6 +243,9 @@ int main(int argc, char** argv) {
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         unsigned frames=0,draws=0,quiet=0; bool snapshot=false,encoded=false,exit=false,nativePresented=false;
         const auto start=std::chrono::steady_clock::now(); auto previous=start;
+        auto stageStart=start; unsigned resizeStage=0; bool stageAnnounced=false;
+        wgpu::Texture retainedEFB;
+        Check(!resizeCheck || nativeSend, "Resize qualification requires source-native send");
         while(!exit && (interactive || !snapshot)) {
             for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
                 if(event->type==AURORA_EXIT)exit=true;
@@ -256,10 +265,42 @@ int main(int argc, char** argv) {
                 Check(aurora_get_video_output_state(&output),"Configured native VI output state unavailable");
                 nativePresented=output.framebuffer && !output.black &&
                     !output.pending && output.presentations>=3;
-                if(now-start>=std::chrono::seconds(3) && nativePresented && encoded) {
-                    if(!snapshot) ReadSelectedXFB(output.framebuffer,dataDirectory/"original-main-native-xfb.ppm");
-                    snapshot=true; // Selected source XFB pixels and native scanout evidence.
-                    if(!interactive)break;
+                if(!stageAnnounced && nativePresented && encoded && now-stageStart>=std::chrono::milliseconds(500)) {
+                    const auto size=aurora_get_window_size();
+                    const auto& efb=aurora::webgpu::g_frameBuffer;
+                    const unsigned expectedWidth=resizeStage==1?1280:resizeStage==2?600:windowWidth;
+                    const unsigned expectedHeight=resizeStage==1?720:resizeStage==2?900:windowHeight;
+                    Check(size.width==expectedWidth && size.height==expectedHeight,
+                          "Controlled native window resize did not reach its requested actual size");
+                    Check(size.fb_width==640 && size.fb_height==448 &&
+                          efb.size.width==640 && efb.size.height==448,
+                          "Window resize changed original source EFB geometry");
+                    if(retainedEFB) Check(efb.texture.Get()==retainedEFB.Get(),
+                                         "Output resize replaced the original source EFB texture");
+                    else retainedEFB=efb.texture;
+                    const auto viewport=aurora::webgpu::calculate_present_viewport(
+                        size.native_fb_width,size.native_fb_height,4,3);
+                    std::printf("Native resize stage%u: surface%ux%u EFB%ux%u same-storage, SC4:3 viewport %.0f,%.0f %.0fx%.0f.\n",
+                        resizeStage,size.native_fb_width,size.native_fb_height,efb.size.width,efb.size.height,
+                        viewport.left,viewport.top,viewport.width,viewport.height);
+                    std::fflush(stdout); stageAnnounced=true;
+                }
+                if(now-stageStart>=std::chrono::seconds(resizeStage?8:3) && nativePresented && encoded) {
+                    if(!snapshot) {
+                        const auto filename=resizeCheck?
+                            "original-main-native-xfb-stage"+std::to_string(resizeStage)+".ppm":
+                            std::string("original-main-native-xfb.ppm");
+                        ReadSelectedXFB(output.framebuffer,dataDirectory/filename);
+                    }
+                    if(resizeCheck && resizeStage<2) {
+                        ++resizeStage; stageStart=now; stageAnnounced=false;
+                        const int w=resizeStage==1?1280:600;
+                        const int h=resizeStage==1?720:900;
+                        Check(SDL_SetWindowSize(host.window,w,h), "Controlled output resize rejected");
+                    } else {
+                        snapshot=true; // Original selected XFB plus actual source/output geometry.
+                        if(!interactive)break;
+                    }
                 }
                 std::this_thread::yield(); continue;
             }
@@ -306,6 +347,15 @@ int main(int argc, char** argv) {
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
         Check(!mscharged::platform::GetNativeAIStatus().initialized,
               "Original-main movie owner did not drain the actual host audio device");
+        if(resizeCheck) {
+            // Retire the actual native hardware/window for the resize gate.
+            // Original game tasks/CRT destruction remain explicitly omitted;
+            // _Exit prevents surviving source statics touching released arenas.
+            aurora_dvd_close();
+            aurora_shutdown();
+            mscharged::platform::ShutdownNativeInterruptController();
+            std::puts("Native resize qualification retired real VI/GX/window hardware.");
+        }
         std::fflush(nullptr);std::_Exit(0);
     }catch(const std::exception& e){std::fprintf(stderr,"Actual source diagnostic stopped: %s\n",e.what());std::fflush(nullptr);std::_Exit(1);}
 }
