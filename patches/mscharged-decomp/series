@@ -168,3 +168,4 @@
 0201-original-whole-file-native-handle-abi.patch
 0199-native-original-camera-data-transport.patch
 0202-native-dsp-mailbox-wire-transport.patch
+0204-native-camera-effects-wii-word-transport.patch
