@@ -20,3 +20,6 @@
 0022-original-wii-sdk-render-mode-tables.patch
 0020-service-native-owner-hardware.patch
 0025-native-gx-fifo-descriptor-requests.patch
+0023-native-vi-clock-and-retrace.patch
+0027-scope-native-video-to-explicit-source-integration.patch
+0026-native-vi-shared-interrupt-line.patch
