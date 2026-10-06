@@ -11,6 +11,9 @@ include(cmake/OriginalInterpreter.cmake)
 add_library(charged_original_boot_scene_sources OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/SH/SHBootLoading.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHLoading.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/fePointerButton.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feBackButton.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHStadiumSelect.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHTitleScreen.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/BaseGameSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
