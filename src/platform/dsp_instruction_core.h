@@ -1,6 +1,8 @@
 #pragma once
 #include "platform/dsp_memory.h"
 #include "platform/dsp_mailbox.h"
+#include "platform/dsp_control.h"
+#include <optional>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +25,9 @@ struct DSPUnsupportedInstruction : std::runtime_error {
 // Unknown instructions/registers/IFX operations fail before a success update.
 class DSPInstructionCore {
 public:
+    // Retained unconnected diagnostic mode cannot execute IFX IRQ requests.
     explicit DSPInstructionCore(NativeDSPMailboxEndpoint mailboxes);
+    DSPInstructionCore(NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control);
     void LoadInstructionMemory(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address,
                                std::uint32_t bytes,std::uint16_t word_address);
     void LoadDataMemory(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address,
@@ -36,6 +40,7 @@ public:
 private:
     static constexpr std::size_t WORDS=4096;
     NativeDSPMailboxEndpoint mailboxes_;
+    std::optional<NativeDSPControlEndpoint> control_;
     std::array<std::uint16_t,WORDS> instructions_{},data_{};
     std::array<bool,WORDS> instruction_valid_{},data_valid_{};
     DSPInstructionRegisters registers_{};

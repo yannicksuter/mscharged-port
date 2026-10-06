@@ -5,6 +5,8 @@ DSPUnsupportedInstruction::DSPUnsupportedInstruction(std::uint16_t address,std::
     :std::runtime_error("DSP instruction core reached an unimplemented instruction/register/interface"),
      pc(address),opcode(word),operand(detail) {}
 DSPInstructionCore::DSPInstructionCore(NativeDSPMailboxEndpoint mailboxes):mailboxes_(mailboxes) {}
+DSPInstructionCore::DSPInstructionCore(NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control)
+    :mailboxes_(mailboxes),control_(control) {}
 void DSPInstructionCore::Load(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical,std::uint32_t bytes,
                              std::uint16_t word_address,bool instruction) {
     if (!bytes || (bytes&1) || word_address>=WORDS || bytes/2>WORDS-word_address)
@@ -47,6 +49,7 @@ void DSPInstructionCore::BeginExecution(const DSPInstructionRegisters& context) 
 DSPInstructionRegisters DSPInstructionCore::Registers() const {return registers_;}
 DSPInstructionRegisters DSPInstructionCore::Step() {
     if(!running_)throw std::logic_error("DSP execution has no supplied register context");
+    if(control_)DSPBackendRequireInstructionExecution(*control_,registers_.status);
     const auto pc=registers_.pc;
     const auto opcode=InstructionWord(pc);
     auto next=registers_;
@@ -89,6 +92,7 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
         const auto immediate=InstructionWord(static_cast<std::uint16_t>(pc+1));
         if(address==0xfffc)DSPBackendMailFromWriteHigh(mailboxes_,immediate);
         else if(address==0xfffd)DSPBackendMailFromWriteLow(mailboxes_,immediate);
+        else if(address==0xfffb && control_)DSPBackendWriteInterruptRequest(*control_,immediate);
         else throw DSPUnsupportedInstruction(pc,opcode,address);
     } else throw DSPUnsupportedInstruction(pc,opcode,0);
     next.pc=static_cast<std::uint16_t>(pc+length);++next.instructions;
