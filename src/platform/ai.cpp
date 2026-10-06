@@ -33,6 +33,9 @@ struct AIState {
     bool running{};
     bool pending{};
     bool callback_active{};
+    bool output_started{};
+    std::uint64_t output_start_cells{};
+    mscharged::platform::NativeAIOutputStatus output{};
     std::uint64_t generation{};
     std::uint64_t submitted{};
     std::uint64_t consumed{};
@@ -127,6 +130,53 @@ void Queue(AIState& state, SDL_AudioStream* stream, Packet* packet) noexcept {
     }
 }
 
+void StartOutputIfReady(AIState& state, SDL_AudioStream* stream) noexcept {
+    u32 dma_frames;
+    {
+        std::lock_guard lock(state.mutex);
+        if (!state.running || state.output_started || state.owner != std::this_thread::get_id()) return;
+        dma_frames = state.active_length / 4;
+    }
+    // SDL availability is in its current destination format. In particular,
+    // a real postmix callback selects F32 even when the device reports S16.
+    // Query it rather than assuming input bytes are immediately playable.
+    SDL_AudioSpec input{}, output{}, device{};
+    int device_frames = 0;
+    const bool formats = SDL_GetAudioStreamFormat(stream, &input, &output) &&
+        SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &device, &device_frames);
+    const int available = formats ? SDL_GetAudioStreamAvailable(stream) : -1;
+    if (!formats || available < 0 || input.freq <= 0 || output.freq <= 0 ||
+        device.freq <= 0 || device_frames <= 0 || SDL_AUDIO_FRAMESIZE(output) <= 0) {
+        std::lock_guard lock(state.mutex);
+        state.running = false;
+        std::snprintf(state.error, sizeof(state.error), "AI output lead query: %s", SDL_GetError());
+        return;
+    }
+    // One actual device pull plus one source-selected completed DMA period.
+    // Ceiling conversion keeps the margin in output-frame units at either
+    // supported source rate, including a resampled physical audio device.
+    const auto dma_output_frames = (std::uint64_t(dma_frames) * output.freq + input.freq - 1) / input.freq;
+    const auto device_output_frames = (std::uint64_t(device_frames) * output.freq + device.freq - 1) / device.freq;
+    const auto required = device_output_frames + dma_output_frames;
+    const auto ready = std::uint64_t(available / SDL_AUDIO_FRAMESIZE(output));
+    {
+        std::lock_guard lock(state.mutex);
+        state.output.required_output_frames = required;
+        if (ready < required) return;
+        state.output.ready_output_frames_at_start = ready;
+        state.output.transferred_input_frames_at_start = (state.transferred_cells - state.output_start_cells) * 8;
+    }
+    if (!SDL_ResumeAudioStreamDevice(stream)) {
+        std::lock_guard lock(state.mutex);
+        state.running = false;
+        std::snprintf(state.error, sizeof(state.error), "AI output device resume: %s", SDL_GetError());
+        return;
+    }
+    std::lock_guard lock(state.mutex);
+    state.output_started = true;
+    state.output.device_start_ns = SDL_GetTicksNS();
+}
+
 void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
     // This same exclusion protects source DMA writes/stop/free. SDL workers
     // only try the lock; they never wait for source code while holding SDL's
@@ -175,6 +225,7 @@ void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
         }
     }
     for (auto* packet : packets) Queue(state, stream, packet);
+    if (source_access) StartOutputIfReady(state, stream);
 }
 
 void SDLCALL Feed(void* userdata, SDL_AudioStream* stream, int additional, int total) noexcept {
@@ -212,6 +263,7 @@ SDL_AudioStream* Stop(AIState& state) {
         std::lock_guard lock(state.mutex);
         state.running = false;
         state.pending = false;
+        state.output_started = false;
         ++state.generation;
         stream = state.stream;
     }
@@ -308,7 +360,6 @@ extern "C" u32 AIGetDMALength() {
 extern "C" void AIStartDMA() {
     NativeInterruptGuard scope;
     auto& state = State();
-    SDL_AudioStream* stream;
     {
         std::lock_guard lock(state.mutex);
         RequireInitialized(state);
@@ -316,18 +367,16 @@ extern "C" void AIStartDMA() {
         if (!state.address || !state.length) throw std::invalid_argument("AI DMA needs a source buffer and nonzero hardware length");
         Latch(state);
         state.clock_epoch = state.last_service = SDL_GetTicksNS();
+        state.output_started = false;
+        state.output = {};
+        state.output.dma_start_ns = state.clock_epoch;
+        state.output_start_cells = state.transferred_cells;
         state.epoch_cells = 0;
         state.first_edge = true;
         state.error[0] = 0;
         state.pending = false;
         ++state.generation;
         state.running = true;
-        stream = state.stream;
-    }
-    if (!SDL_ResumeAudioStreamDevice(stream)) {
-        const auto error = SDLError("AI audio DMA start failed");
-        Stop(state);
-        throw error;
     }
 }
 
@@ -543,6 +592,13 @@ NativeAIObservationStatus GetNativeAIObservationStatus() {
         observed.observed_elapsed_ns = end - observed.observation_start_ns;
     }
     return observed;
+}
+
+NativeAIOutputStatus GetNativeAIOutputStatus() {
+    NativeInterruptGuard scope;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    return state.output;
 }
 
 void ShutdownNativeAI() {

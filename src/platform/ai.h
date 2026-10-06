@@ -76,4 +76,17 @@ void BeginNativeAIObservations();
 void EndNativeAIObservations();
 NativeAIObservationStatus GetNativeAIObservationStatus();
 
+// The hardware DMA clock starts immediately. The separate host device starts
+// after already-transferred PCM covers its actual pull quantum plus one DMA
+// quantum; no future source PCM or interrupt is generated for this lead.
+// Separate return ABI keeps the existing three status structures unchanged.
+struct NativeAIOutputStatus {
+    std::uint64_t dma_start_ns{};
+    std::uint64_t device_start_ns{};
+    std::uint64_t required_output_frames{};
+    std::uint64_t ready_output_frames_at_start{};
+    std::uint64_t transferred_input_frames_at_start{};
+};
+NativeAIOutputStatus GetNativeAIOutputStatus();
+
 } // namespace mscharged::platform
