@@ -139,21 +139,23 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 }
 int main(int argc, char** argv) {
     try {
-        bool interactive=false, nativeSend=false;
+        bool interactive=false, nativeSend=true;
         std::filesystem::path disc;
         for (int i=1;i<argc;++i) {
             const std::string argument=argv[i];
             if (argument=="--help") {
-                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--native-send]\n"
+                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--diagnostic-frame]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
                           "Full tasks, AX predecessor, physical input and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
-                          "--native-send tests original glSendFrame/swap/VI at physical 640x448.");
+                          "Original glSendFrame/swap/VI at physical 640x448 is the default.\n"
+                          "--diagnostic-frame selects the transitional unarmed frame comparison.");
                 return 0;
             }
             if(argument=="--window")interactive=true;
             else if(argument=="--native-send")nativeSend=true;
+            else if(argument=="--diagnostic-frame")nativeSend=false;
             else if(argument=="--disc" && i+1<argc)disc=argv[++i];
             else throw std::runtime_error("Unknown or incomplete argument; use --help");
         }

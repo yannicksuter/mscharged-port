@@ -35,8 +35,8 @@ This temporary test enters original `main`, then loads and renders Credits with
 the original fonts, frontend code, scrolling and THP movie with native audio.
 It skips blocked startup steps; full startup, game input and full game audio
 remain pending. Playback timing is still experimental. Close the window to exit. Omit
-`--window` to save a capture and exit. Add `--native-send` to test original
-frame submission and VI framebuffer presentation at 640×448.
+`--window` to save a capture and exit. The test uses original frame submission
+and VI framebuffer presentation at 640×448.
 
 The separate `mscharged-original-credits-check` target tests Credits directly,
 including the original THP movie and native audio:
