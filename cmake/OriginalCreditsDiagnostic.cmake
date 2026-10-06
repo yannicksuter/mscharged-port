@@ -174,7 +174,7 @@ target_include_directories(mscharged_original_credits_module PRIVATE
     "${MSCHARGED_PREPARED}/src/NL/gl"
     "${MSCHARGED_PREPARED}/src/NL/glx")
 target_compile_definitions(mscharged_original_credits_module PRIVATE
-    MSCHARGED_DIAGNOSTIC_CREDITS_SCENE=1 MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1
+    MSCHARGED_DIAGNOSTIC_CREDITS_SCENE=1 MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1 MSCHARGED_DIAGNOSTIC_CREDITS_COPYRIGHTS=1
     MSCHARGED_GAME_MODULE=1
     AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca
     C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)

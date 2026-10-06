@@ -209,3 +209,5 @@
 0255-restore-original-effects-initialization.patch
 0254-native-compressed-file-byte-ownership.patch
 0270-keep-legacy-diagnostic-event-marker.patch
+0252-diagnostic-original-main-frontend-input.patch
+0256-diagnostic-original-credits-copyright-phase.patch

@@ -20,6 +20,7 @@
 #include <dolphin/vi.h>
 #include "webgpu/gpu.hpp"
 #include "platform/stm_device.h"
+#include "platform/hardware_owner.h"
 #include "platform/ai.h"
 #include "platform/system.h"
 #include "platform/video_device.h"
@@ -163,7 +164,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 std::puts("Usage: mscharged-original-main-credits-check [launch settings] [--resize-check] [--diagnostic-frame]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
-                          "Full tasks, AX predecessor, physical input and game shutdown are omitted.\n"
+                          "Desktop keys/controllers feed original Wii/frontend input methods.\n"
+                          "Enter/Space=A, Escape/Backspace=B; arrows=DPad; Z/X=1/2.\n"
+                          "A selects original COPYRIGHTS; the following menu transition remains held.\n"
+                          "Full tasks, AX predecessor, motion and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
                           "Original glSendFrame/swap/VI preserves source geometry at any window size.\n"
                           "--diagnostic-frame selects the transitional unarmed frame comparison.");
@@ -234,7 +238,12 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         }
         mscharged::platform::InitializeNativeSTMDevice();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
-        mscharged::diagnostic::InitializeCreditsMovieHardware();
+        // Borrow input into the existing AI/SDK hardware owner; source KPAD
+        // and FE methods retain their original mappings and decisions.
+        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3},
+            mscharged::platform::GetNativeSTMInput(),{true,true});
+        mscharged::diagnostic::InitializeCreditsMovieHardware(
+            mscharged::platform::ServiceNativeHardwareInput);
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
         auto* module=dlopen(modulePath.c_str(),RTLD_LAZY|RTLD_LOCAL);
         if(!module)throw std::runtime_error(dlerror());
@@ -331,9 +340,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
               (nativeSend ? nativePresented : aurora_get_last_presentation().sequence != 0),
               "Original main Credits real source draw/presentation incomplete");
         if(nativeSend) {
-            std::printf("Original main selected Credits: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full tasks/AX predecessor/physical-input/CRT remain omitted; source-selected completed XFB pixel readback retained.\n",frames);
+            std::printf("Original main selected Credits: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Original digital input endpoints are selected; full tasks/automatic swap reset/AX predecessor/motion/CRT remain omitted.\n",frames);
         } else {
-        std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Actual original THP/movie/mode0 audio; full task/AX/physical-input/CRT scopes remain held.\n",frames,draws);
+        std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Actual original THP/movie/mode0 audio; digital input endpoints selected; full task/automatic swap reset/AX/motion/CRT scopes remain held.\n",frames,draws);
         }
         const auto audio=mscharged::platform::GetNativeAIStatus();
         const auto audioClock=mscharged::platform::GetNativeAIClockStatus();
@@ -355,6 +364,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                     static_cast<unsigned long long>(videoClock.elapsed_fields));
         stopMovie();
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
+        mscharged::platform::ShutdownNativeHardwareInput();
         Check(!mscharged::platform::GetNativeAIStatus().initialized,
               "Original-main movie owner did not drain the actual host audio device");
         if(resizeCheck) {

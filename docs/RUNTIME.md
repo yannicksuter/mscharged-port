@@ -39,7 +39,10 @@ for this run without saving. `--window` or `--fullscreen` keeps it open.
 
 This temporary test enters original `main`, then loads and renders Credits with
 the original fonts, frontend code, scrolling and THP movie with native audio.
-It skips blocked startup steps; full startup, game input and full game audio
+Desktop keys/controllers feed the original frontend input: Enter/Space is A,
+Escape/Backspace is B, arrows are D-pad, and Z/X are 1/2. A advances to the original
+COPYRIGHTS screen; the following menu transition is still blocked.
+It skips blocked startup steps; full startup, gameplay input and full game audio
 remain pending. Playback timing is still experimental. Close the window to exit. Omit
 both `--window` and `--fullscreen` to save a capture and exit. The test uses original frame submission
 and VI framebuffer presentation. The game image keeps its original aspect and

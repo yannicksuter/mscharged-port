@@ -14,6 +14,7 @@ include(cmake/NativeSystemSettings.cmake)
 include(cmake/NativeSTM.cmake)
 include(cmake/NativeVideo.cmake)
 include(cmake/OriginalCreditsMovieHardware.cmake)
+include(cmake/NativeHardwareOwner.cmake)
 include(cmake/NativeVideoOutput.cmake)
 find_package(Threads REQUIRED)
 
@@ -186,7 +187,8 @@ target_compile_definitions(mscharged_original_main_credits_module PRIVATE
     MSCHARGED_GAME_MODULE=1 AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca
     MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP=1 MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND=1
     MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND_SCENE=1 MSCHARGED_DIAGNOSTIC_CREDITS_SCENE=1
-    MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1
+    MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1 MSCHARGED_DIAGNOSTIC_CREDITS_COPYRIGHTS=1
+    MSCHARGED_DIAGNOSTIC_MAIN_INPUT=1
     C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)
 target_compile_options(mscharged_original_main_credits_module PRIVATE
     -O1 -ffunction-sections -fdata-sections -fno-strict-aliasing
@@ -218,6 +220,17 @@ add_library(mscharged_original_main_credits_focus OBJECT
     "${MSCHARGED_PREPARED}/src/NL/plat/GameCubePad.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plat/WiiRemotePad.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plat/WiiFreestylePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/cPlatPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/PlatPadManager.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiClassicPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/SwappablePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/DPDData.cpp"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/kpad/KPAD.c"
+    "${MSCHARGED_PREPARED}/src/Game/PadMonkey.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiPadMonkey.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakConfig.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feHelpFuncs.cpp"
  )
 add_dependencies(mscharged_original_main_credits_focus verify_prepared)
 set_target_properties(mscharged_original_main_credits_focus PROPERTIES
@@ -255,7 +268,7 @@ target_link_libraries(mscharged_original_main_credits_vi PRIVATE aurora::vi)
 add_library(charged_original_main_credits_host OBJECT
     src/runtime/original_main_credits.cpp
     src/platform/os.cpp src/platform/host_metadata.cpp src/platform/string_format.cpp
-    src/platform/report.cpp src/platform/thread.cpp)
+    src/platform/report.cpp src/platform/thread.cpp src/platform/os_version.cpp)
 add_dependencies(charged_original_main_credits_host mscharged_original_main_credits_module)
 target_compile_features(charged_original_main_credits_host PRIVATE cxx_std_20)
 target_include_directories(charged_original_main_credits_host BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
@@ -272,6 +285,7 @@ target_link_libraries(charged_original_main_credits_host PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm
     charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
+    charged_native_hardware_owner
     charged_native_video_output_device Threads::Threads ${CMAKE_DL_LIBS})
 
 function(mscharged_link_original_main_credits target)
