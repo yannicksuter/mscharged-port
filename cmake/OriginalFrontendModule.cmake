@@ -53,7 +53,8 @@ add_library(charged_original_frontend_module OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/glx/glxMemory.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxTexture.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/GXUnlitTextureMaterialProgram.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/glx/GXUnlitTextureMaterialProgramRender.cpp")
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXUnlitTextureMaterialProgramRender.cpp"
+    src/platform/game_resource_records.cpp)
 add_dependencies(charged_original_frontend_module verify_prepared)
 set_target_properties(charged_original_frontend_module PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
@@ -90,4 +91,16 @@ if(BUILD_TESTING)
     target_link_libraries(original_target_layout_tests PRIVATE charged_original_function_pool_abi)
     add_dependencies(original_target_layout_tests verify_prepared)
     add_test(NAME original_target_layout COMMAND original_target_layout_tests)
+endif()
+
+# Declared-source/SDK layout only; actual source pool lifetime proof is a
+# separate private isolated-module diagnostic, not full game readiness.
+if(BUILD_TESTING)
+    add_executable(original_resource_header_abi_tests tests/original_resource_header_abi.cpp)
+    target_include_directories(original_resource_header_abi_tests PRIVATE
+        "${MSCHARGED_AURORA_PREPARED}/include")
+    target_link_libraries(original_resource_header_abi_tests PRIVATE charged_original_function_pool_abi)
+    target_compile_definitions(original_resource_header_abi_tests PRIVATE TARGET_PC=1)
+    add_dependencies(original_resource_header_abi_tests verify_prepared)
+    add_test(NAME original_resource_header_abi COMMAND original_resource_header_abi_tests)
 endif()
