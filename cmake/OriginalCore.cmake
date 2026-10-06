@@ -10,6 +10,12 @@ target_include_directories(charged_sanim_decode PUBLIC "${MSCHARGED_PREPARED}/in
 target_compile_definitions(charged_sanim_decode PUBLIC MSCHARGED_NATIVE=1)
 target_compile_features(charged_sanim_decode PRIVATE cxx_std_17)
 
+# This provider belongs to the host foundation, outside any original-game module.
+# Game ownership bookkeeping imports its C interface instead of game operators.
+add_library(charged_native_metadata STATIC src/platform/host_metadata.cpp)
+target_include_directories(charged_native_metadata PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(charged_native_metadata PRIVATE cxx_std_17)
+
 add_library(charged_native_allocator STATIC "${MSCHARGED_PREPARED}/src/NL/MemAlloc.cpp"
     src/platform/game_allocation_ownership.cpp)
 add_dependencies(charged_native_allocator verify_prepared)
@@ -18,6 +24,7 @@ target_include_directories(charged_native_allocator PUBLIC "${MSCHARGED_PREPARED
     PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 target_compile_definitions(charged_native_allocator PRIVATE MSCHARGED_NATIVE=1)
 target_compile_features(charged_native_allocator PRIVATE cxx_std_17)
+target_link_libraries(charged_native_allocator PRIVATE charged_native_metadata)
 
 add_library(charged_original_core STATIC
     "${MSCHARGED_PREPARED}/src/NL/nlInit.cpp"

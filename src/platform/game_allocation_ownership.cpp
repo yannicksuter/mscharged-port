@@ -1,7 +1,10 @@
 #include "platform/game_allocation_ownership.h"
+#include "platform/host_metadata.h"
 #include "NL/MemAlloc.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -18,7 +21,22 @@ struct Allocation
     unsigned int arena_bytes;
     unsigned long bytes;
 };
-using Records = std::map<std::uintptr_t, Allocation>;
+template<class T> struct HostMetadataAllocator
+{
+    using value_type = T;
+    HostMetadataAllocator() = default;
+    template<class U> HostMetadataAllocator(const HostMetadataAllocator<U>&) noexcept {}
+    T* allocate(std::size_t count)
+    {
+        static_assert(alignof(T) <= alignof(std::max_align_t));
+        if (count > std::numeric_limits<std::size_t>::max() / sizeof(T)) throw std::bad_alloc();
+        return static_cast<T*>(ChargedNativeMetadataAllocate(count * sizeof(T)));
+    }
+    void deallocate(T* pointer, std::size_t) noexcept { ChargedNativeMetadataRelease(pointer); }
+    template<class U> bool operator==(const HostMetadataAllocator<U>&) const noexcept { return true; }
+};
+using Records = std::map<std::uintptr_t, Allocation, std::less<std::uintptr_t>,
+    HostMetadataAllocator<std::pair<const std::uintptr_t, Allocation>>>;
 struct Registry
 {
     std::mutex mutex;
@@ -27,7 +45,8 @@ struct Registry
 Registry& State()
 {
     // Constructed on first use; no dependence on another TU's static order.
-    // All this file's STL allocation uses the host CRT, never game new/delete.
+    // The explicit C allocation boundary keeps nodes in the host CRT even when
+    // this registry is compiled inside the original-game module.
     static Registry registry;
     return registry;
 }
@@ -57,11 +76,17 @@ GameAllocationReservation::GameAllocationReservation(MemoryAllocator& owner, uns
     : pending_(nullptr)
 {
     (void)State();
-    pending_ = new Pending(owner, bytes);
+    void* storage = ChargedNativeMetadataAllocate(sizeof(Pending));
+    try { pending_ = new (storage) Pending(owner, bytes); }
+    catch (...) { ChargedNativeMetadataRelease(storage); throw; }
 }
 GameAllocationReservation::~GameAllocationReservation()
 {
-    delete static_cast<Pending*>(pending_);
+    if (pending_)
+    {
+        static_cast<Pending*>(pending_)->~Pending();
+        ChargedNativeMetadataRelease(pending_);
+    }
 }
 void GameAllocationReservation::Commit(void* pointer)
 {
