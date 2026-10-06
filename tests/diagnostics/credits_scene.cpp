@@ -17,6 +17,10 @@
 #include "Game/FE/tlTextInstance.h"
 #include "Game/Font/fontmanager.h"
 #include "Game/SH/SHCredits.h"
+#include "Game/Task/GameRenderTask.h"
+#include "Game/Sys/movie.h"
+#include "NL/glx/glxSwap.h"
+#include "NL/glx/GXMovieMaterialProgram.h"
 #include "NL/gl/glMaterialProgram.h"
 #include "NL/gl/glMatrix.h"
 #include "NL/gl/glMemory.h"
@@ -87,10 +91,12 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     // The named diagnostic retains the four original constructor requests;
     // normal startup retains all43 and this is not full startup acceptance.
     glInitMaterialPrograms();
-    // Actual source gxInit owns the hardware/cache initialization normally
-    // requested by whole glPlat::glx_InitGX. No hand-tuned renderer state.
-    GXAdjustForOverscan(&GXNtsc480IntDf, &glx_rmode, 0, 16);
-    gxInit();
+    // The actual whole glPlat startup owns VI/FIFO/XFB/GX/cache initialization
+    // and installs source vi_post_cb: this is the movie's genuine frame clock.
+    // The named host diagnostic still brackets EFB rendering without source
+    // task scheduling or VI display-copy/swap presentation.
+    Check(glplatStartup(glGetScreenInfo()), "Actual source glPlat startup failed");
+    Check(glplatPostStartup(), "Actual source glPlat post-startup failed");
     gl_StateStartup();
     gl_MatrixStartup();
     glplatInitializeMaterialPrograms(); // Actual source registry traversal.
@@ -117,12 +123,8 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     Check(permanentComplete, "Original permanent bundle never completed");
     std::puts("231 genuine MainUI permanent source callback complete");
 
-    // Named platform-frame diagnostic omits source glPlat/VI startup. These
-    // exact EFB logical dimensions are the original glPlat default target
-    // values, recorded in the actual source screen object, not fake getters.
-    glGetScreenInfo()->ScreenWidth = 640;
-    glGetScreenInfo()->ScreenHeight = 448;
-    glxInitTargets();
+    Check(glGetScreenInfo()->ScreenWidth == 640 && glGetScreenInfo()->ScreenHeight == 448,
+          "Actual source glPlat screen object differs from source defaults");
     gl_TargetStartup();
     SetupViews(); // Named diagnostic creates the genuine source Anark only.
     nlMatrix4 identity; identity.SetIdentity();
@@ -182,8 +184,18 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     Check(credits->m_pTextLines[0]->GetAssetPosition().f.y == -250.0f &&
           credits->m_pTextLines[19]->GetAssetPosition().f.y == -725.0f,
           "Original authored line setup changed");
+    // Exact source renderer callback creates GXMovie packets for the authored
+    // movie image. The source MovieInit entry selects real THPSimple mode0 only
+    // under the explicitly named diagnostic while normal AX mode1 is held.
+    InstallImageRenderCallback();
+    Check(MovieInit(), "Actual original MovieInit rejected its request");
     for (unsigned frame=0; frame<120; ++frame)
         scenes->Update(1.0f/60.0f);
+    Check(credits->mMovieStarted && credits->mSwappedTexture && credits->mMovieInstance,
+          "Original Credits parent movie source did not start/swap its authored image");
+    Check(IsMovieActive() && !IsMovieFinished(), "Actual source MovieStart/preload did not remain active");
+    std::printf("Actual source Credits movie selected %s, initial retrace frame%d.\n",
+                credits->mMovieFilename, glxGetFrameCount());
     Check(credits->m_pTextLines[0]->GetString() == credits->mStrings[0] && credits->mStrings[0][0],
           "Original parser/handler did not publish genuine first Credits string");
     scenes->RenderActiveScenes();
@@ -196,7 +208,7 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     view.Iterate(Observe);
     Check(packets && vertices, "Actual original Credits renderer omitted source packets");
     Check(gxGetNumTexGens() == 0, "GPU fixture issued an unintended source GX request before first frame");
-    std::printf("231 owned original Credits: %u checks, %u source packets, %u vertices. Temporary phase2/movie/audio/world/input gates; genuine Anark/source projection; metadata-only packet observation before first GPU frame.\n", checks,packets,vertices);
+    std::printf("231 owned original Credits: %u checks, %u source packets, %u vertices. Temporary phase2/mode0/world/input gates; genuine Anark/source projection; metadata-only packet observation before first GPU frame.\n", checks,packets,vertices);
     // Keep live source scene/font/pool owners until terminal diagnostic exit.
     // No missing FESceneManager destructor or CRT cleanup is invented.
     (void)fontPool;
@@ -207,8 +219,10 @@ extern "C" __attribute__((visibility("default"))) void charged_scene_update_and_
 {
     Check(std::isfinite(delta) && delta>=0, "Invalid native diagnostic frame delta");
     if (!retainedSceneView) throw std::logic_error("Original owned Credits scene not loaded");
-    // The native frame fixture still omits original VI/swap and the full task
-    // loop. It calls the actual source endpoints in DrawFrontEndElements order.
+    // True VI retrace callbacks own the source movie clock. The native frame
+    // fixture still omits source VI scanout/swap and the full task loop, calling
+    // actual FE endpoints in DrawFrontEndElements order. MoviePlay is the
+    // original nlTaskManager post-Run movie endpoint, selected diagnostically.
     // The preceding native frame has ended/drained before reusing frame backing.
     gl_ViewReset();
     glplatFrameAllocNextFrame();
@@ -219,6 +233,7 @@ extern "C" __attribute__((visibility("default"))) void charged_scene_update_and_
     Check(g_pFEInput->m_bInputAllowed,
           "Original scene-manager focus did not dispatch the active Credits handler");
     retainedSceneManager->RenderActiveScenes();
+    MoviePlay();
     glEndFrame();
     retainedSceneView->Iterate(glx_SendFrame_cb);
     glx_SendEnd();
@@ -227,6 +242,9 @@ extern "C" __attribute__((visibility("default"))) void charged_scene_update_and_
     if(liveFrames==1 || liveFrames==15)
         std::printf("Original Credits live source frame%u: first-line Y%.9g (before live%.9g), phase%d.\n",
                     liveFrames,y,firstLineBeforeLive,retainedCredits->mPhase);
+    if(liveFrames==1 || liveFrames==15)
+        std::printf("Actual Credits movie frame%u/source retrace%d, active%d.\n",
+                    GetMovieFrame(), glxGetFrameCount(), IsMovieActive());
 }
 
 // Retain the previous bounded fixture ABI for an independent fixed-step root
@@ -234,4 +252,13 @@ extern "C" __attribute__((visibility("default"))) void charged_scene_update_and_
 extern "C" __attribute__((visibility("default"))) void charged_scene_render_frame()
 {
     charged_scene_update_and_render_frame(1.0f/60.0f);
+}
+
+// Terminal diagnostic owner boundary. No original manager/CRT teardown is
+// invented. MovieStop follows original audio/read/texture/pool release order;
+// the host drains its genuine AI endpoint before releasing the one SDK.
+extern "C" __attribute__((visibility("default"))) void charged_scene_stop_movie()
+{
+    MovieStop();
+    Check(MovieQuit(), "Actual original MovieQuit failed");
 }

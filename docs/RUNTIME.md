@@ -36,8 +36,15 @@ the original fonts, frontend code and live scrolling. It skips blocked startup
 steps; full startup, movie/audio and game input remain pending. Close the window to exit. Omit
 `--window` to save a capture and exit.
 
-The separate `mscharged-original-credits-check` target remains available for
-testing Credits directly.
+The separate `mscharged-original-credits-check` target tests Credits directly,
+including the original THP movie and native audio:
+
+```sh
+cmake --build --preset graphics --target mscharged-original-credits-check -j 3
+./build/graphics/mscharged-original-credits-check --disc ./game/R4QE01.rvz --window
+```
+
+Audio can repeat during host scheduling delays. Full game audio remains pending.
 
 ## Original movie audio test
 
