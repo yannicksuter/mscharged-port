@@ -222,3 +222,4 @@
 0280-retain-original-vertex-animation-native-records.patch
 0281-native-stadium-singleton-declaration.patch
 0282-adapt-original-character-loader-callback-contexts.patch
+0265-native-packed-registry-backing.patch

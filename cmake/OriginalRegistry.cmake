@@ -7,7 +7,8 @@ include(cmake/OriginalFunctionPools.cmake)
 add_library(charged_original_registry_module_sources OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/nlRegistry.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlRegistryLookup.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlRegistryOwner.cpp")
+    "${MSCHARGED_PREPARED}/src/NL/nlRegistryOwner.cpp"
+    src/platform/native_packed_registry.cpp)
 add_dependencies(charged_original_registry_module_sources verify_prepared)
 set_target_properties(charged_original_registry_module_sources PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
@@ -23,6 +24,11 @@ target_compile_options(charged_original_registry_module_sources PRIVATE
     -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas
     -fcheck-new -fno-rtti)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Literal RegistryIterator rebinding needs actual virtual dispatch here.
+    # Scope the measured compiler fix to its defining whole source unit only.
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/NL/nlRegistryOwner.cpp"
+        TARGET_DIRECTORY charged_original_registry_module_sources
+        APPEND PROPERTY COMPILE_OPTIONS -fno-devirtualize)
     target_compile_options(charged_original_registry_module_sources PRIVATE
         -fno-gnu-unique -fno-assume-sane-operators-new-delete)
 else()

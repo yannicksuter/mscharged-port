@@ -13,9 +13,9 @@ namespace {
 thread_local int metadata_budget = -1;
 unsigned metadata_live = 0, metadata_allocations = 0, checks = 0;
 void Check(bool value, const char* message) { ++checks; if (!value) throw std::runtime_error(message); }
-template<class Error, class Action> void Reject(Action action) {
+template<class Error, class Action> void Reject(Action action, const char* message="Unsupported domain operation succeeded") {
     ++checks; try { action(); } catch (const Error&) { return; }
-    throw std::runtime_error("Unsupported domain operation succeeded");
+    throw std::runtime_error(message);
 }
 void Word(unsigned char* p, std::uint32_t value) {
     p[0]=value>>24; p[1]=value>>16; p[2]=value>>8; p[3]=value;
@@ -174,6 +174,51 @@ int main() {
               "Multi-span retirement damaged prefix/suffix or unrelated domains");
         Check(FindGameCompletedSpan(many,32768,completed), "Crossing write lost the shared source origin");
         parent.Free(many);
+
+        // A native twin belongs to the actual source allocation and completed
+        // bytes. Views may overlap or nest; one producer invalidates every
+        // covering view while leaving disjoint views alive.
+        auto* packed=static_cast<unsigned char*>(parent.Allocate(256,32,false));
+        GameNativeBackingSpan twin{};
+        Reject<std::invalid_argument>([&]{GameNativeBackingReservation v(packed,256,512);});
+        { GameByteWriteReservation producer(packed,256); producer.Complete(GameByteDomain::WiiSerialized); }
+        const auto beforeTwinMetadata=metadata_live;
+        {
+            GameNativeBackingReservation abandoned(packed,8,32);
+            Check(abandoned.Data()!=packed, "Native twin aliases authored source storage");
+            Check(!FindGameNativeBacking(packed,8,twin), "Uncommitted native view became discoverable");
+        }
+        Check(metadata_live==beforeTwinMetadata, "Abandoned native reservation leaked metadata");
+        metadata_budget=0;
+        Reject<std::bad_alloc>([&]{GameNativeBackingReservation v(packed,8,32);});
+        metadata_budget=-1;
+        Check(!FindGameNativeBacking(packed,8,twin) && FindGameCompletedSpan(packed,256,completed),
+              "Native backing OOM changed actual source bytes or publication");
+        auto attach=[&](unsigned offset,unsigned bytes) {
+            GameNativeBackingReservation view(packed+offset,bytes,bytes*2);
+            std::memset(view.Data(),0x6c,bytes*2); view.Commit();
+            Check(FindGameNativeBacking(packed+offset,bytes,twin) && twin.bytes==bytes*2
+                  && twin.allocation.base==packed && twin.allocation.owner==&parent,
+                  "Published native backing lost its genuine source owner");
+        };
+        attach(0,8); attach(8,64); attach(24,16); attach(28,8); attach(128,32);
+        Reject<std::logic_error>([&]{GameNativeBackingReservation duplicate(packed,8,32);});
+        { GameByteWriteReservation crossing(packed+32,1); crossing.Complete(GameByteDomain::NativePayload); }
+        Check(!FindGameNativeBacking(packed+8,64,twin) && !FindGameNativeBacking(packed+24,16,twin)
+              && !FindGameNativeBacking(packed+28,8,twin), "Producer retained a covering native view");
+        Check(FindGameNativeBacking(packed,8,twin) && FindGameNativeBacking(packed+128,32,twin),
+              "Producer retired disjoint native views");
+        {
+            GameNativeBackingReservation staleView(packed+80,16,32);
+            // Native conversion preserves the original logical-completion tag,
+            // but the expanded pending view still requires serialized bytes.
+            GameByteWriteReservation conversion(packed+80,16);
+            conversion.Complete(GameByteDomain::NativePayload);
+            Reject<std::invalid_argument>([&]{staleView.Commit();}, "Pending backing accepted converted source bytes");
+        }
+        parent.Free(packed);
+        Check(!FindGameNativeBacking(packed,8,twin) && !FindGameNativeBacking(packed+128,32,twin),
+              "Source free retained CRT-owned native data");
         GameByteWriteReservation stale(raw,32);
         parent.Free(raw);
         auto* reused=static_cast<unsigned char*>(parent.Allocate(256,32,false));
