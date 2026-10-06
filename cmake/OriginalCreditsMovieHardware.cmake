@@ -17,3 +17,7 @@ target_link_libraries(charged_credits_movie_hardware PUBLIC
 target_link_options(charged_credits_movie_hardware INTERFACE
     -Wl,--undefined=AIInit -Wl,--undefined=THPInit
     -Wl,--undefined=THPVideoDecode -Wl,--undefined=THPAudioDecode)
+
+# The existing movie SDK owner composes optional input beneath original APIs.
+include(cmake/NativeHardwareOwner.cmake)
+target_link_libraries(charged_credits_movie_hardware PUBLIC charged_native_hardware_owner)

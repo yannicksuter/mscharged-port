@@ -14,6 +14,7 @@ struct Owner {
     std::mutex mutex;
     std::thread::id thread;
     bool registered{}, ready{}, active{};
+    void (*service_input)(){};
 };
 Owner& State() { static Owner owner; return owner; }
 }
@@ -35,19 +36,26 @@ void ServiceCreditsMovieHardware() {
         ~Finish() { std::lock_guard lock(owner.mutex); owner.active = false; }
     } finish{owner};
     platform::ServiceNativeAI();
+    // One exact owner, never a replacement SDK registration. VI remains
+    // serviced by the SDK after this endpoint returns.
+    if (owner.service_input) owner.service_input();
 }
 
-void InitializeCreditsMovieHardware() {
+void InitializeCreditsMovieHardware() { InitializeCreditsMovieHardware(nullptr); }
+
+void InitializeCreditsMovieHardware(void (*service_input)()) {
     auto& owner = State();
     {
         std::lock_guard lock(owner.mutex);
         if (owner.registered || owner.ready)
             throw std::logic_error("Credits movie hardware already has an owner");
         owner.thread = std::this_thread::get_id();
+        owner.service_input = service_input;
         // Never replace a native input/power owner or create a second SDK
         // hardware endpoint. This selected diagnostic has one AI-only owner.
         if (!aurora_register_hardware_service(ServiceCreditsMovieHardware)) {
             owner.thread = {};
+            owner.service_input = nullptr;
             throw std::logic_error("The SDK already has a native hardware owner");
         }
         owner.registered = true;
@@ -61,6 +69,7 @@ void InitializeCreditsMovieHardware() {
         aurora_unregister_hardware_service(ServiceCreditsMovieHardware);
         owner.registered = false;
         owner.thread = {};
+        owner.service_input = nullptr;
         throw;
     }
     std::lock_guard lock(owner.mutex);
@@ -81,6 +90,7 @@ void ShutdownCreditsMovieHardware() {
         owner.ready = false;
         owner.registered = false;
         owner.thread = {};
+        owner.service_input = nullptr;
     }
     // Caller has run original MovieStop/Quit while the source module is still
     // live. Stop and drain the true SDL source callbacks before SDK teardown or
