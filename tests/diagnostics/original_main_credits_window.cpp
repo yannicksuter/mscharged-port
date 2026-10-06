@@ -14,10 +14,12 @@
 #include <aurora/dvd.h>
 #include <dolphin/os.h>
 #include "platform/stm_device.h"
+#include "platform/ai.h"
 #include "platform/system.h"
 #include "platform/video_device.h"
 #include "platform/video_output_device.h"
 #include "platform/interrupt_controller.h"
+#include "credits_movie_hardware.h"
 #include <SDL3/SDL_video.h>
 #include <dlfcn.h>
 #include <cstdio>
@@ -144,8 +146,8 @@ int main(int argc, char** argv) {
             if (argument=="--help") {
                 std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--native-send]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
-                          "Explicit USA/English system configuration. Full tasks, movie/audio,\n"
-                          "physical input and game shutdown remain omitted.\n"
+                          "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
+                          "Full tasks, AX predecessor, physical input and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
                           "--native-send tests original glSendFrame/swap/VI at physical 640x448.");
                 return 0;
@@ -214,6 +216,7 @@ int main(int argc, char** argv) {
         }
         mscharged::platform::InitializeNativeSTMDevice();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
+        mscharged::diagnostic::InitializeCreditsMovieHardware();
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
         auto* module=dlopen(modulePath.c_str(),RTLD_LAZY|RTLD_LOCAL);
         if(!module)throw std::runtime_error(dlerror());
@@ -225,6 +228,8 @@ int main(int argc, char** argv) {
         Check(result==85, "Original main selected scene did not complete checkpoint 85");
         auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
         Check(frame,"Same original-main module scene-frame export unavailable");
+        auto stopMovie=reinterpret_cast<void(*)()>(dlsym(module,"charged_original_scene_stop_movie"));
+        Check(stopMovie,"Original main movie-stop export unavailable");
         // Existing actual source GX/state/material/font/view initialization is
         // retained. No host GXInit, source pool restart or fixture font setup.
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
@@ -234,6 +239,7 @@ int main(int argc, char** argv) {
             for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
                 if(event->type==AURORA_EXIT)exit=true;
             if(exit)break;
+            mscharged::diagnostic::ServiceCreditsMovieHardware();
             const auto now=std::chrono::steady_clock::now();
             Check(interactive || now-start<std::chrono::seconds(40),"Original main Credits Vulkan pipeline timed out");
             if(nativeSend) {
@@ -272,10 +278,24 @@ int main(int argc, char** argv) {
               (nativeSend ? nativePresented : aurora_get_last_presentation().sequence != 0),
               "Original main Credits real source draw/presentation incomplete");
         if(nativeSend) {
-            std::printf("Original main selected Credits: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full tasks/movie/audio/physical-input/CRT remain omitted; source-selected completed XFB pixel readback retained.\n",frames);
+            std::printf("Original main selected Credits: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full tasks/AX predecessor/physical-input/CRT remain omitted; source-selected completed XFB pixel readback retained.\n",frames);
         } else {
-        std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Explicit task/VI swap/movie/audio/physical-input/full-CRT omissions remain.\n",frames,draws);
+        std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Actual original THP/movie/mode0 audio; full task/AX/physical-input/CRT scopes remain held.\n",frames,draws);
         }
+        const auto audio=mscharged::platform::GetNativeAIStatus();
+        const auto audioClock=mscharged::platform::GetNativeAIClockStatus();
+        Check(audio.initialized && audio.consumed_blocks && audio.dispatched_callbacks,
+              "Original-main movie audio did not reach the actual host device");
+        std::printf("Original-main movie native AI: submitted%llu consumed%llu callbacks%llu, rate%d; coalesced%llu, maximum owner gap%lluns.\n",
+                    static_cast<unsigned long long>(audio.submitted_blocks),
+                    static_cast<unsigned long long>(audio.consumed_blocks),
+                    static_cast<unsigned long long>(audio.dispatched_callbacks),audio.input_frequency,
+                    static_cast<unsigned long long>(audioClock.coalesced_edges),
+                    static_cast<unsigned long long>(audioClock.maximum_service_gap_ns));
+        stopMovie();
+        mscharged::diagnostic::ShutdownCreditsMovieHardware();
+        Check(!mscharged::platform::GetNativeAIStatus().initialized,
+              "Original-main movie owner did not drain the actual host audio device");
         std::fflush(nullptr);std::_Exit(0);
     }catch(const std::exception& e){std::fprintf(stderr,"Actual source diagnostic stopped: %s\n",e.what());std::fflush(nullptr);std::_Exit(1);}
 }

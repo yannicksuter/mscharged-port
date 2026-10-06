@@ -13,6 +13,7 @@ include(cmake/WiiStringFormat.cmake)
 include(cmake/NativeSystemSettings.cmake)
 include(cmake/NativeSTM.cmake)
 include(cmake/NativeVideo.cmake)
+include(cmake/OriginalCreditsMovieHardware.cmake)
 include(cmake/NativeVideoOutput.cmake)
 find_package(Threads REQUIRED)
 
@@ -120,6 +121,12 @@ add_library(mscharged_original_main_credits_module MODULE
     "${MSCHARGED_PREPARED}/src/NL/nlBind.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHCredits.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHMoviePlayer.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Sys/movie.cpp"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/thp/THPSimple.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Task/GameRenderTask.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLMovieMeshWriter.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgramRender.cpp"
     src/platform/frontend_package.cpp
     "${MSCHARGED_PREPARED}/src/Game/Render/Frustum.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Render/RLViewLayers.cpp"
@@ -177,6 +184,7 @@ target_compile_definitions(mscharged_original_main_credits_module PRIVATE
     MSCHARGED_GAME_MODULE=1 AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca
     MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP=1 MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND=1
     MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND_SCENE=1 MSCHARGED_DIAGNOSTIC_CREDITS_SCENE=1
+    MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1
     C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)
 target_compile_options(mscharged_original_main_credits_module PRIVATE
     -O1 -ffunction-sections -fdata-sections -fno-strict-aliasing
@@ -184,7 +192,8 @@ target_compile_options(mscharged_original_main_credits_module PRIVATE
     -fcheck-new)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(mscharged_original_main_credits_module PRIVATE
-        -fno-gnu-unique -fno-assume-sane-operators-new-delete)
+        -fno-gnu-unique -fno-assume-sane-operators-new-delete
+        -fno-devirtualize-speculatively)
 else()
     target_compile_options(mscharged_original_main_credits_module PRIVATE
         -fno-assume-sane-operator-new -Wno-register)
@@ -267,7 +276,7 @@ target_link_libraries(mscharged-original-main-credits-check PRIVATE
     mscharged_original_main_credits_vi
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_wii_string_format charged_native_stm
-    charged_native_system_settings charged_native_video_device
+    charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
     charged_native_video_output_device Threads::Threads ${CMAKE_DL_LIBS})
 
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
