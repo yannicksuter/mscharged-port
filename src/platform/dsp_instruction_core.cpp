@@ -8,7 +8,7 @@ std::uint16_t QualifiedInstructionWords(std::uint16_t word) {
        (word>=0x8a00 && word<=0x8f00 && !(word&0xff)) ||
        word==0x8100 || word==0x8900 || (word&0xfefc)==0x0218 ||
        (word&0xfc00)==0x1c00 || (word&0xffe0)==0x0040 ||
-       (word&0xff80)==0x1b00)return 1;
+       (word&0xff80)==0x1b00 || (word&0xff80)==0x1900)return 1;
     return 0;
 }
 }
@@ -168,6 +168,22 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
             cell=(static_cast<std::uint64_t>(word)<<16) |
                  ((word&0x8000)?0xff00000000ULL:0ULL);
         } else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
+        next.address[source]=static_cast<std::uint16_t>(next.address[source]+1);
+    } else if ((opcode&0xff80)==0x1900) {
+        const auto source=static_cast<unsigned>((opcode>>5)&3);
+        const auto destination=static_cast<unsigned>(opcode&31);
+        // The original coefficient-bank walk loads accumulator middle cells.
+        // Other destinations (including aliasing AR/WR writes) remain explicit
+        // unsupported register/address-mode boundaries, never guessed effects.
+        if(destination!=0x1e && destination!=0x1f)
+            throw DSPUnsupportedInstruction(pc,opcode,static_cast<std::uint16_t>(destination));
+        if(next.wrap[source]!=0xffff)
+            throw DSPUnsupportedInstruction(pc,opcode,next.wrap[source]);
+        const auto word=DataWord(next.address[source]);
+        auto& cell=next.accumulator[destination-0x1e];
+        if(next.status&0x4000)cell=(static_cast<std::uint64_t>(word)<<16) |
+            ((word&0x8000)?0xff00000000ULL:0ULL);
+        else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
         next.address[source]=static_cast<std::uint16_t>(next.address[source]+1);
     } else if ((opcode&0xff80)==0x1b00) {
         const auto destination=static_cast<unsigned>((opcode>>5)&3);
