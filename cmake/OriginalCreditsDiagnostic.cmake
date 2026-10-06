@@ -161,6 +161,8 @@ add_library(mscharged_original_credits_module MODULE
 )
 set_source_files_properties("${MSCHARGED_PREPARED}/src/RVL_SDK/mtx/mtx44.c" PROPERTIES LANGUAGE CXX)
 add_dependencies(mscharged_original_credits_module verify_prepared)
+include(cmake/OriginalCompressedFiles.cmake)
+mscharged_add_original_inflater(mscharged_original_credits_module)
 set_target_properties(mscharged_original_credits_module PROPERTIES
     PREFIX "" POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)

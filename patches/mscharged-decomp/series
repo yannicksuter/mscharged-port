@@ -207,3 +207,4 @@
 0258-native-registry-scalar-words.patch
 0259-native-audio-config-live-values.patch
 0255-restore-original-effects-initialization.patch
+0254-native-compressed-file-byte-ownership.patch
