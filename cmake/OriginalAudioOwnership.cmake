@@ -7,6 +7,8 @@ include_guard(GLOBAL)
 # inventories, with the same isolated original-game-module profile.
 include(cmake/OriginalFunctionPools.cmake)
 add_library(charged_original_audio_ownership_module_sources OBJECT EXCLUDE_FROM_ALL
+    "${MSCHARGED_PREPARED}/src/Game/Audio/audio.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioBackend.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Audio/AudioSystem.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Audio/AudioBundleManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Audio/AudioBundleManagerPlatform.cpp"
