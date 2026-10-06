@@ -175,3 +175,5 @@ if(BUILD_TESTING AND TARGET aurora::gx
     set_tests_properties(original_frontend_render PROPERTIES TIMEOUT 120
         ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy")
 endif()
+
+include(cmake/OriginalMaterialParameters.cmake)
