@@ -162,3 +162,5 @@ if(BUILD_TESTING AND TARGET aurora::gx
     set_tests_properties(original_font_loading PROPERTIES TIMEOUT 120
         ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy")
 endif()
+
+include(cmake/OriginalStringPrefix.cmake)
