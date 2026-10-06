@@ -38,3 +38,4 @@
 0039-separate-native-efb-from-window-output.patch
 0041-native-vi-interrupt-service-without-output.patch
 0042-track-completed-native-vi-presentation.patch
+0043-keep-native-clock-waits-on-interrupt-safe-points.patch
