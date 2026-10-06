@@ -38,6 +38,25 @@ def video(width, height, dc):
     return b'\xff\xd8' + quant + frame + huffman + scan + entropy
 
 
+def quarter_video(dc, ac):
+    # Four luma blocks each contain DC and coefficient (0,1) only. Chroma is DC0.
+    # This selects the retail SDK's _quarterIDCT path, including its store order.
+    size = abs(ac).bit_length()
+    amplitude = ac if ac > 0 else ac + (1 << size) - 1
+    quant = segment(0xdb, bytes(1) + bytes([1] * 64))
+    frame = segment(0xc0, bytes([8]) + struct.pack('>HH', 16, 16) +
+                    bytes([3, 1, 0x22, 0, 2, 0x11, 0, 3, 0x11, 0]))
+    huffman = segment(0xc4, bytes([0, 2] + [0] * 15 + [0, 4]) +
+                      bytes([16, 2] + [0] * 15 + [0, size]))
+    scan = segment(0xda, bytes([3, 1, 0, 2, 0, 3, 0, 0, 63, 0]))
+    first_dc = '11000' if dc == 8 else '0'
+    coefficient = '1' + format(amplitude, f'0{size}b') + '0'
+    bits = first_dc + coefficient + ('0' + coefficient) * 3 + '00' * 2
+    bits += '1' * (-len(bits) % 8)
+    entropy = bytes(int(bits[p:p + 8], 2) for p in range(0, len(bits), 8))
+    return b'\xff\xd8' + quant + frame + huffman + scan + entropy
+
+
 def audio_oracle(encoded, layout):
     offset, count = struct.unpack_from('>II', encoded)
     channels = []
@@ -82,6 +101,23 @@ def synthetic(folder):
         case.mkdir()
         (case / 'video.bin').write_bytes(video(width, height, dc))
         (case / 'video.txt').write_text(f'{width:x} {height:x} {128 + dc // 8:x} 80 80\n')
+
+    # Literal pixel rows follow the paired-single stores in both original
+    # RVL THPDec.c _quarterIDCT routines: tmp7, tmp8, swapped tmp6, swapped tmp5.
+    # These are independent source-instruction oracles, not decoder snapshots.
+    quarter_rows = (
+        (0, 64, [139, 137, 134, 125, 130, 121, 118, 116]),
+        (8, 64, [140, 138, 135, 126, 131, 122, 119, 117]),
+        (0, -64, [116, 118, 121, 130, 125, 134, 137, 139]),
+        (8, -64, [117, 119, 122, 131, 126, 135, 138, 140]),
+        (8, 4096, [255, 255, 255, 0, 255, 0, 0, 0]),
+    )
+    for index, (dc, ac, row) in enumerate(quarter_rows):
+        case = folder / f'video-quarter-{index:02}'
+        case.mkdir()
+        (case / 'video.bin').write_bytes(quarter_video(dc, ac))
+        (case / 'video.txt').write_text('10 10 ffffffff 80 80\n')
+        (case / 'video-y.bin').write_bytes(bytes(row * 32))
 
     for index, count in enumerate((1, 13, 14, 15, 28, 39, 56, 96)):
         for mono in (False, True):

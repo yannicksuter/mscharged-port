@@ -101,7 +101,16 @@ void Video(const std::filesystem::path& folder) {
     Bytes y(ySize + 2, 0xa5), u(cSize + 2, 0xa5), v(cSize + 2, 0xa5);
     Check(THPVideoDecode(raw.data(), y.data() + 1, u.data() + 1, v.data() + 1, nullptr) == 0, "actual pointer-interface video decode failed");
     Check(Guard(y, 1, ySize) && Guard(u, 1, cSize) && Guard(v, 1, cSize), "video output guard changed");
-    if (expected[2] != UINT32_MAX) {
+    if (std::filesystem::exists(folder / "video-y.bin")) {
+        const auto expectedY = Read(folder / "video-y.bin");
+        Check(expectedY.size() == ySize, "retail luma oracle size differs");
+        for (std::size_t n = 0; n < ySize; ++n)
+            Check(y[n + 1] == expectedY[n], "retail SDK quarter-IDCT store order differs");
+        for (std::size_t n = 1; n <= cSize; ++n) {
+            Check(u[n] == expected[3], "independent U DC oracle differs");
+            Check(v[n] == expected[4], "independent V DC oracle differs");
+        }
+    } else if (expected[2] != UINT32_MAX) {
         for (std::size_t n = 1; n <= ySize; ++n) Check(y[n] == expected[2], "independent luma DC oracle differs");
         for (std::size_t n = 1; n <= cSize; ++n) {
             Check(u[n] == expected[3], "independent U DC oracle differs");
