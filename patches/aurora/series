@@ -28,3 +28,4 @@
 0031-native-gx-blocking-pipelines.patch
 0028-native-gx-display-copy-snapshots.patch
 0032-native-vi-selected-xfb-output.patch
+0033-native-gx-original-fifo-recording.patch
