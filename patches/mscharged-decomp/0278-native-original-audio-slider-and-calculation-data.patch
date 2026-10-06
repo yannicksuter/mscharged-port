@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: [PATCH] Adapt original audio control data and saved word offsets to native ABI
-Upstream-base: dc238202b310059d80791d0140dee37f27b9a3bf
+Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
 
 Original chunk selection, constructor requests, list order, transitions and
 numeric behavior remain authoritative. Native endian/record views are attached
