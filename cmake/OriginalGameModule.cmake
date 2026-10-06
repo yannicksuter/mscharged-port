@@ -105,3 +105,5 @@ include(cmake/OriginalBootSceneSources.cmake)
 include(cmake/OriginalCharacterLoading.cmake)
 
 include(cmake/OriginalSaveSources.cmake)
+
+include(cmake/OriginalUserOptions.cmake)
