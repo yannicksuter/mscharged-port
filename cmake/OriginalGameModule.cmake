@@ -111,3 +111,5 @@ include(cmake/OriginalUserOptions.cmake)
 include(cmake/OriginalAudioScript.cmake)
 
 include(cmake/OriginalAudioBanks.cmake)
+
+include(cmake/OriginalAudioControls.cmake)

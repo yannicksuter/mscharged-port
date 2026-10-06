@@ -231,3 +231,4 @@
 0289-native-save-icon-data.patch
 0271-preserve-original-audio-script-word-and-endian-abi.patch
 0272-preserve-original-audio-bank-record-and-relocation-abi.patch
+0278-native-original-audio-slider-and-calculation-data.patch
