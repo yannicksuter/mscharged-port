@@ -16,6 +16,7 @@ struct LaunchOptions
     std::optional<std::filesystem::path> disc;
     std::optional<bool> fullscreen;
     std::optional<WindowSize> size;
+    std::optional<std::string> aspect;
 };
 
 enum class SettingSource { Defaults, Config, Launcher, CommandLine };
@@ -28,6 +29,7 @@ struct ResolvedLaunch
     SettingSource width_source = SettingSource::Defaults;
     SettingSource height_source = SettingSource::Defaults;
     SettingSource fullscreen_source = SettingSource::Defaults;
+    SettingSource aspect_source = SettingSource::Defaults;
 };
 
 // Consume a shared option at argv[index], including its value where required.
@@ -41,7 +43,7 @@ ResolvedLaunch LoadLaunch(const LaunchOptions& options, const std::filesystem::p
 std::string DescribeLaunch(const ResolvedLaunch& launch);
 const char* SettingSourceName(SettingSource source);
 inline constexpr std::string_view LaunchOptionsHelp =
-    "Launch settings: [--config FILE] [--disc FILE | --disk FILE] [--window | --fullscreen] [--size WIDTHxHEIGHT]\n"
+    "Launch settings: [--config FILE] [--disc FILE | --disk FILE] [--window | --fullscreen] [--size WIDTHxHEIGHT] [--aspect auto|4:3|16:9]\n"
     "Command-line settings override the INI for this run only; later options win.\n"
     "INI disc paths are relative to that INI; command-line paths are relative to the working directory.\n";
 }

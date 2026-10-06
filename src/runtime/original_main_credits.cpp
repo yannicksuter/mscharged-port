@@ -185,6 +185,14 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             mscharged::LoadLaunch(launchOptions,executable.parent_path());
         disc=mscharged::PathUtf8(launch.disc_path);
         windowWidth=launch.settings.width;windowHeight=launch.settings.height;
+        const auto& aspect = launch.settings.aspect;
+        Check(aspect=="auto" || aspect=="4:3" || aspect=="16:9",
+              "Original Credits supports 4:3 or 16:9; select --aspect 4:3 or --aspect 16:9");
+        // Stage a Wii system preference. Original main queries SC and selects
+        // its projection and authored scene; resizing only scales that image.
+        const bool widescreen = aspect=="16:9" ||
+            (aspect=="auto" && windowWidth*3u>windowHeight*4u);
+        const unsigned aspectWidth=widescreen?16u:4u, aspectHeight=widescreen?9u:3u;
         std::printf("%s\n",mscharged::DescribeLaunch(launch).c_str());
         Check(!disc.empty() && std::filesystem::is_regular_file(launch.disc_path),"Supply your own game ISO/RVZ with --disc FILE or [game] disc in the INI");
         Check(!resizeCheck || !launch.settings.fullscreen,"--resize-check requires a windowed launch; add --window");
@@ -227,7 +235,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             throw std::runtime_error("Actual captured SDK arenas unavailable");
         mscharged::platform::InitializeNativeInterruptController();
         // Explicit USA diagnostic backing; independent SC and VI settings.
-        const mscharged::NativeSystemSettings settings{1,0,0,0,1};
+        const mscharged::NativeSystemSettings settings{1,0,0,std::uint8_t(widescreen),1};
         mscharged::ConfigureNativeSystemSettings(settings);
         mscharged::platform::ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT,false);
         if(nativeSend) {
@@ -298,9 +306,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                                          "Output resize replaced the original source EFB texture");
                     else retainedEFB=efb.texture;
                     const auto viewport=aurora::webgpu::calculate_present_viewport(
-                        size.native_fb_width,size.native_fb_height,4,3);
-                    std::printf("Native resize stage%u: surface%ux%u EFB%ux%u same-storage, SC4:3 viewport %.0f,%.0f %.0fx%.0f.\n",
+                        size.native_fb_width,size.native_fb_height,aspectWidth,aspectHeight);
+                    std::printf("Native resize stage%u: surface%ux%u EFB%ux%u same-storage, SC%u:%u viewport %.0f,%.0f %.0fx%.0f.\n",
                         resizeStage,size.native_fb_width,size.native_fb_height,efb.size.width,efb.size.height,
+                        aspectWidth,aspectHeight,
                         viewport.left,viewport.top,viewport.width,viewport.height);
                     std::fflush(stdout); stageAnnounced=true;
                 }

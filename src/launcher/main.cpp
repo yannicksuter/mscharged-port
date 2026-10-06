@@ -450,7 +450,7 @@ private:
     void GamePage()
     {
         PageTitle("Your game", "Open your ISO or RVZ directly. No extraction needed.");
-        if (options_.launch.disc || options_.launch.size || options_.launch.fullscreen)
+        if (options_.launch.disc || options_.launch.size || options_.launch.fullscreen || options_.launch.aspect)
         { Paragraph(DescribeLaunch(EffectiveLaunch()).c_str()); Paragraph("Command-line overrides apply for this run; Save settings changes only the INI."); }
         ImGui::TextUnformatted("Disc image");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 98);
@@ -492,10 +492,11 @@ private:
     void DisplayPage()
     {
         PageTitle("Display", "Game display preferences. These take effect when gameplay is available.");
-        if (options_.launch.size || options_.launch.fullscreen)
+        if (options_.launch.size || options_.launch.fullscreen || options_.launch.aspect)
         {
             const auto settings = EffectiveLaunch().settings;
             const auto text = "For this run: " + std::to_string(settings.width) + " x " + std::to_string(settings.height)
+                + ", " + settings.aspect
                 + (settings.fullscreen ? ", fullscreen." : ", windowed.") + " Command-line overrides are not saved.";
             Paragraph(text.c_str());
         }

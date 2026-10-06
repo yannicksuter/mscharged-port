@@ -34,7 +34,7 @@ cmake --build --preset graphics --target mscharged -j 3
 The launcher also offers **Try Credits**. The separate
 `mscharged-original-main-credits-check` target uses the same original-main driver.
 The test also accepts `--config FILE`, `--disc FILE` (`--disk`), `--window`,
-`--fullscreen`, and `--size WIDTHxHEIGHT`; command-line values override the INI
+`--fullscreen`, `--size WIDTHxHEIGHT`, and `--aspect auto|4:3|16:9`; command-line values override the INI
 for this run without saving. `--window` or `--fullscreen` keeps it open.
 
 This temporary test enters original `main`, then loads and renders Credits with
@@ -47,7 +47,10 @@ remain pending. Playback timing is still experimental. Close the window to exit.
 both `--window` and `--fullscreen` to save a capture and exit. The test uses original frame submission
 and VI framebuffer presentation. The game image keeps its original aspect and
 positioning when the window is resized. Add `--size 1280x720` to choose an initial
-window size; unused space is filled with bars.
+window size; unused space is filled with bars. `[display] aspect` selects the
+original Wii 4:3 or 16:9 layout, including text placement. Use `--aspect 16:9`
+to override it for one run. `auto` chooses once from the initial window size;
+resizing preserves that layout.
 
 The separate `mscharged-original-credits-check` target tests Credits directly,
 including the original THP movie and native audio:

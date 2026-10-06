@@ -39,7 +39,7 @@ int main()
     fs::create_directories(root / "config"); fs::create_directories(root / "working");
     const auto path = root / "config/settings.ini";
     const std::string original = "\xEF\xBB\xBF; untouched\r\n[game]\r\ndisc = \"games/INI disc.rvz\"\r\n"
-        "[display]\r\nwidth = 960\r\nheight = 640\r\nfullscreen = true\r\n"
+        "[display]\r\nwidth = 960\r\nheight = 640\r\nfullscreen = true\r\naspect = 4:3\r\n"
         "[future]\r\nunknown = retained\r\n";
     std::ofstream(path, std::ios::binary) << original;
     const auto stamp = fs::last_write_time(path);
@@ -53,11 +53,15 @@ int main()
         Check(baseline.disc_source == SettingSource::Config && baseline.width_source == SettingSource::Config
             && baseline.height_source == SettingSource::Config && baseline.fullscreen_source == SettingSource::Config,
             "INI field provenance lost");
-        const auto parsed = Parse({"test", "--config", "settings.ini", "--disk", "CLI disc.rvz", "--window", "--size", "600x900"});
+        Check(baseline.settings.aspect == "4:3" && baseline.aspect_source == SettingSource::Config,
+            "Original system aspect INI provenance lost");
+        const auto parsed = Parse({"test", "--config", "settings.ini", "--disk", "CLI disc.rvz", "--window", "--size", "600x900", "--aspect", "16:9"});
         const auto resolved = ResolveLaunch(file, parsed, nullptr, root / "working");
         Check(resolved.disc_path == root / "working/CLI disc.rvz", "CLI-relative disc did not use cwd");
         Check(resolved.settings.width == 600 && resolved.settings.height == 900 && !resolved.settings.fullscreen,
             "CLI did not override INI display fields");
+        Check(resolved.settings.aspect == "16:9" && resolved.aspect_source == SettingSource::CommandLine
+            && resolved.config.settings.aspect == "4:3", "Run-only aspect override altered saved settings");
         Check(parsed.explicit_config && parsed.config == "settings.ini", "Explicit configuration source lost");
         Check(resolved.disc_source == SettingSource::CommandLine && resolved.width_source == SettingSource::CommandLine
             && resolved.height_source == SettingSource::CommandLine && resolved.fullscreen_source == SettingSource::CommandLine,
@@ -67,6 +71,13 @@ int main()
             "Overrides modified loaded or persistable INI settings");
         const auto last = Parse({"test", "--fullscreen", "--window", "--fullscreen", "--disc", "old.iso", "--disk", "new.rvz"});
         Check(*last.fullscreen && *last.disc == "new.rvz", "Later display/disc options did not win");
+        const auto last_aspect = Parse({"test", "--aspect", "16:9", "--aspect", "4:3"});
+        Check(*last_aspect.aspect == "4:3", "Later system aspect did not win");
+        Check(*Parse({"test", "--aspect", "auto"}).aspect == "auto", "Automatic initial aspect rejected");
+        Reject([&] { Parse({"test", "--aspect", "21:9"}); });
+        Reject([&] { Parse({"test", "--aspect"}); });
+        LaunchOptions invalid_aspect; invalid_aspect.aspect = "invalid";
+        Reject([&] { ResolveLaunch(file, invalid_aspect); });
         const auto limits = Parse({"test", "--size", "1x16384"});
         Check(limits.size->width == 1 && limits.size->height == 16384, "Valid boundary dimensions rejected");
         LaunchOptions invalid; invalid.size = WindowSize{0, 600};
@@ -80,14 +91,18 @@ int main()
         LaunchOptions untouched;
         Check(!ParseLaunchOption(2, unknown, index, untouched) && index == 1 && !untouched.disc,
             "Shared parsing consumed an explicit runtime mode");
-        Settings draft = file.settings; draft.disc = "launcher.rvz"; draft.width = 1111;
+        Settings draft = file.settings; draft.disc = "launcher.rvz"; draft.width = 1111; draft.aspect = "auto";
         const auto edited = ResolveLaunch(file, {}, &draft);
         Check(edited.disc_source == SettingSource::Launcher && edited.width_source == SettingSource::Launcher
             && edited.height_source == SettingSource::Config && edited.disc_path == root / "config/launcher.rvz",
             "Launcher draft precedence or provenance lost");
+        Check(edited.settings.aspect == "auto" && edited.aspect_source == SettingSource::Launcher,
+            "Launcher aspect draft precedence lost");
         const auto override_draft = ResolveLaunch(file, parsed, &draft, root / "working");
         Check(override_draft.settings.width == 600 && override_draft.disc_path == resolved.disc_path,
             "Launcher edits overrode explicit CLI options");
+        Check(override_draft.settings.aspect == "16:9" && override_draft.aspect_source == SettingSource::CommandLine,
+            "Launcher draft overrode explicit system aspect");
         auto missing = LoadConfig(root / "missing.ini", true);
         const auto defaults = ResolveLaunch(missing, {});
         Check(defaults.width_source == SettingSource::Defaults && defaults.disc_path.empty(), "Missing INI defaults misclassified");

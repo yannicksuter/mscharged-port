@@ -21,6 +21,12 @@ SettingSource Source(const ConfigFile& config, const char* key)
 {
     return config.configured_keys.count(key) ? SettingSource::Config : SettingSource::Defaults;
 }
+
+void ValidateAspect(std::string_view value)
+{
+    if (value != "auto" && value != "4:3" && value != "16:9")
+        throw std::invalid_argument("Aspect requires auto, 4:3 or 16:9");
+}
 }
 
 bool ParseLaunchOption(int argc, const char* const* argv, int& index, LaunchOptions& options)
@@ -28,7 +34,8 @@ bool ParseLaunchOption(int argc, const char* const* argv, int& index, LaunchOpti
     const std::string_view argument = argv[index];
     if (argument == "--window") { options.fullscreen = false; return true; }
     if (argument == "--fullscreen") { options.fullscreen = true; return true; }
-    if (argument != "--config" && argument != "--disc" && argument != "--disk" && argument != "--size")
+    if (argument != "--config" && argument != "--disc" && argument != "--disk"
+        && argument != "--size" && argument != "--aspect")
         return false;
     if (index + 1 >= argc || std::string_view(argv[index + 1]).empty()
         || std::string_view(argv[index + 1]).substr(0, 2) == "--")
@@ -36,6 +43,7 @@ bool ParseLaunchOption(int argc, const char* const* argv, int& index, LaunchOpti
     const std::string_view value = argv[++index];
     if (argument == "--config") { options.config = PathFromUtf8(value); options.explicit_config = true; }
     else if (argument == "--disc" || argument == "--disk") options.disc = PathFromUtf8(value);
+    else if (argument == "--aspect") { ValidateAspect(value); options.aspect = value; }
     else
     {
         const auto separator = value.find('x');
@@ -68,12 +76,14 @@ ResolvedLaunch ResolveLaunch(const ConfigFile& config, const LaunchOptions& opti
     result.width_source = Source(config, "display.width");
     result.height_source = Source(config, "display.height");
     result.fullscreen_source = Source(config, "display.fullscreen");
+    result.aspect_source = Source(config, "display.aspect");
     if (launcher_settings)
     {
         if (launcher_settings->disc != config.settings.disc) result.disc_source = SettingSource::Launcher;
         if (launcher_settings->width != config.settings.width) result.width_source = SettingSource::Launcher;
         if (launcher_settings->height != config.settings.height) result.height_source = SettingSource::Launcher;
         if (launcher_settings->fullscreen != config.settings.fullscreen) result.fullscreen_source = SettingSource::Launcher;
+        if (launcher_settings->aspect != config.settings.aspect) result.aspect_source = SettingSource::Launcher;
     }
     if (options.disc)
     {
@@ -97,6 +107,12 @@ ResolvedLaunch ResolveLaunch(const ConfigFile& config, const LaunchOptions& opti
     {
         result.settings.fullscreen = *options.fullscreen;
         result.fullscreen_source = SettingSource::CommandLine;
+    }
+    if (options.aspect)
+    {
+        ValidateAspect(*options.aspect);
+        result.settings.aspect = *options.aspect;
+        result.aspect_source = SettingSource::CommandLine;
     }
     return result;
 }
@@ -125,6 +141,7 @@ std::string DescribeLaunch(const ResolvedLaunch& launch)
         + "); window: " + std::to_string(launch.settings.width) + "x" + std::to_string(launch.settings.height)
         + " (" + SettingSourceName(launch.width_source) + "/" + SettingSourceName(launch.height_source)
         + "), " + (launch.settings.fullscreen ? "fullscreen" : "windowed")
-        + " (" + SettingSourceName(launch.fullscreen_source) + ")";
+        + " (" + SettingSourceName(launch.fullscreen_source) + "); aspect: "
+        + launch.settings.aspect + " (" + SettingSourceName(launch.aspect_source) + ")";
 }
 }
