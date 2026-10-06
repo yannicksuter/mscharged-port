@@ -179,3 +179,5 @@ endif()
 include(cmake/OriginalMaterialParameters.cmake)
 
 include(cmake/OriginalLighting.cmake)
+
+include(cmake/OriginalGXMaterials.cmake)
