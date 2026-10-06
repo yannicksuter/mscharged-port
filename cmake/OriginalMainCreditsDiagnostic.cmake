@@ -148,6 +148,7 @@ add_library(mscharged_original_main_credits_module MODULE
     src/platform/rlg_record_abi.cpp
     src/platform/rlg_vertex_animation_abi.cpp
     src/platform/rlg_geometry_bytes.cpp
+    src/platform/rlg_material_parameters.cpp
     "${MSCHARGED_PREPARED}/src/Game/Font/fontmanager.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlFont.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlTextEscape.cpp"

@@ -227,3 +227,4 @@
 0286-native-page-control-scalar-context.patch
 0288-restore-original-save-provider.patch
 0290-restore-whole-original-user-options.patch
+0287-restore-original-effects-material-parameters.patch
