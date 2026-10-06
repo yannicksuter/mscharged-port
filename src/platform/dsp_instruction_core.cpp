@@ -108,13 +108,27 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
                (last&0xffe0)==0x0060)width=2;
             else if(last==0 || (last&0xfff8)==0x1200 || (last&0xfff8)==0x1300 ||
                     (last>=0x8a00 && last<=0x8f00 && !(last&0xff)) ||
-                    last==0x8100 || last==0x8900)width=1;
+                    last==0x8100 || last==0x8900 || (last&0xfefc)==0x0218)width=1;
             else throw DSPUnsupportedInstruction(pc,opcode,last);
             // Counter0 skips the endpoint instruction, including its operand.
             // Unknown instruction sizes remain an explicit decoder gap.
             next.pc=static_cast<std::uint16_t>(endpoint+width);
             branch=true;
         }
+    } else if ((opcode&0xfefc)==0x0218) {
+        const auto selected=static_cast<unsigned>((opcode>>8)&1);
+        const auto source=static_cast<unsigned>(opcode&3);
+        // The original init walk explicitly sets WR0=ffff. General circular
+        // address modes need their own qualified hardware implementation.
+        if(next.wrap[source]!=0xffff)
+            throw DSPUnsupportedInstruction(pc,opcode,next.wrap[source]);
+        const auto word=InstructionWord(next.address[source]);
+        auto& cell=next.accumulator[selected];
+        if(next.status&0x4000) {
+            cell=(static_cast<std::uint64_t>(word)<<16) |
+                 ((word&0x8000)?0xff00000000ULL:0ULL);
+        } else cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(word)<<16);
+        next.address[source]=static_cast<std::uint16_t>(next.address[source]+1);
     } else if (opcode==0x029f) {
         // Unconditional immediate jump used by the original OS DSP init
         // vector. Invalid destinations remain real next-fetch failures.

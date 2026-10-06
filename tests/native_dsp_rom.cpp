@@ -126,7 +126,7 @@ void LoopGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_
         Same(core.Registers(),before);
     };
     auto unknown_reg=Program({0x006c,0x0102,0});Rejected(unknown_reg,input);
-    auto unknown_size=Program({0x0064,0x0102,0x0218});context=input;context.index[0]=0;Rejected(unknown_size,context);
+    auto unknown_size=Program({0x0064,0x0102,0x0210});context=input;context.index[0]=0;Rejected(unknown_size,context);
     auto missing_end=Program({0x0064,0x0110,0});Rejected(missing_end,context);
     auto missing_operand=Program({0x0064});Rejected(missing_operand,input);
     auto overflow=Program({0x0064,0x0102,0});context=input;context.index[0]=1;
@@ -137,6 +137,102 @@ void LoopGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_
         "invalid externally supplied loop depth was accepted");Same(overflow.Registers(),context);
     invalid=input;invalid.stack[3]=1;Throws([&]{overflow.BeginExecution(invalid);},
         "unknown active native stack history was silently invented");Same(overflow.Registers(),context);
+}
+
+std::uint64_t LoadedCell(std::uint64_t previous,std::uint16_t word,bool extend) {
+    if(extend) {
+        const std::int64_t signed_word=word<0x8000?word:std::int64_t(word)-65536;
+        return static_cast<std::uint64_t>(signed_word*65536)&0xffffffffffULL;
+    }
+    return (previous/0x100000000ULL)*0x100000000ULL + std::uint64_t(word)*65536 + previous%65536;
+}
+void InstructionReadGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+                         NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    DSPInstructionRegisters input{0x100,0x19ad,0xa3,{0x12abcdef34ULL,0x89fedcba21ULL},5,
+        {0x0200,0x0200,0x0200,0x0200},{0x1111,0x2222,0x3333,0x4444},
+        {0xffff,0xffff,0xffff,0xffff}};
+    input.stack={0xbeef,0xabcd,0x1234,0};
+    const auto Reader=[&](unsigned destination,unsigned address,std::uint16_t word) {
+        PutWord(backing,0,static_cast<std::uint16_t>(0x0218+destination*0x100+address));
+        PutWord(backing,1024,word);PutWord(backing,1025,static_cast<std::uint16_t>(~word));
+        DSPInstructionCore core(mailboxes,control);
+        core.LoadInstructionMemory(memory,physical,2,0x100);
+        core.LoadInstructionMemory(memory,physical+2048,2,0x200);
+        core.LoadDataMemory(memory,physical+2050,2,0x200);
+        return core;
+    };
+    constexpr std::array<std::uint16_t,5> words{0,1,0x7fff,0x8000,0xffff};
+    for(unsigned selected=0;selected<2;++selected) {
+        for(unsigned source=0;source<4;++source) {
+            const auto word=words[(source+selected)%words.size()];
+            auto context=input;if(source&1)context.status|=0x4000;
+            auto core=Reader(selected,source,word);core.BeginExecution(context);
+            auto expected=context;++expected.pc;++expected.instructions;++expected.address[source];
+            expected.accumulator[selected]=LoadedCell(context.accumulator[selected],word,(context.status&0x4000)!=0);
+            Same(core.Step(),expected);
+            Check(core.DataWord(0x200)==static_cast<std::uint16_t>(~word),
+                  "ILRRI read data memory instead of independent instruction memory");
+        }
+    }
+    for(bool extend:{false,true})for(auto word:words) {
+        auto context=input;if(extend)context.status|=0x4000;
+        auto core=Reader(0,0,word);core.BeginExecution(context);
+        auto expected=context;++expected.pc;++expected.instructions;++expected.address[0];
+        expected.accumulator[0]=LoadedCell(context.accumulator[0],word,extend);Same(core.Step(),expected);
+    }
+    auto wrap=Reader(0,0,0x8000);auto context=input;context.wrap[0]=0x0fff;
+    wrap.BeginExecution(context);Throws([&]{wrap.Step();},"unqualified circular address mode was silently guessed");
+    Same(wrap.Registers(),context);
+    // IRAM is present but the actual source IROM is absent: no dummy memory word.
+    auto absent=Reader(0,0,0);context=input;context.address[0]=0x8000;
+    absent.BeginExecution(context);Throws([&]{absent.Step();},"absent IROM was replaced with a successful zero read");
+    Same(absent.Registers(),context);
+    auto coefficient=Reader(0,0,0);context=input;context.address[0]=0x1000;
+    PutWord(backing,4096,0x8123);coefficient.LoadCoefficientROM(memory,physical+8192);
+    Check(coefficient.DataWord(0x1000)==0x8123,"fixture coefficient domain was not actually supplied");
+    coefficient.BeginExecution(context);Throws([&]{coefficient.Step();},"coefficient data bank became instruction memory");
+    Same(coefficient.Registers(),context);
+    PutWord(backing,0,0x0064);PutWord(backing,1,0x0102);PutWord(backing,2,0x0218);
+    DSPInstructionCore skipped(mailboxes,control);skipped.LoadInstructionMemory(memory,physical,6,0x100);
+    context=input;context.index[0]=0;context.wrap[0]=0;context.address[0]=0x8000;skipped.BeginExecution(context);
+    auto expected=context;expected.pc=0x103;++expected.instructions;
+    Same(skipped.Step(),expected); // Known size only; no read, write or wrap request occurred.
+}
+void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+                         NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    // This generated bank is hardware test input, not Nintendo/FreeDSP ROM.
+    // Only the IRAM instruction stream is the actual original source program.
+    for(unsigned i=0;i<4096;++i)PutWord(backing,i,static_cast<std::uint16_t>(i*0x351du+0x2abcu));
+    DSPInstructionCore walk(mailboxes,control);
+    walk.LoadInstructionROM(memory,physical);
+    walk.LoadInstructionMemory(memory,physical+12288,128,0);
+    walk.BeginExecution({0,0xffff,0,{0,0},0});
+    for(unsigned i=0;i<9;++i)walk.Step();
+    Check(walk.Registers().pc==0x1c && walk.Registers().stack[3]==4096 &&
+          walk.Registers().instructions==9,"genuine source loop setup differs with supplied generated bank");
+    for(unsigned i=0;i<4096;++i) {
+        const auto loaded=walk.Step();
+        const auto endpoint=walk.Step();
+        if(i==0 || i==1023 || i==2048 || i==4095) {
+            const auto word=static_cast<std::uint16_t>(i*0x351du+0x2abcu);
+            Check(loaded.pc==0x1d && loaded.address[0]==0x8001u+i && loaded.status==0xe1ff &&
+                  loaded.accumulator[0]==LoadedCell(0,word,true) && loaded.stack[3]==4096u-i &&
+                  loaded.instructions==10u+i*2u,
+                  "actual source IROM walker differs from independent word/sign/address/counter oracle");
+            Check(endpoint.pc==(i==4095?0x1e:0x1c) && endpoint.instructions==11u+i*2u &&
+                  endpoint.loop_depth==(i==4095?0:1),"actual source NOP endpoint changed traversal/count");
+        }
+    }
+    auto state=walk.Registers();
+    Check(state.instructions==8201 && state.pc==0x1e && state.address[0]==0x9000 &&
+          state.index[0]==0x1000 && state.wrap[0]==0xffff && state.loop_depth==0 && state.stack[3]==0,
+          "actual source4096-word IROM walk wrapped within the wrong bank or altered authored count");
+    state=walk.Step();Check(state.pc==0x1f && state.instructions==8202 && state.accumulator[0]==0 &&
+          state.status==0xe1e4,"original source clear after IROM walker differs");
+    const auto before=walk.Registers();bool held=false;
+    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x1f && gap.opcode==0x1c1e;}
+    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated later MRR/source readiness");
+    Same(walk.Registers(),before);
 }
 
 void Run(int argc,char** argv) {
@@ -244,12 +340,12 @@ void Run(int argc,char** argv) {
           state.loop_depth==1 && state.address[0]==0x8000 && state.wrap[0]==0xffff && state.status==0xe1ff,
           "actual original BLOOP differs from independent IROM-walk stack/counter request");
     const auto loop_hold=init.Registers();
-    bool unsupported=false;try{init.Step();}catch(const DSPUnsupportedInstruction& gap) {
-        unsupported=gap.pc==0x1c && gap.opcode==0x0218;
-    }
-    Check(unsupported && !DSPCheckMailFromDSP(), "actual unimplemented ILRRI request was bypassed");
+    bool missing_rom=false;try{init.Step();}catch(const std::out_of_range&) {missing_rom=true;}
+    Check(missing_rom && !DSPCheckMailFromDSP(), "actual ILRRI invented absent IROM bytes");
     Same(init.Registers(),loop_hold);
+    GeneratedSourceWalk(backing,memory,physical,mailboxes,control);
     LoopGate(backing,memory,physical,mailboxes,control);
+    InstructionReadGate(backing,memory,physical,mailboxes,control);
     // Independently authored nonzero context proves each16-bit hardware family
     // cell changes alone, in either SR mode, without guessing reset defaults.
     for(unsigned reg=0;reg<12;++reg) {
@@ -292,7 +388,7 @@ void Run(int argc,char** argv) {
     OSRestoreInterrupts(TRUE);
     DetachNativeDSPControl();DetachNativeDSPMailboxes();ShutdownNativeInterruptController();
     ReleaseNativeDSPMemory(pin);DetachNativeDSPMEM1();
-    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP setup then holds at real ILRRI; ROM/reset/task boot remains unavailable\n";
+    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk reachesMRR; ROM/reset/task boot remains unavailable\n";
 }
 } // namespace
 int main(int argc,char** argv) {
