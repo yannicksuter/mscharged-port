@@ -325,3 +325,7 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
 endif()
 
 include(cmake/OriginalLoadingDiagnostic.cmake)
+
+if(MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC)
+    include(cmake/OriginalFrontendDiagnostic.cmake)
+endif()

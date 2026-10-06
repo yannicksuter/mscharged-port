@@ -237,3 +237,5 @@
 0299-native-event-inline-definitions.patch
 0300-native-warble-texture-abi.patch
 0296-restore-original-main-menu.patch
+0284-original-frontend-owner-endpoint-diagnostic.patch
+0291-original-frontend-task-cadence-diagnostic.patch

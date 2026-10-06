@@ -19,6 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patches `0284` and `0291` select the temporary original Boot/Intro diagnostic.
+They retain original scene owners and task scheduling while explicitly omitting
+blocked services. These gates are enabled only in the separate frontend test
+module; default game source and the Credits test retain their existing flow.
+They do not establish complete startup, game audio or menu readiness.
+
 Patch `0143-original-font-native-abi.patch` restores the complete original
 `nlFont` and text escape bodies, with Wii32 words, big endian keys, native matrix
 handles, stack allocation and owning game frees. Generated and owned font
