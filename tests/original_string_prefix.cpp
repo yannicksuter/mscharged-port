@@ -191,6 +191,66 @@ void TypedAlignmentBoundary()
     Allocator::Free(payload);
 }
 
+void TypedStringObjects()
+{
+#ifdef MSCHARGED_DIAGNOSTIC_VECTORS
+#error The actual source string qualifier must retain original insert/erase
+#endif
+    using CharString = BasicString<char, Allocator>;
+    using WideString = BasicString<unsigned short, Allocator>;
+    static_assert(sizeof(CharString::Data) == 20 && alignof(CharString::Data) == 4);
+    static_assert(sizeof(WideString::Data) == 20 && alignof(WideString::Data) == 4);
+    static_assert(sizeof(BasicString<char, DefaultAllocator>::Data) == 24
+        && alignof(BasicString<char, DefaultAllocator>::Data) == 8);
+
+    const unsigned standard_before = StandardAllocator.TotalFreeMemory();
+    const unsigned virtual_before = VirtualAllocator.TotalFreeMemory();
+    {
+        CharString original("ab");
+        CharString copy(original);
+        auto* shared = original.mData;
+        Check(copy.mData == shared && shared->mRefCount == 2,
+            "Actual source copy/refcount does not retain shared Data");
+        CheckPrefix(shared, 20);
+        copy[0] = 'A';
+        Check(copy.mData != shared && shared->mRefCount == 1 && copy.mData->mRefCount == 1,
+            "Actual source copy-on-write did not preserve ownership");
+        Check(std::strcmp(original.c_str(), "ab") == 0
+            && std::strcmp(copy.c_str(), "Ab") == 0,
+            "Authored source COW characters differ");
+        copy.AppendInPlace("CD");
+        Check(std::strcmp(copy.c_str(), "AbCD") == 0,
+            "Original insertion/concat characters differ");
+        Check(copy.mData->mData.mCapacity == 5,
+            "Original insertion/reserve capacity differs");
+        CheckPrefix(copy.c_str(), 5);
+        copy.erase(copy.begin() + 1, copy.begin() + 3);
+        Check(std::strcmp(copy.c_str(), "AD") == 0,
+            "Original erase characters differ");
+        CharString assigned;
+        assigned = original;
+        Check(assigned.mData == shared && shared->mRefCount == 2,
+            "Original assignment ownership differs");
+
+        const unsigned short text[] = {0x41, 0x3a9, 0x7fff, 0};
+        const unsigned short suffix[] = {0x20, 0x42, 0};
+        const unsigned short expected[] = {0x41, 0x3a9, 0x7fff, 0x20, 0x42, 0};
+        WideString wide(text);
+        CheckPrefix(wide.mData, 20);
+        CheckPrefix(wide.c_str(), 10);
+        wide.AppendInPlace(suffix);
+        Check(wide.size() == 5, "Original Wii16 concatenated length differs");
+        for (unsigned i = 0; i < 6; ++i)
+            Check(wide.c_str()[i] == expected[i], "Authored Wii16 concatenation word differs");
+        CheckPrefix(wide.c_str(), 12);
+        Check(reinterpret_cast<std::uintptr_t>(wide.mData) % 4 == 0,
+            "Actual source Data lost reviewed native alignment");
+    }
+    Check(StandardAllocator.TotalFreeMemory() == standard_before
+        && VirtualAllocator.TotalFreeMemory() == virtual_before,
+        "Actual source typed Data/buffer destruction lost owning arena memory");
+}
+
 void Qualify()
 {
     const unsigned standard_baseline = StandardAllocator.TotalFreeMemory();
@@ -213,6 +273,7 @@ void Qualify()
     }
     ConcurrentSlots();
     TypedAlignmentBoundary();
+    TypedStringObjects();
     fn_802B467C(&Pool());
     SlotPoolBase::BaseFreeBlocks(&Pool(), 64);
     Check(Pool().m_BlockList == nullptr && Pool().m_FreeList == nullptr,
@@ -231,7 +292,7 @@ int main()
         Qualify();
         std::cout << "actual original string prefix checks=" << checks
             << " threshold_cases=" << preserved_threshold_cases
-            << " native_data_alignment=unqualified" << std::endl;
+            << " native_data_alignment=qualified4 terminal_only=1" << std::endl;
 #if defined(CHARGED_PREFIX_SANITIZED)
         if (__lsan_do_recoverable_leak_check()) std::_Exit(1);
 #endif

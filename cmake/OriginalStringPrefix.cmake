@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 # Native four-byte runtime metadata beneath the unchanged original pool decisions.
-# This CPU gate does not construct native BasicString Data or test CRT teardown.
+# Raw prefix and typed original string operations use retained CPU fixture arenas.
+# Actual SDK/module source gates remain private; CRT teardown is unqualified.
 if(BUILD_TESTING AND UNIX AND NOT APPLE
     AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     add_executable(original_string_prefix_tests
