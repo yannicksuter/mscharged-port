@@ -287,3 +287,5 @@ if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
         FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|Actual source diagnostic stopped:")
 endif()
+
+include(cmake/OriginalLoadingDiagnostic.cmake)
