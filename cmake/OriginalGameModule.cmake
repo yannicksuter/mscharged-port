@@ -69,3 +69,5 @@ include(cmake/OriginalConfig.cmake)
 include(cmake/OriginalCredits.cmake)
 
 include(cmake/OriginalInput.cmake)
+
+include(cmake/OriginalFiles.cmake)
