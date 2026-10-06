@@ -60,6 +60,8 @@ function(mscharged_add_aurora_host)
     set(AURORA_NOD_LINKAGE static)
     set(AURORA_ENABLE_CARD OFF)
     set(AURORA_ENABLE_THP OFF)
+    # Original Wii source and SDK time conversions use the same hardware units.
+    set(AURORA_WII_CLOCK ON)
     set(AURORA_ENABLE_RMLUI OFF)
     set(AURORA_ENABLE_TESTS OFF)
     set(AURORA_ENABLE_EXAMPLES OFF)

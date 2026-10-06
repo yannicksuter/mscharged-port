@@ -24,6 +24,7 @@ target_include_directories(charged_original_task_flow PRIVATE
 target_compile_definitions(charged_original_task_flow PRIVATE
     MSCHARGED_NATIVE=1 TARGET_PC=1 dSINGLE=1)
 target_compile_features(charged_original_task_flow PRIVATE cxx_std_17)
+target_link_libraries(charged_original_task_flow PRIVATE aurora::os)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_original_task_flow PRIVATE
         -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)

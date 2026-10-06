@@ -3,6 +3,7 @@
 include_guard(GLOBAL)
 include(cmake/NativeAI.cmake)
 include(cmake/OriginalCore.cmake)
+include(cmake/NativeClock.cmake)
 include(cmake/OriginalStringStorage.cmake)
 include(cmake/OriginalAllocation.cmake)
 include(cmake/OriginalFontTextures.cmake)

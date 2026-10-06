@@ -99,6 +99,7 @@ target_include_directories(charged_game_entry PRIVATE
 # The entry includes physics headers; retain upstream's single-precision ODE ABI.
 target_compile_definitions(charged_game_entry PRIVATE MSCHARGED_NATIVE=1 TARGET_PC=1 dSINGLE=1)
 target_compile_features(charged_game_entry PRIVATE cxx_std_17)
+target_link_libraries(charged_game_entry PRIVATE aurora::os)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_game_entry PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
 endif()
