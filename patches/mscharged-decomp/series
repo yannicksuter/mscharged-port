@@ -235,3 +235,4 @@
 0285-original-live-audio-ownership-abi.patch
 0294-original-sound-handle-numeric-compiler-abi.patch
 0299-native-event-inline-definitions.patch
+0300-native-warble-texture-abi.patch
