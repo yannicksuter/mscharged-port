@@ -12,7 +12,9 @@ add_library(charged_original_ax OBJECT
     "${MSCHARGED_PREPARED}/src/RVL_SDK/ax/AXProf.c"
     "${MSCHARGED_PREPARED}/src/RVL_SDK/ax/AXSPB.c"
     "${MSCHARGED_PREPARED}/src/RVL_SDK/ax/AXVPB.c"
-    "${MSCHARGED_PREPARED}/src/RVL_SDK/ax/DSPCode.c")
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/ax/DSPCode.c"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/mix/mix.c"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/mix/remote.c")
 add_dependencies(charged_original_ax verify_prepared)
 target_include_directories(charged_original_ax PUBLIC
     src "${MSCHARGED_PREPARED}/include"
@@ -29,7 +31,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
         -Wno-unknown-pragmas)
 endif()
 
-# Explicitly bounded ELF CPU qualifier. All ten source units are compiled;
+# Explicitly bounded ELF CPU qualifier. All AX/MIX source units are compiled;
 # section collection excludes original AXInit/DSP startup and hardware mixing.
 # Voice descriptors below are fixture-owned rather than a fabricated AX init.
 if(BUILD_TESTING AND CMAKE_SIZEOF_VOID_P EQUAL 8
