@@ -42,6 +42,7 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/feBackButton.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/fePageControls.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHStadiumSelect.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHMainMenu.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feScene.cpp"
