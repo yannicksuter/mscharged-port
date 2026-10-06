@@ -215,3 +215,4 @@
 0277-diagnostic-original-main-system-aspect.patch
 0264-preserve-original-effects-native-data-cells.patch
 0262-native-registry-offset-words.patch
+0263-restore-original-camera-scalar-providers.patch
