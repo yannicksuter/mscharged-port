@@ -32,9 +32,9 @@ cmake --build --preset graphics --target mscharged-original-credits-check -j 3
 ```
 
 This temporary test loads and renders the original Credits handler, assets,
-fonts and frontend code. It currently displays retained scene packets after
-original updates; full startup, live scrolling, movie/audio and game input are
-pending. Close the window to exit. Omit `--window` to save a capture and exit.
+fonts and frontend code, with live source updates and scrolling. Full startup,
+movie/audio and game input remain pending. Close the window to exit. Omit
+`--window` to save a capture and exit.
 
 ## Original movie audio test
 

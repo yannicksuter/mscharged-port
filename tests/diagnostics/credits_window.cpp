@@ -93,7 +93,7 @@ int main(int argc,char** argv) {
                 std::puts("Usage: mscharged-original-credits-check --disc FILE [--window]\n"
                           "Render the original Credits scene from your own ISO/RVZ.\n"
                           "--window keeps the window open until you close it.\n"
-                          "Shows retained scene packets after genuine source loading and updates.\n"
+                          "Runs original scene updates and frontend rendering each frame.\n"
                           "Full main/task loop, movies, audio and source VI scanout are omitted.");
                 return 0;
             }
@@ -124,11 +124,12 @@ int main(int argc,char** argv) {
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         auto* module=dlopen(modulePath.c_str(),RTLD_NOW|RTLD_LOCAL);if(!module)throw std::runtime_error(dlerror());
         auto qualify=reinterpret_cast<unsigned(*)()>(dlsym(module,"charged_font_qualify"));
-        auto draw=reinterpret_cast<void(*)()>(dlsym(module,"charged_scene_render_frame"));
+        auto draw=reinterpret_cast<void(*)(float)>(dlsym(module,"charged_scene_update_and_render_frame"));
         Check(qualify && draw,"Actual original scene module exports unavailable");
         Check(qualify(),"Original Credits async loading/draw prerequisites failed");
         unsigned frames=0,draws=0,quiet=0;bool snapshot=false,encoded=false;bool exit=false;
         const auto start=std::chrono::steady_clock::now();
+        auto previousFrame=start;
         while(!exit && (interactive || !snapshot)) {
             for(const auto* e=aurora_update();e->type!=AURORA_NONE;++e)if(e->type==AURORA_EXIT)exit=true;
             if(exit)break;
@@ -140,7 +141,10 @@ int main(int argc,char** argv) {
             GXSetPixelFmt(GX_PF_RGB8_Z24,GX_ZC_LINEAR);GXSetCopyClear({0,0,0,255},GX_MAX_Z24);
             GXSetViewport(0,0,640,448,0,1);GXSetScissor(0,0,640,448);
             const auto receipt=AuroraGXBeginDrawReceipt();Check(receipt,"Real draw receipt unavailable");
-            draw();AuroraGXEndDrawReceipt();
+            const auto now=std::chrono::steady_clock::now();
+            const float delta=std::chrono::duration<float>(now-previousFrame).count();
+            previousFrame=now;
+            draw(delta);AuroraGXEndDrawReceipt();
             const bool sample=!snapshot && frames>=14 && quiet>=2;
             if(sample){EndWithSnapshot(directory/"original-credits.ppm");snapshot=true;}else aurora_end_frame();
             aurora::gfx::synchronize();
@@ -151,7 +155,7 @@ int main(int argc,char** argv) {
         }
         Check(snapshot && encoded && draws && aurora_get_last_presentation().sequence,"Original source Credits draw/presentation incomplete");
         Check(!errors,"Actual scene/SDK reported errors");
-        std::printf("Original Credits window diagnostic: %u frames,%u actual draws,source receipt and presentation verified. Static source packet replay after120 genuine source updates; omits original main/glPlat/VI scanout/movie/audio/input/world/CRT teardown.\n",frames,draws);
+        std::printf("Original Credits window diagnostic: %u frames,%u actual draws,source receipt and presentation verified. Live original scene-manager Update/FERender using elapsed native owner time; omits original main/glPlat/VI scanout/movie/audio/input/world/CRT teardown.\n",frames,draws);
         aurora_dvd_close();aurora_shutdown();std::fflush(nullptr);std::_Exit(0);
     } catch(const std::exception& e){std::fprintf(stderr,"Original Credits gate: %s\n",e.what());std::fflush(nullptr);std::_Exit(1);}
 }

@@ -184,6 +184,40 @@ target_link_options(mscharged_original_credits_module PRIVATE
 set_property(TARGET mscharged_original_credits_module APPEND PROPERTY LINK_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/credits_exports.map")
 
+# True original logical-pad/focus prerequisites for scene-manager Update. The
+# source InitPads creates eight null-backend logical pads; no physical input
+# readiness or CreatePadBackends is substituted. Ordinary O2 inlining removes
+# unused base-vptr stores; -fno-inline would retain the unfinished base vtable.
+add_library(mscharged_original_credits_focus OBJECT
+    "${MSCHARGED_PREPARED}/src/Game/PadActions.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/globalpad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/cGlobalPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/PadBackend.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feInput.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/GameCubePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiRemotePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiFreestylePad.cpp")
+add_dependencies(mscharged_original_credits_focus verify_prepared)
+set_target_properties(mscharged_original_credits_focus PROPERTIES
+    POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+target_compile_features(mscharged_original_credits_focus PRIVATE cxx_std_20)
+target_link_libraries(mscharged_original_credits_focus PRIVATE charged_original_function_pool_abi)
+target_include_directories(mscharged_original_credits_focus PRIVATE
+    "${MSCHARGED_AURORA_PREPARED}/include" "${MSCHARGED_PREPARED}/src")
+target_compile_definitions(mscharged_original_credits_focus PRIVATE
+    MSCHARGED_GAME_MODULE=1 AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca)
+target_compile_options(mscharged_original_credits_focus PRIVATE
+    -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off
+    -fsigned-char -Wno-unknown-pragmas -Wno-invalid-offsetof -fcheck-new)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(mscharged_original_credits_focus PRIVATE
+        -fno-gnu-unique -fno-assume-sane-operators-new-delete -fno-devirtualize-speculatively)
+else()
+    target_compile_options(mscharged_original_credits_focus PRIVATE
+        -fno-assume-sane-operator-new -Wno-register)
+endif()
+target_link_libraries(mscharged_original_credits_module PRIVATE mscharged_original_credits_focus)
+
 # One genuine SDK instance lives in the host. Export its actual hardware and
 # metadata symbols to the hidden module, leaving host STL on the host allocator.
 add_executable(mscharged-original-credits-check

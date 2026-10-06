@@ -2,6 +2,10 @@
 // completion, authored component, text/visibility/update and draw decision
 // below is made by the original reconstructed TUs. No main/task-loop claim.
 #include "Game/BaseGameSceneManager.h"
+#include "Game/PadActions.h"
+#include "Game/FE/feInput.h"
+#include "NL/globalpad.h"
+#include "NL/gl/gl.h"
 #include "Game/Render/RLViewLayers.h"
 #include "NL/gl/glStruct.h"
 #include "NL/glx/glxTarget.h"
@@ -32,6 +36,7 @@
 #include "platform/game_allocation_ownership.h"
 #include <dolphin/gx.h>
 #include <array>
+#include <cmath>
 #include <chrono>
 #include <cstdio>
 #include <stdexcept>
@@ -47,6 +52,11 @@ namespace {
 unsigned checks, packets, vertices;
 bool permanentComplete;
 GLView* retainedSceneView;
+FESceneManager* retainedSceneManager;
+FEResourceManager* retainedResourceManager;
+CreditScene* retainedCredits;
+unsigned liveFrames;
+float firstLineBeforeLive;
 void Check(bool value, const char* reason) { ++checks; if (!value) throw std::runtime_error(reason); }
 void PermanentComplete() { permanentComplete = true; }
 void Observe(GLView* view, unsigned long flags, const glModelPacket* packet)
@@ -128,6 +138,22 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     Check(projection->m11 == 2.0f/640.0f && projection->m22 == 2.0f/480.0f,
           "Actual source Anark projection is not original centered640x480");
     GLView& view = *sourceView;
+    // Actual original pre-FE logical pad initialization, without installing or
+    // fabricating a physical backend. InitPads leaves all eight mBackend=0.
+    // FEInput's original constructor resets the true source analog-map fields.
+    InitPads();
+    Check(g_pPadManager && g_pPadManager->mPadCount==4 && g_pPadManager->mPadSetCount==2,
+          "Source InitPads did not create its original logical pad sets");
+    for(int set=0;set<2;++set) {
+        g_pPadManager->SetActivePadSet(set);
+        for(int pad=0;pad<4;++pad)
+            Check(g_pPadManager->GetPad(pad)->mBackend==nullptr,
+                  "Logical pad prerequisite installed an unexpected physical backend");
+    }
+    g_pPadManager->SetActivePadSet(0);
+    FEInput::Initialize();
+    Check(g_pFEInput && g_pFEInput->m_InputLockDepth==0 && g_pFEInput->m_bInputAllowed,
+          "Original FEInput constructor/focus initialization changed");
     auto* scenes = new (8, false) FESceneManager;
     FESceneManager::s_pInstance = scenes;
     scenes->m_uDefaultRenderView = reinterpret_cast<glViewHandle>(&view);
@@ -157,12 +183,16 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
           credits->m_pTextLines[19]->GetAssetPosition().f.y == -725.0f,
           "Original authored line setup changed");
     for (unsigned frame=0; frame<120; ++frame)
-        credits->Update(1.0f/60.0f);
+        scenes->Update(1.0f/60.0f);
     Check(credits->m_pTextLines[0]->GetString() == credits->mStrings[0] && credits->mStrings[0][0],
           "Original parser/handler did not publish genuine first Credits string");
     scenes->RenderActiveScenes();
     Check(!view.m_Enabled, "Original Anark alpha-write permission changed during packet attachment");
     retainedSceneView = &view;
+    retainedSceneManager = scenes;
+    retainedResourceManager = resources;
+    retainedCredits = credits;
+    firstLineBeforeLive = credits->m_pTextLines[0]->GetAssetPosition().f.y;
     view.Iterate(Observe);
     Check(packets && vertices, "Actual original Credits renderer omitted source packets");
     Check(gxGetNumTexGens() == 0, "GPU fixture issued an unintended source GX request before first frame");
@@ -173,12 +203,35 @@ unsigned DrawActualCredits231(FontManager& fonts, GLResourcePool* fontPool)
     return checks;
 }
 
-extern "C" __attribute__((visibility("default"))) void charged_scene_render_frame()
+extern "C" __attribute__((visibility("default"))) void charged_scene_update_and_render_frame(float delta)
 {
+    Check(std::isfinite(delta) && delta>=0, "Invalid native diagnostic frame delta");
     if (!retainedSceneView) throw std::logic_error("Original owned Credits scene not loaded");
-    // Repeat the unchanged original source packet list while the real host
-    // asynchronously prepares pipelines. This is a static scene diagnostic,
-    // not an original task/frame loop or artificial resource readiness.
+    // The native frame fixture still omits original VI/swap and the full task
+    // loop. It calls the actual source endpoints in DrawFrontEndElements order.
+    // The preceding native frame has ended/drained before reusing frame backing.
+    gl_ViewReset();
+    glplatFrameAllocNextFrame();
+    glBeginFrame();
+    nlServiceFileSystem();
+    retainedResourceManager->Run(delta);
+    retainedSceneManager->Update(delta);
+    Check(g_pFEInput->m_bInputAllowed,
+          "Original scene-manager focus did not dispatch the active Credits handler");
+    retainedSceneManager->RenderActiveScenes();
+    glEndFrame();
     retainedSceneView->Iterate(glx_SendFrame_cb);
     glx_SendEnd();
+    ++liveFrames;
+    const auto y=retainedCredits->m_pTextLines[0]->GetAssetPosition().f.y;
+    if(liveFrames==1 || liveFrames==15)
+        std::printf("Original Credits live source frame%u: first-line Y%.9g (before live%.9g), phase%d.\n",
+                    liveFrames,y,firstLineBeforeLive,retainedCredits->mPhase);
+}
+
+// Retain the previous bounded fixture ABI for an independent fixed-step root
+// comparison; the user-facing host sends elapsed native owner time instead.
+extern "C" __attribute__((visibility("default"))) void charged_scene_render_frame()
+{
+    charged_scene_update_and_render_frame(1.0f/60.0f);
 }
