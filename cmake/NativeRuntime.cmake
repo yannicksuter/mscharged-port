@@ -3,6 +3,7 @@
 include_guard(GLOBAL)
 include(cmake/NativeAI.cmake)
 include(cmake/OriginalAX.cmake)
+include(cmake/OriginalAXWords.cmake)
 include(cmake/OriginalCore.cmake)
 include(cmake/NativeClock.cmake)
 include(cmake/OriginalStringStorage.cmake)
