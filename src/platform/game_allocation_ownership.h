@@ -71,6 +71,52 @@ private:
 };
 std::uint32_t ReadGameChunkWord(const void* header, unsigned word);
 
+// Exact source GL suballocations are storage facts inside an existing actual
+// allocation. They do not invent MemoryAllocator owners or imply written bytes.
+class GameGraphicsStorageReservation
+{
+public:
+    explicit GameGraphicsStorageReservation(std::size_t bytes);
+    ~GameGraphicsStorageReservation();
+    GameGraphicsStorageReservation(const GameGraphicsStorageReservation&) = delete;
+    GameGraphicsStorageReservation& operator=(const GameGraphicsStorageReservation&) = delete;
+    void Commit(void* pointer);
+private:
+    void* pending_;
+};
+// Reserve the one possible split node before the original callback/rewind. The
+// actual source result supplies the retired range; Commit allocates no metadata.
+class GameGraphicsRetirementReservation
+{
+public:
+    GameGraphicsRetirementReservation();
+    ~GameGraphicsRetirementReservation();
+    GameGraphicsRetirementReservation(const GameGraphicsRetirementReservation&) = delete;
+    GameGraphicsRetirementReservation& operator=(const GameGraphicsRetirementReservation&) = delete;
+    void Commit(const void* pointer, std::size_t bytes);
+private:
+    void* pending_;
+};
+struct GameGraphicsStorageSpan
+{
+    const void* base;
+    std::size_t bytes;
+    GameAllocationSpan allocation;
+    std::uint64_t incarnation;
+};
+bool FindGameGraphicsStorage(const void* pointer, std::size_t bytes, GameGraphicsStorageSpan& result);
+// Source writer cursors supply the genuinely written range. No vertex/index
+// count, normalization or alternate game-side readiness flag is used.
+void PublishGameGraphicsNativeBytes(const void* base, const void* writtenEnd);
+struct GameGraphicsArraySpan
+{
+    const void* data;
+    std::size_t bytes;
+    bool little_endian;
+    GameGraphicsStorageSpan storage;
+};
+GameGraphicsArraySpan ResolveGameGraphicsArray(const void* pointer);
+
 MemoryAllocator* FindGameAllocationOwner(const void* pointer);
 void ValidateGameAllocationFree(MemoryAllocator& owner, const void* pointer);
 void FinishGameAllocationFree(const void* pointer);

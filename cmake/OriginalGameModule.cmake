@@ -81,3 +81,5 @@ include(cmake/OriginalStaticTasks.cmake)
 include(cmake/OriginalEmissionModule.cmake)
 
 include(cmake/OriginalImpostorModule.cmake)
+
+include(cmake/OriginalFrontendModule.cmake)
