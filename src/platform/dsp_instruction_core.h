@@ -32,6 +32,10 @@ public:
                                std::uint32_t bytes,std::uint16_t word_address);
     void LoadDataMemory(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address,
                         std::uint32_t bytes,std::uint16_t word_address);
+    // Caller-supplied complete BE ROM banks, copied through genuine checked
+    // bus backing. This supplies bytes, never a boot context or readiness.
+    void LoadInstructionROM(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address);
+    void LoadCoefficientROM(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address);
     void BeginExecution(const DSPInstructionRegisters& context);
     DSPInstructionRegisters Step();
     DSPInstructionRegisters Registers() const;
@@ -39,13 +43,17 @@ public:
     std::uint16_t DataWord(std::uint16_t address) const;
 private:
     static constexpr std::size_t WORDS=4096;
+    static constexpr std::size_t ROM_WORDS=2048;
     NativeDSPMailboxEndpoint mailboxes_;
     std::optional<NativeDSPControlEndpoint> control_;
     std::array<std::uint16_t,WORDS> instructions_{},data_{};
     std::array<bool,WORDS> instruction_valid_{},data_valid_{};
+    std::array<std::uint16_t,ROM_WORDS> instruction_rom_{},coefficient_rom_{};
+    bool instruction_rom_loaded_{},coefficient_rom_loaded_{};
     DSPInstructionRegisters registers_{};
     bool running_{};
     void Load(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address,
               std::uint32_t bytes,std::uint16_t word_address,bool instruction);
+    void LoadROM(NativeDSPMemoryEndpoint endpoint,std::uint32_t physical_address,bool instruction);
 };
 } // namespace mscharged::platform
