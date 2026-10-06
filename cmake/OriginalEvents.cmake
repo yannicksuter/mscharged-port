@@ -8,6 +8,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OriginalFunctionPools.cmake")
 # Do not link the old charged_events/runtime queue replicas as its providers.
 add_library(charged_original_events OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/nlEvent.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlBind.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlFunctionMemory.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlAVLTree.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Task/DispatchEventsTask.cpp")

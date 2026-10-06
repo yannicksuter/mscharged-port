@@ -151,3 +151,4 @@
 0173-native-temporary-string-prefix-word.patch
 0172-original-typed-function-pool-abi.patch
 0174-native-material-parameter-transport.patch
+0175-original-bind-provider-compiler.patch
