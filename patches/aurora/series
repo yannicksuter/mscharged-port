@@ -31,3 +31,4 @@
 0033-native-gx-original-fifo-recording.patch
 0034-native-pe-color-aperture.patch
 0036-preserve-native-fifo-draw-receipts.patch
+0035-service-native-hardware-during-thp-decoding.patch
