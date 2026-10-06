@@ -1,6 +1,6 @@
 Subject: [PATCH] retain original fixed task source methods in native modules
 
-Upstream-base: bab83befb5d6a2fdff0b30d2ec4b59f7251a108d
+Upstream-base: c7b2e663f878d38dc429ab12ee7db451daf0c217
 
 Retain both actual source empty ABI helpers in the original module. Their
 unchanged retail bodies are not a fabricated successful provider. Keep the
