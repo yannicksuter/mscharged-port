@@ -115,5 +115,6 @@ include(cmake/OriginalAudioBanks.cmake)
 include(cmake/OriginalAudioControls.cmake)
 
 include(cmake/OriginalAudioOwnership.cmake)
+include(cmake/OriginalAudioResourceMetadata.cmake)
 
 include(cmake/OriginalWarbleModule.cmake)

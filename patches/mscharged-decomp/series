@@ -241,3 +241,4 @@
 0291-original-frontend-task-cadence-diagnostic.patch
 0303-native-save-scalar-and-checksum-abi.patch
 0304-preserve-original-audio-memory-size-word.patch
+0305-native-original-audio-resource-metadata.patch
