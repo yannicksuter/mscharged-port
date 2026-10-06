@@ -109,3 +109,5 @@ include(cmake/OriginalSaveSources.cmake)
 include(cmake/OriginalUserOptions.cmake)
 
 include(cmake/OriginalAudioScript.cmake)
+
+include(cmake/OriginalAudioBanks.cmake)
