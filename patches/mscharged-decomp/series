@@ -223,3 +223,4 @@
 0281-native-stadium-singleton-declaration.patch
 0282-adapt-original-character-loader-callback-contexts.patch
 0265-native-packed-registry-backing.patch
+0283-transport-original-rlg-geometry-bytes.patch

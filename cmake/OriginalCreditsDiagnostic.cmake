@@ -153,6 +153,7 @@ add_library(mscharged_original_credits_module MODULE
     src/platform/game_module_allocations.cpp
     src/platform/rlg_record_abi.cpp
     src/platform/rlg_vertex_animation_abi.cpp
+    src/platform/rlg_geometry_bytes.cpp
     src/platform/tweak_storage.cpp
     src/platform/file_handle_abi.cpp
     src/platform/localization_data.cpp
