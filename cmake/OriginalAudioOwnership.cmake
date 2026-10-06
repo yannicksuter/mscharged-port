@@ -16,7 +16,11 @@ add_library(charged_original_audio_ownership_module_sources OBJECT EXCLUDE_FROM_
     "${MSCHARGED_PREPARED}/src/Game/Audio/XSoundHandle.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Audio/XSoundCueHandle.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Audio/SoundInstance.cpp"
-    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioSequenceInstance.cpp")
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioSequenceInstance.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioSequenceEvent.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioResourceLoadOwner.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioResourceLoader.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Audio/AudioRuntimeGroup.cpp")
 add_dependencies(charged_original_audio_ownership_module_sources verify_prepared)
 set_target_properties(charged_original_audio_ownership_module_sources PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
