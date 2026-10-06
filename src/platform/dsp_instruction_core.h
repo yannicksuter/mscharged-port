@@ -14,6 +14,8 @@ struct DSPInstructionRegisters {
     std::uint8_t control{};
     std::array<std::uint64_t,2> accumulator{}; // Exact raw 40-bit hardware cells.
     std::uint64_t instructions{}; // Executed instructions, not cycle timing.
+    // Exact16-bit hardware cells. Defaults are fixture input, not reset values.
+    std::array<std::uint16_t,4> address{},index{},wrap{};
 };
 struct DSPUnsupportedInstruction : std::runtime_error {
     DSPUnsupportedInstruction(std::uint16_t address,std::uint16_t word,std::uint16_t detail);
@@ -43,12 +45,14 @@ public:
     std::uint16_t DataWord(std::uint16_t address) const;
 private:
     static constexpr std::size_t WORDS=4096;
-    static constexpr std::size_t ROM_WORDS=2048;
+    static constexpr std::size_t IROM_WORDS=4096;
+    static constexpr std::size_t COEFFICIENT_WORDS=2048;
     NativeDSPMailboxEndpoint mailboxes_;
     std::optional<NativeDSPControlEndpoint> control_;
     std::array<std::uint16_t,WORDS> instructions_{},data_{};
     std::array<bool,WORDS> instruction_valid_{},data_valid_{};
-    std::array<std::uint16_t,ROM_WORDS> instruction_rom_{},coefficient_rom_{};
+    std::array<std::uint16_t,IROM_WORDS> instruction_rom_{};
+    std::array<std::uint16_t,COEFFICIENT_WORDS> coefficient_rom_{};
     bool instruction_rom_loaded_{},coefficient_rom_loaded_{};
     DSPInstructionRegisters registers_{};
     bool running_{};

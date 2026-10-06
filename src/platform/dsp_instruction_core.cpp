@@ -34,10 +34,11 @@ void DSPInstructionCore::LoadROM(NativeDSPMemoryEndpoint endpoint,std::uint32_t 
     auto& loaded=instruction?instruction_rom_loaded_:coefficient_rom_loaded_;
     if (loaded || running_)
         throw std::logic_error("DSP ROM transport requires an unloaded non-executing bank");
-    std::array<std::uint8_t,ROM_WORDS*2> raw;
-    DSPBackendReadMemory(endpoint,physical,raw.data(),raw.size());
-    auto& words=instruction?instruction_rom_:coefficient_rom_;
-    for (std::size_t i=0;i<ROM_WORDS;++i)
+    std::array<std::uint8_t,IROM_WORDS*2> raw;
+    const auto count=instruction?IROM_WORDS:COEFFICIENT_WORDS;
+    DSPBackendReadMemory(endpoint,physical,raw.data(),count*2);
+    auto* words=instruction?instruction_rom_.data():coefficient_rom_.data();
+    for (std::size_t i=0;i<count;++i)
         words[i]=static_cast<std::uint16_t>((static_cast<std::uint16_t>(raw[i*2])<<8)|raw[i*2+1]);
     loaded=true;
 }
@@ -49,14 +50,14 @@ void DSPInstructionCore::LoadCoefficientROM(NativeDSPMemoryEndpoint endpoint,std
 }
 std::uint16_t DSPInstructionCore::InstructionWord(std::uint16_t address) const {
     if ((address>>12)==8 && instruction_rom_loaded_)
-        return instruction_rom_[address&(ROM_WORDS-1)];
+        return instruction_rom_[address&(IROM_WORDS-1)];
     if(address>=WORDS || !instruction_valid_[address])
         throw std::out_of_range("DSP instruction memory/ROM word is not supplied");
     return instructions_[address];
 }
 std::uint16_t DSPInstructionCore::DataWord(std::uint16_t address) const {
     if ((address>>12)==1 && coefficient_rom_loaded_)
-        return coefficient_rom_[address&(ROM_WORDS-1)];
+        return coefficient_rom_[address&(COEFFICIENT_WORDS-1)];
     if(address>=WORDS || !data_valid_[address])
         throw std::out_of_range("DSP data/ROM word is not supplied or written");
     return data_[address];
@@ -97,7 +98,10 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
         length=2;
         const auto immediate=InstructionWord(static_cast<std::uint16_t>(pc+1));
         const auto reg=static_cast<std::uint16_t>(opcode&31);
-        if(reg==0x12)next.control=static_cast<std::uint8_t>(immediate);
+        if(reg<4)next.address[reg]=immediate;
+        else if(reg<8)next.index[reg-4]=immediate;
+        else if(reg<12)next.wrap[reg-8]=immediate;
+        else if(reg==0x12)next.control=static_cast<std::uint8_t>(immediate);
         else if((reg==0x1e || reg==0x1f) && !(next.status&0x4000)) {
             auto& cell=next.accumulator[reg-0x1e];
             cell=(cell&0xff0000ffffULL)|(static_cast<std::uint64_t>(immediate)<<16);
