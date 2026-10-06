@@ -15,7 +15,8 @@ add_library(charged_original_cameras OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/Camera/animcam.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Camera/noisefilter.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Camera/rumblefilter.cpp"
-    "${MSCHARGED_PREPARED}/src/Game/Camera/GameplayCam.cpp")
+    "${MSCHARGED_PREPARED}/src/Game/Camera/GameplayCam.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/camera_data_transport.cpp")
 add_dependencies(charged_original_cameras verify_prepared)
 set_target_properties(charged_original_cameras PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
