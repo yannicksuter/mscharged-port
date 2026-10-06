@@ -12,6 +12,7 @@ target_compile_features(charged_game_config PUBLIC cxx_std_17)
 # and unbounded temporary-string allocation policies. Genuine whole-source
 # inventories and the original game module must use the literal original string/vector methods, without this definition.
 target_compile_definitions(charged_game_config PUBLIC
+    MSCHARGED_DIAGNOSTIC_CONFIG=1
     MSCHARGED_DIAGNOSTIC_VECTORS=1
     MSCHARGED_DIAGNOSTIC_STRINGS=1)
 if(BUILD_TESTING)

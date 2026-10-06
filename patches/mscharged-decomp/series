@@ -162,3 +162,4 @@
 0183-share-canonical-native-cache-declarations.patch
 0194-native-swap-sdk-type-and-clock-compatibility.patch
 0195-restore-original-camera-production-paths.patch
+0200-original-configuration-source-lifecycle.patch
