@@ -2,8 +2,8 @@ include_guard(GLOBAL)
 
 # Whole frontend/frame-resource source under the original game-module ABI.
 # The compiler inventory does not establish full program startup, resources, scenes or CRT lifetime.
-# Inherited native matrix/state guards remain an explicit fidelity boundary;
-# this inventory retains RTTI for that existing guard until its source review.
+# Legacy matrix/state checks belong only to diagnostic consumers; this
+# source module uses the original shared RTTI-off compiler profile.
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8
         OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" OR MSVC)
     return()

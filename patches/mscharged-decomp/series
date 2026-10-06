@@ -182,3 +182,4 @@
 0221-adapt-original-glplat-canonical-sdk-compiler-abi.patch
 0224-original-pose-borrowed-callback-abi.patch
 0225-restore-original-renderer-state-and-matrix-decisions.patch
+0220-retain-original-fixed-task-module-methods.patch
