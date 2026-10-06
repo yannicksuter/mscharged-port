@@ -188,3 +188,4 @@
 0235-restore-original-target-source-decisions.patch
 0234-temporary-original-main-bootstrap-diagnostic.patch
 0236-native-sdk-standard-library-includes.patch
+0232-diagnostic-thp-audio-only.patch
