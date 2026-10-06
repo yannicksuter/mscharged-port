@@ -171,3 +171,4 @@
 0202-native-dsp-mailbox-wire-transport.patch
 0204-native-camera-effects-wii-word-transport.patch
 0206-native-dsp-task-mem1-addresses.patch
+0210-restore-original-skeleton-source-providers.patch

@@ -73,3 +73,5 @@ include(cmake/OriginalInput.cmake)
 include(cmake/OriginalFiles.cmake)
 
 include(cmake/OriginalFontResources.cmake)
+
+include(cmake/OriginalSkeleton.cmake)
