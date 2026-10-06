@@ -26,3 +26,4 @@
 0029-native-gx-scissor-box-offset.patch
 0030-native-gx-misc-state-requests.patch
 0031-native-gx-blocking-pipelines.patch
+0028-native-gx-display-copy-snapshots.patch
