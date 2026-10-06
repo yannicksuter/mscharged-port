@@ -165,3 +165,4 @@
 0200-original-configuration-source-lifecycle.patch
 0196-restore-original-frontend-navigation-and-rfl-gx.patch
 0203-original-input-initialization-and-sdk-abi.patch
+0197-owned-byte-domains-native.patch
