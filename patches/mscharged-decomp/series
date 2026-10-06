@@ -221,3 +221,4 @@
 0276-restore-original-front-end-buttons.patch
 0280-retain-original-vertex-animation-native-records.patch
 0281-native-stadium-singleton-declaration.patch
+0282-adapt-original-character-loader-callback-contexts.patch

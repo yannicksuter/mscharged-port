@@ -101,3 +101,5 @@ include(cmake/OriginalViewLayers.cmake)
 include(cmake/OriginalInterpreter.cmake)
 
 include(cmake/OriginalBootSceneSources.cmake)
+
+include(cmake/OriginalCharacterLoading.cmake)
