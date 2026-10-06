@@ -30,3 +30,4 @@
 0032-native-vi-selected-xfb-output.patch
 0033-native-gx-original-fifo-recording.patch
 0034-native-pe-color-aperture.patch
+0036-preserve-native-fifo-draw-receipts.patch

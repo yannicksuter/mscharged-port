@@ -13,6 +13,7 @@ include(cmake/WiiStringFormat.cmake)
 include(cmake/NativeSystemSettings.cmake)
 include(cmake/NativeSTM.cmake)
 include(cmake/NativeVideo.cmake)
+include(cmake/NativeVideoOutput.cmake)
 find_package(Threads REQUIRED)
 
 add_library(mscharged_original_main_credits_module MODULE
@@ -66,6 +67,7 @@ add_library(mscharged_original_main_credits_module MODULE
     "${MSCHARGED_PREPARED}/src/Game/Ball.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glPlat.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glStat.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glDrawSyncLog.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glState.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glTarget.cpp"
@@ -246,7 +248,8 @@ add_executable(mscharged-original-main-credits-check
 add_dependencies(mscharged-original-main-credits-check mscharged_original_main_credits_module)
 target_compile_features(mscharged-original-main-credits-check PRIVATE cxx_std_20)
 target_include_directories(mscharged-original-main-credits-check BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
-target_include_directories(mscharged-original-main-credits-check PRIVATE src
+target_include_directories(mscharged-original-main-credits-check PRIVATE
+    "${MSCHARGED_AURORA_PREPARED}/lib" src
     "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 target_compile_definitions(mscharged-original-main-credits-check PRIVATE
     MSCHARGED_NATIVE=1 TARGET_PC=1 AURORA_WII_CLOCK=1
@@ -264,7 +267,8 @@ target_link_libraries(mscharged-original-main-credits-check PRIVATE
     mscharged_original_main_credits_vi
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_wii_string_format charged_native_stm
-    charged_native_system_settings charged_native_video_device Threads::Threads ${CMAKE_DL_LIBS})
+    charged_native_system_settings charged_native_video_device
+    charged_native_video_output_device Threads::Threads ${CMAKE_DL_LIBS})
 
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
     add_test(NAME original_main_credits_vulkan COMMAND mscharged-original-main-credits-check

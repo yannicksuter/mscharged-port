@@ -2,8 +2,10 @@
 #include <aurora/event.h>
 #include <aurora/gfx.h>
 #include <aurora/gfx.hpp>
+#include "gfx/xfb.hpp"
 #include <dolphin/gx/GXAurora.h>
 #include <atomic>
+#include <algorithm>
 #include <vector>
 #include <memory>
 #include <chrono>
@@ -14,7 +16,9 @@
 #include "platform/stm_device.h"
 #include "platform/system.h"
 #include "platform/video_device.h"
+#include "platform/video_output_device.h"
 #include "platform/interrupt_controller.h"
+#include <SDL3/SDL_video.h>
 #include <dlfcn.h>
 #include <cstdio>
 #include <cstdlib>
@@ -56,6 +60,58 @@ struct Snapshot : std::enable_shared_from_this<Snapshot> {
         });
     }
 };
+// Read the completed resource selected by original VI. This diagnostic reads
+// source copy output; it submits no game draw or diagnostic frame boundary.
+void ReadSelectedXFB(const void* destination, const std::filesystem::path& output) {
+    const auto copy=aurora::gfx::xfb::find(destination);
+    Check(copy && copy->gpuComplete.load(std::memory_order_acquire),
+          "Selected original XFB has no completed source GX copy");
+    Check(copy->width==640 && copy->height==448 && copy->stride==1280,
+          "Native selected XFB copy geometry is outside this1:1 diagnostic");
+    Check(copy->packedYuyv && copy->packedYuyv->format==wgpu::TextureFormat::RGBA8Unorm &&
+          copy->packedYuyv->size.width==copy->width/2 && copy->packedYuyv->size.height==copy->height,
+          "Selected XFB does not retain packed source YUYV output");
+    const unsigned pitch=(copy->stride+255)&~255u;
+    auto device=aurora::gfx::device();
+    const wgpu::BufferDescriptor desc{.usage=wgpu::BufferUsage::MapRead|wgpu::BufferUsage::CopyDst,
+        .size=std::uint64_t(pitch)*copy->height};
+    const auto buffer=device.CreateBuffer(&desc); auto encoder=device.CreateCommandEncoder();
+    const wgpu::TexelCopyTextureInfo source{.texture=copy->packedYuyv->texture};
+    const wgpu::TexelCopyBufferInfo target{.layout={.bytesPerRow=pitch,.rowsPerImage=copy->height},.buffer=buffer};
+    const wgpu::Extent3D extent{copy->width/2,copy->height,1};
+    encoder.CopyTextureToBuffer(&source,&target,&extent);
+    const auto command=encoder.Finish(); device.GetQueue().Submit(1,&command);
+    struct Result { std::atomic_int done{0}; }; auto result=std::make_shared<Result>();
+    buffer.MapAsync(wgpu::MapMode::Read,0,desc.size,wgpu::CallbackMode::AllowSpontaneous,
+        [result](wgpu::MapAsyncStatus status,wgpu::StringView) {
+            result->done.store(status==wgpu::MapAsyncStatus::Success?1:-1,std::memory_order_release);
+        });
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(!result->done.load(std::memory_order_acquire) && std::chrono::steady_clock::now()<deadline) {
+        device.Tick(); std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Check(result->done.load(std::memory_order_acquire)==1, "Selected source XFB GPU readback failed");
+    const auto* bytes=static_cast<const unsigned char*>(buffer.GetConstMappedRange(0,desc.size));
+    std::vector<unsigned char> rgb(std::size_t(copy->width)*copy->height*3);
+    auto channel=[](int value) { return static_cast<unsigned char>(std::clamp(value,0,255)); };
+    unsigned lit=0;
+    for(unsigned y=0;y<copy->height;++y)for(unsigned x=0;x<copy->width;++x) {
+        const auto* pair=bytes+std::size_t(y)*pitch+(x/2)*4;
+        const int c=int(pair[(x&1)?2:0])-16,d=int(pair[1])-128,e=int(pair[3])-128;
+        auto* pixel=rgb.data()+3*(std::size_t(y)*copy->width+x);
+        pixel[0]=channel((298*c+409*e+128)>>8);
+        pixel[1]=channel((298*c-100*d-208*e+128)>>8);
+        pixel[2]=channel((298*c+516*d+128)>>8);
+        if(pixel[0]||pixel[1]||pixel[2])++lit;
+    }
+    buffer.Unmap(); Check(lit!=0, "Source-selected native XFB is entirely black");
+    auto* file=std::fopen(output.c_str(),"wb"); Check(file,"Cannot create selected XFB snapshot");
+    std::fprintf(file,"P6\n%u %u\n255\n",copy->width,copy->height);
+    const auto written=std::fwrite(rgb.data(),1,rgb.size(),file); const auto closed=std::fclose(file);
+    Check(written==rgb.size() && !closed,"Selected XFB snapshot write failed");
+    std::printf("Actual source-selected XFB %ux%u revision%llu, nonblack pixels%u; saved %s.\n",
+        copy->width,copy->height,static_cast<unsigned long long>(copy->revision),lit,output.c_str());
+}
 void EndWithSnapshot(const std::filesystem::path& output) {
     auto s=std::make_shared<Snapshot>();
     Check(aurora::gfx::resolve_pass({},s->target),"Cannot resolve actual original Credits EFB");
@@ -81,19 +137,21 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 }
 int main(int argc, char** argv) {
     try {
-        bool interactive=false;
+        bool interactive=false, nativeSend=false;
         std::filesystem::path disc;
         for (int i=1;i<argc;++i) {
             const std::string argument=argv[i];
             if (argument=="--help") {
-                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window]\n"
+                std::puts("Usage: mscharged-original-main-credits-check --disc FILE [--window] [--native-send]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Explicit USA/English system configuration. Full tasks, movie/audio,\n"
-                          "physical input, source VI swap and game shutdown remain omitted.\n"
-                          "--window keeps the source scene running until you close the window.");
+                          "physical input and game shutdown remain omitted.\n"
+                          "--window keeps the source scene running until you close the window.\n"
+                          "--native-send tests original glSendFrame/swap/VI at physical 640x448.");
                 return 0;
             }
             if(argument=="--window")interactive=true;
+            else if(argument=="--native-send")nativeSend=true;
             else if(argument=="--disc" && i+1<argc)disc=argv[++i];
             else throw std::runtime_error("Unknown or incomplete argument; use --help");
         }
@@ -111,7 +169,7 @@ int main(int argc, char** argv) {
         config.appName="Mario Strikers Charged | original-main Credits diagnostic";
         config.userPath=config.cachePath=dataPath.c_str();
         config.desiredBackend=BACKEND_VULKAN;
-        config.windowWidth=800;config.windowHeight=600;
+        config.windowWidth=nativeSend?640:800;config.windowHeight=nativeSend?448:600;
         config.windowPosX=config.windowPosY=-1;
         config.mem1Size=MEM1_DEFAULT_SIZE;
         config.mem2Size=64u*1024u*1024u;
@@ -120,16 +178,40 @@ int main(int argc, char** argv) {
         const auto host=aurora_initialize(argc,argv,&config);
         if(!host.window||host.backend!=BACKEND_VULKAN)
             throw std::runtime_error("Actual Vulkan foundation unavailable; no fallback acceptance");
-        // Selected scene diagnostic keeps explicit native begin/end ownership.
-        // Continuous aurora_configure_native_gx_hardware is a separate mode;
-        // arming it here would reject mixed diagnostic frame ownership.
+        if(nativeSend) {
+            // Aurora's default desktop minimum is640x480. Establish actual1:1
+            // backing before source VIConfigure/GXFlush starts native packets.
+            Check(SDL_SetWindowMinimumSize(host.window,640,448), "Native1:1 window minimum rejected");
+            Check(SDL_SetWindowSize(host.window,640,448), "Native1:1 window resize rejected");
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+            bool sized=false;
+            while(std::chrono::steady_clock::now()<deadline) {
+                for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
+                    Check(event->type!=AURORA_EXIT, "Native window closed before source entry");
+                aurora::gfx::synchronize();
+                const auto size=aurora_get_window_size();
+                if(size.fb_width==640 && size.fb_height==448 &&
+                        size.native_fb_width==640 && size.native_fb_height==448) {
+                    sized=true; break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            Check(sized, "Native source-send requires actual1:1 physical640x448 backing");
+        }
         OSInit();
         if(!OSGetArenaLo()||!OSGetMEM2ArenaLo())
             throw std::runtime_error("Actual captured SDK arenas unavailable");
         mscharged::platform::InitializeNativeInterruptController();
         // Explicit USA diagnostic backing; independent SC and VI settings.
-        mscharged::ConfigureNativeSystemSettings({1,0,0,0});
+        const mscharged::NativeSystemSettings settings{1,0,0,0,1};
+        mscharged::ConfigureNativeSystemSettings(settings);
         mscharged::platform::ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT,false);
+        if(nativeSend) {
+            mscharged::platform::ConfigureNativeVideoOutputHardware(settings);
+            // Arm source-owned recording before original constructors/commands.
+            // This mode never uses diagnostic aurora_begin/end_frame.
+            aurora_configure_native_gx_hardware();
+        }
         mscharged::platform::InitializeNativeSTMDevice();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
@@ -140,13 +222,13 @@ int main(int argc, char** argv) {
         std::fprintf(stderr,"Entering actual source main with real Aurora Vulkan/FIFO owner and native PI_VI under temporary MAIN_BOOTSTRAP; flow remains incomplete.\n");
         std::fflush(nullptr);
         const int result=entry();
-        Check(result==85, "Original main selected scene did not complete checkpoint85");
-        auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,"charged_original_scene_frame"));
+        Check(result==85, "Original main selected scene did not complete checkpoint 85");
+        auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
         Check(frame,"Same original-main module scene-frame export unavailable");
         // Existing actual source GX/state/material/font/view initialization is
         // retained. No host GXInit, source pool restart or fixture font setup.
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
-        unsigned frames=0,draws=0,quiet=0; bool snapshot=false,encoded=false,exit=false;
+        unsigned frames=0,draws=0,quiet=0; bool snapshot=false,encoded=false,exit=false,nativePresented=false;
         const auto start=std::chrono::steady_clock::now(); auto previous=start;
         while(!exit && (interactive || !snapshot)) {
             for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
@@ -154,6 +236,25 @@ int main(int argc, char** argv) {
             if(exit)break;
             const auto now=std::chrono::steady_clock::now();
             Check(interactive || now-start<std::chrono::seconds(40),"Original main Credits Vulkan pipeline timed out");
+            if(nativeSend) {
+                const auto receipt=AuroraGXBeginDrawReceipt();
+                Check(receipt,"Native source draw receipt unavailable");
+                const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
+                frame(delta); AuroraGXEndDrawReceipt();
+                AuroraGXSync(); aurora::gfx::synchronize();
+                encoded=encoded || AuroraGXWasDrawEncoded(receipt);
+                draws+=aurora_get_stats()->drawCallCount; ++frames;
+                AuroraVIOutputState output{};
+                Check(aurora_get_video_output_state(&output),"Configured native VI output state unavailable");
+                nativePresented=output.framebuffer && !output.black &&
+                    !output.pending && output.presentations>=3;
+                if(now-start>=std::chrono::seconds(3) && nativePresented && encoded) {
+                    if(!snapshot) ReadSelectedXFB(output.framebuffer,dataDirectory/"original-main-native-xfb.ppm");
+                    snapshot=true; // Selected source XFB pixels and native scanout evidence.
+                    if(!interactive)break;
+                }
+                std::this_thread::yield(); continue;
+            }
             if(!aurora_begin_frame()){std::this_thread::yield();continue;}
             const auto receipt=AuroraGXBeginDrawReceipt();Check(receipt,"Real source frame draw receipt unavailable");
             const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
@@ -167,9 +268,14 @@ int main(int argc, char** argv) {
             quiet=std::atomic_ref<const unsigned>(aurora_get_stats()->queuedPipelines).load()?0:quiet+1;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        Check(snapshot && encoded && draws && aurora_get_last_presentation().sequence,
+        Check(snapshot && encoded && draws &&
+              (nativeSend ? nativePresented : aurora_get_last_presentation().sequence != 0),
               "Original main Credits real source draw/presentation incomplete");
-        std::printf("Original main→selected Credits live: %u actual source frames,%u encoded draws; one initialized game/SDK, native owner elapsed time. Explicit task/VI swap/movie/audio/physical-input/full-CRT omissions remain.\n",frames,draws);
+        if(nativeSend) {
+            std::printf("Original main selected Credits: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full tasks/movie/audio/physical-input/CRT remain omitted; source-selected completed XFB pixel readback retained.\n",frames);
+        } else {
+        std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Explicit task/VI swap/movie/audio/physical-input/full-CRT omissions remain.\n",frames,draws);
+        }
         std::fflush(nullptr);std::_Exit(0);
     }catch(const std::exception& e){std::fprintf(stderr,"Actual source diagnostic stopped: %s\n",e.what());std::fflush(nullptr);std::_Exit(1);}
 }
