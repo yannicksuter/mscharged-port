@@ -62,3 +62,5 @@ add_custom_target(charged_original_module_scan
     DEPENDS charged_original_game_module_sources
     COMMENT "Compile original module entry/core; full link, lifetime and startup pending"
     VERBATIM)
+
+include(cmake/OriginalCameras.cmake)
