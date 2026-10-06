@@ -31,3 +31,7 @@ else()
     target_compile_options(charged_original_save_sources PRIVATE
         -fno-assume-sane-operator-new -Wno-register)
 endif()
+
+# SaveLoad retains Wii16 text and fixed32 TPL records beneath its source flow.
+include(cmake/OriginalSaveIcons.cmake)
+mscharged_add_original_save_icon_transport(charged_original_save_sources)
