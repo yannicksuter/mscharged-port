@@ -85,3 +85,5 @@ include(cmake/OriginalImpostorModule.cmake)
 include(cmake/OriginalFrontendModule.cmake)
 
 include(cmake/OriginalPlatformGraphics.cmake)
+
+include(cmake/OriginalPoseModule.cmake)
