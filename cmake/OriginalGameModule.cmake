@@ -65,3 +65,5 @@ add_custom_target(charged_original_module_scan
 
 include(cmake/OriginalCameras.cmake)
 include(cmake/OriginalConfig.cmake)
+
+include(cmake/OriginalCredits.cmake)
