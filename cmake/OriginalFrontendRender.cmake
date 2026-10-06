@@ -177,3 +177,5 @@ if(BUILD_TESTING AND TARGET aurora::gx
 endif()
 
 include(cmake/OriginalMaterialParameters.cmake)
+
+include(cmake/OriginalLighting.cmake)
