@@ -10,6 +10,9 @@ namespace mscharged::platform {
 struct WpadSDLSettings {
     std::uint8_t sensor_bar_position;
     std::uint8_t dpd_sensitivity;
+    // Selected host profiles may defer physical remotes while retaining their
+    // existing default discovery policy for all other callers.
+    bool physical_wii_remotes = true;
 };
 void ConfigureWpadSDL(WpadSDLSettings settings);
 

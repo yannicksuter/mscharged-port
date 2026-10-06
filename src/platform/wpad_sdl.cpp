@@ -123,6 +123,7 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
     return true;
 }
 bool SupportedRemote(SDL_JoystickID id) {
+    if (!State().settings.physical_wii_remotes && !SDL_IsJoystickVirtual(id)) return false;
     // Mapping names may be cached by GUID across devices. Use the actual
     // underlying joystick identity provided by the pinned Wii HID driver.
     const char* name = SDL_GetJoystickNameForID(id);
