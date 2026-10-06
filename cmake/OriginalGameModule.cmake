@@ -67,3 +67,5 @@ include(cmake/OriginalCameras.cmake)
 include(cmake/OriginalConfig.cmake)
 
 include(cmake/OriginalCredits.cmake)
+
+include(cmake/OriginalInput.cmake)
