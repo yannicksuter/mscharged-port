@@ -172,7 +172,7 @@ int main(int argc,char** argv) {
         const auto audioClock=mscharged::platform::GetNativeAIClockStatus();
         Check(audio.initialized && audio.consumed_blocks && audio.dispatched_callbacks,
               "Original movie audio did not reach the actual host device");
-        std::printf("Original Credits native AI: submitted%llu consumed%llu callbacks%llu, rate%d, last PCM hash%016llx; coalesced%llu, maximum owner gap%lluns.\n",
+        std::printf("Original Credits native AI: submitted%llu consumed%llu callbacks%llu, rate%d, last PCM hash%016llx; coalesced%llu, maximum DMA service gap%lluns.\n",
                     static_cast<unsigned long long>(audio.submitted_blocks),
                     static_cast<unsigned long long>(audio.consumed_blocks),
                     static_cast<unsigned long long>(audio.dispatched_callbacks),audio.input_frequency,
@@ -180,6 +180,14 @@ int main(int argc,char** argv) {
                     static_cast<unsigned long long>(audioClock.coalesced_edges),
                     static_cast<unsigned long long>(audioClock.maximum_service_gap_ns));
         std::printf("Original Credits window diagnostic: %u frames,%u actual draws,source receipt and presentation verified. Live original scene-manager Update/FERender using elapsed native owner time; actual source THP movie/video and mode0 audio; omits original main/tasks/AX predecessor/VI scanout/input/world/CRT teardown.\n",frames,draws);
+        std::printf("Native audio device: rate%d, period%d frames, queued%d source bytes.\n",
+                    audio.device_frequency,audio.device_frames,audio.queued_input_bytes);
+        AuroraVIHardwareState videoClock{};
+        Check(aurora_get_video_hardware_state(&videoClock), "Original VI clock observation unavailable");
+        const auto elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        std::printf("Playback observation: %.3fs, %.2f rendered frames/s; VI retraces%u, elapsed fields%llu.\n",
+                    elapsed,frames/elapsed,videoClock.retrace_count,
+                    static_cast<unsigned long long>(videoClock.elapsed_fields));
         stopMovie();
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
         Check(!mscharged::platform::GetNativeAIStatus().initialized,

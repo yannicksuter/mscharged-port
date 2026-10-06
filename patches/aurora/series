@@ -32,3 +32,4 @@
 0034-native-pe-color-aperture.patch
 0036-preserve-native-fifo-draw-receipts.patch
 0035-service-native-hardware-during-thp-decoding.patch
+0037-service-native-owner-during-graphics-waits.patch

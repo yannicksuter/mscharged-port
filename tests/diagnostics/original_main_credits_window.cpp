@@ -286,12 +286,20 @@ int main(int argc, char** argv) {
         const auto audioClock=mscharged::platform::GetNativeAIClockStatus();
         Check(audio.initialized && audio.consumed_blocks && audio.dispatched_callbacks,
               "Original-main movie audio did not reach the actual host device");
-        std::printf("Original-main movie native AI: submitted%llu consumed%llu callbacks%llu, rate%d; coalesced%llu, maximum owner gap%lluns.\n",
+        std::printf("Original-main movie native AI: submitted%llu consumed%llu callbacks%llu, rate%d; coalesced%llu, maximum DMA service gap%lluns.\n",
                     static_cast<unsigned long long>(audio.submitted_blocks),
                     static_cast<unsigned long long>(audio.consumed_blocks),
                     static_cast<unsigned long long>(audio.dispatched_callbacks),audio.input_frequency,
                     static_cast<unsigned long long>(audioClock.coalesced_edges),
                     static_cast<unsigned long long>(audioClock.maximum_service_gap_ns));
+        std::printf("Native audio device: rate%d, period%d frames, queued%d source bytes.\n",
+                    audio.device_frequency,audio.device_frames,audio.queued_input_bytes);
+        AuroraVIHardwareState videoClock{};
+        Check(aurora_get_video_hardware_state(&videoClock), "Original VI clock observation unavailable");
+        const auto elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        std::printf("Playback observation: %.3fs, %.2f rendered frames/s; VI retraces%u, elapsed fields%llu.\n",
+                    elapsed,frames/elapsed,videoClock.retrace_count,
+                    static_cast<unsigned long long>(videoClock.elapsed_fields));
         stopMovie();
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
         Check(!mscharged::platform::GetNativeAIStatus().initialized,
