@@ -194,3 +194,4 @@
 0242-native-original-stream-dsp-cached-address.patch
 0243-preserve-original-native-matrix-inverse-semantics.patch
 0231-temporary-original-credits-scene-diagnostic.patch
+0244-native-physical-header-and-source-clock-transport.patch
