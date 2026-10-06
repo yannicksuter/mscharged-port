@@ -179,3 +179,4 @@
 0216-original-stm-native-device-registers.patch
 0217-original-impostor-native-pointer-abi.patch
 0213-track-original-procedural-graphics-storage-and-arrays.patch
+0221-adapt-original-glplat-canonical-sdk-compiler-abi.patch

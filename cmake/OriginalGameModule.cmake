@@ -83,3 +83,5 @@ include(cmake/OriginalEmissionModule.cmake)
 include(cmake/OriginalImpostorModule.cmake)
 
 include(cmake/OriginalFrontendModule.cmake)
+
+include(cmake/OriginalPlatformGraphics.cmake)
