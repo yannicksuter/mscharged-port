@@ -100,5 +100,11 @@ if(NOT MSCHARGED_BUILD_GX_CHECK)
         add_test(NAME aurora_host COMMAND mscharged-aurora-check)
         set_tests_properties(aurora_host PROPERTIES
             ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy" TIMEOUT 30)
+        add_executable(aurora_configuration_tests tests/aurora_configuration.cpp)
+        target_compile_features(aurora_configuration_tests PRIVATE cxx_std_20)
+        target_link_libraries(aurora_configuration_tests PRIVATE aurora::core)
+        add_test(NAME aurora_configuration COMMAND aurora_configuration_tests)
+        set_tests_properties(aurora_configuration PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy" TIMEOUT 30)
     endif()
 endif()
