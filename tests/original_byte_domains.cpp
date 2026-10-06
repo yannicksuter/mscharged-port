@@ -11,7 +11,7 @@
 
 namespace {
 thread_local int metadata_budget = -1;
-unsigned metadata_live = 0, checks = 0;
+unsigned metadata_live = 0, metadata_allocations = 0, checks = 0;
 void Check(bool value, const char* message) { ++checks; if (!value) throw std::runtime_error(message); }
 template<class Error, class Action> void Reject(Action action) {
     ++checks; try { action(); } catch (const Error&) { return; }
@@ -26,7 +26,7 @@ void Word(unsigned char* p, std::uint32_t value) {
 extern "C" void* ChargedNativeMetadataAllocate(std::size_t bytes) {
     if (metadata_budget == 0) throw std::bad_alloc();
     if (metadata_budget > 0) --metadata_budget;
-    auto* p = ::operator new(bytes); ++metadata_live; return p;
+    auto* p = ::operator new(bytes); ++metadata_live; ++metadata_allocations; return p;
 }
 extern "C" void ChargedNativeMetadataRelease(void* p) noexcept {
     if (p) { --metadata_live; ::operator delete(p); }
@@ -120,7 +120,7 @@ int main() {
         // Restore by a genuine fixture producer, then prove node reservation OOM
         // leaves existing completion metadata and original allocator unchanged.
         { GameByteWriteReservation write(raw,128); write.Complete(GameByteDomain::WiiSerialized); }
-        for (int budget : {0,1,2,3,4}) {
+        for (int budget : {0,1,2,3}) {
             const auto free=parent.TotalFreeMemory(), count=parent.m_allocation_count;
             bool oom=false;
             metadata_budget=budget;
@@ -132,6 +132,48 @@ int main() {
             Check(parent.TotalFreeMemory()==free && parent.m_allocation_count==count,
                   "Metadata reservation changed original allocation requests");
         }
+        // Four pre-write reservations suffice even when many independent leaf
+        // conversions retain the same original logical completion. Completion
+        // and unaffected-domain retention must perform no host allocation.
+        {
+            metadata_budget=4;
+            GameByteWriteReservation write(raw+8,8);
+            Check(metadata_budget==0, "Reservation did not exercise every reserved node");
+            write.Complete(GameByteDomain::NativeHeader);
+            metadata_budget=-1;
+        }
+        auto* many = static_cast<unsigned char*>(parent.Allocate(32768,32,false));
+        std::memset(many,0x6b,32768);
+        { GameByteWriteReservation write(many,32768); write.Complete(GameByteDomain::WiiSerialized); }
+        for(unsigned offset=8;offset<32768;offset+=16) {
+            const auto beforeAllocations=metadata_allocations;
+            GameByteWriteReservation write(many+offset,8);
+            Check(metadata_allocations-beforeAllocations==4,
+                  "Leaf conversion copied metadata for unrelated completed spans");
+            metadata_budget=0;
+            write.Complete(GameByteDomain::NativePayload);
+            metadata_budget=-1;
+        }
+        Check(FindGameCompletedSpan(many,32768,completed) && completed.base==many
+              && completed.bytes==32768, "Many converted leaves lost the original logical extent");
+        for(unsigned offset=0;offset<32768;offset+=16) {
+            Check(FindGameByteDomain(many+offset,8)==GameByteDomain::WiiSerialized
+                  && FindGameByteDomain(many+offset+8,8)==GameByteDomain::NativePayload,
+                  "Range-local retirement altered an unrelated leaf domain");
+        }
+        std::array<unsigned char,32768> expectedBytes{}; expectedBytes.fill(0x6b);
+        Check(std::memcmp(many,expectedBytes.data(),expectedBytes.size())==0,
+              "Metadata conversion changed source bytes");
+        // A crossing producer erases several spans and trims both edges while
+        // keeping the same source origin in its completed native publication.
+        { GameByteWriteReservation crossing(many+3,74); crossing.Complete(GameByteDomain::NativePayload); }
+        Check(FindGameByteDomain(many,3)==GameByteDomain::WiiSerialized
+              && FindGameByteDomain(many+3,74)==GameByteDomain::NativePayload
+              && FindGameByteDomain(many+77,3)==GameByteDomain::NativePayload
+              && FindGameByteDomain(many+80,8)==GameByteDomain::WiiSerialized,
+              "Multi-span retirement damaged prefix/suffix or unrelated domains");
+        Check(FindGameCompletedSpan(many,32768,completed), "Crossing write lost the shared source origin");
+        parent.Free(many);
         GameByteWriteReservation stale(raw,32);
         parent.Free(raw);
         auto* reused=static_cast<unsigned char*>(parent.Allocate(256,32,false));

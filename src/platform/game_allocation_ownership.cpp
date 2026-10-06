@@ -212,26 +212,6 @@ struct PendingBytes
         active = writes.extract(address);
     }
 };
-ByteSpans RetainOutside(const ByteSpans& spans, std::uintptr_t address, std::size_t bytes)
-{
-    ByteSpans retained;
-    for (const auto& [base, span] : spans)
-    {
-        if (!Overlaps(base, span.bytes, address, bytes)) { retained.emplace(base, span); continue; }
-        if (base < address)
-        {
-            auto left = span; left.bytes = address - base;
-            retained.emplace(base, left);
-        }
-        const auto end = address + bytes;
-        if (end - base < span.bytes)
-        {
-            auto right = span; right.bytes = span.bytes - (end - base);
-            retained.emplace(end, right);
-        }
-    }
-    return retained;
-}
 ByteSpans::node_type ReservedByteNode()
 {
     ByteSpans temporary;
@@ -241,28 +221,32 @@ ByteSpans::node_type ReservedByteNode()
 // A contiguous retired range can split at most one preexisting disjoint span
 // into two pieces. Reuse a pre-reserved node for that case; all other trims are
 // in-place/extract operations and preserve unaffected source logical origins.
-void RetireByteRange(Allocation& owner, std::uintptr_t address, std::size_t bytes,
-                     ByteSpans::node_type& split)
+void RetireCompletedByteRange(Allocation& owner, std::uintptr_t address, std::size_t bytes,
+                              ByteSpans::node_type& split)
 {
-    for (auto i = owner.byte_spans.begin(); i != owner.byte_spans.end();)
+    const auto end = address + bytes;
+    // Completed spans are disjoint. Only the predecessor and spans starting
+    // before the retired end can overlap; retain unrelated nodes in place.
+    auto i = owner.byte_spans.upper_bound(address);
+    if (i != owner.byte_spans.begin()) --i;
+    while (i != owner.byte_spans.end() && i->first < end)
     {
         auto current = i++;
         const auto base = current->first;
         auto& span = current->second;
         if (!Overlaps(base, span.bytes, address, bytes)) continue;
-        const auto end = address + bytes;
         const bool left = base < address;
         const bool right = end - base < span.bytes;
         if (left && right)
         {
-            if (split.empty()) throw std::logic_error("Graphics retirement split reservation was consumed");
+            if (split.empty()) throw std::logic_error("Byte retirement split reservation was consumed");
             auto suffix = span;
             suffix.bytes = span.bytes - (end - base);
             span.bytes = address - base;
             split.key() = end;
             split.mapped() = suffix;
             auto inserted = owner.byte_spans.insert(std::move(split));
-            if (!inserted.inserted) throw std::logic_error("Graphics retirement suffix address conflict");
+            if (!inserted.inserted) throw std::logic_error("Byte retirement suffix address conflict");
         }
         else if (left) span.bytes = address - base;
         else if (right)
@@ -271,10 +255,15 @@ void RetireByteRange(Allocation& owner, std::uintptr_t address, std::size_t byte
             node.mapped().bytes -= end - base;
             node.key() = end;
             auto inserted = owner.byte_spans.insert(std::move(node));
-            if (!inserted.inserted) throw std::logic_error("Graphics retirement trim address conflict");
+            if (!inserted.inserted) throw std::logic_error("Byte retirement trim address conflict");
         }
         else owner.byte_spans.erase(current);
     }
+}
+void RetireByteRange(Allocation& owner, std::uintptr_t address, std::size_t bytes,
+                     ByteSpans::node_type& split)
+{
+    RetireCompletedByteRange(owner, address, bytes, split);
     for (auto i = owner.pending_writes.begin(); i != owner.pending_writes.end();)
     {
         if (Overlaps(i->first, i->second.bytes, address, bytes)) i = owner.pending_writes.erase(i);
@@ -396,10 +385,10 @@ GameByteWriteReservation::GameByteWriteReservation(void* destination, std::size_
         token = new (storage) PendingBytes(owner, address, logicalBytes, physicalBytes, owner->second.next_write);
         // Any host OOM occurs before completed-domain invalidation or the actual
         // producer write. After reservation, completion inserts reserved nodes.
-        auto retained = RetainOutside(owner->second.byte_spans, address, physicalBytes);
+        auto split = ReservedByteNode();
         auto inserted = owner->second.pending_writes.insert(std::move(token->active));
         if (!inserted.inserted) throw std::logic_error("Byte reservation address conflict");
-        owner->second.byte_spans.swap(retained);
+        RetireCompletedByteRange(owner->second, address, physicalBytes, split);
         ++owner->second.next_write;
         pending_ = token;
     }
