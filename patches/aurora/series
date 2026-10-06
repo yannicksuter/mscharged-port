@@ -34,3 +34,4 @@
 0035-service-native-hardware-during-thp-decoding.patch
 0037-service-native-owner-during-graphics-waits.patch
 0038-native-pe-finish-sdk-safe-point.patch
+0040-service-only-native-owner-during-thp-decoding.patch
