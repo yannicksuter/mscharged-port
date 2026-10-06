@@ -79,3 +79,5 @@ include(cmake/OriginalSkeleton.cmake)
 include(cmake/OriginalStaticTasks.cmake)
 
 include(cmake/OriginalEmissionModule.cmake)
+
+include(cmake/OriginalImpostorModule.cmake)
