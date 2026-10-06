@@ -219,3 +219,4 @@
 0267-restore-original-animation-controller-provider.patch
 0279-restore-original-loading-scene-handlers.patch
 0276-restore-original-front-end-buttons.patch
+0280-retain-original-vertex-animation-native-records.patch
