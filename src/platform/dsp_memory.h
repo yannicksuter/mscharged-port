@@ -12,6 +12,9 @@ struct NativeDSPMemoryPin { std::uint64_t generation, identity; };
 NativeDSPMemoryEndpoint AttachNativeDSPMEM1();
 void DetachNativeDSPMEM1();
 NativeDSPMemoryPin PinNativeDSPMEM1(const void* address, std::size_t bytes, bool writable);
+// Explicit extension to actual SDK MEM2 and registered static reservations.
+// A static owner is retained by the shared SDK until all device pins drain.
+NativeDSPMemoryPin PinNativeDSPMemory(const void* address, std::size_t bytes, bool writable);
 void ReleaseNativeDSPMemory(NativeDSPMemoryPin pin);
 
 // Checked copy operations keep the ownership lock through each transfer. No
