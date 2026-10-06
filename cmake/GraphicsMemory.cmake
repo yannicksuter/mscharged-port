@@ -35,7 +35,7 @@ target_compile_definitions(charged_graphics_memory PRIVATE TARGET_PC=1)
 # Original source object targets use their independent, unextended view ABI.
 target_compile_definitions(charged_graphics_memory PUBLIC
     MSCHARGED_DIAGNOSTIC_VIEWS=1 MSCHARGED_DIAGNOSTIC_TASKS=1
-    MSCHARGED_DIAGNOSTIC_TEXTURES=1)
+    MSCHARGED_DIAGNOSTIC_TEXTURES=1 MSCHARGED_DIAGNOSTIC_EVENTS=1)
 # Original resource object targets compile without the legacy pool policies.
 target_compile_definitions(charged_graphics_memory PRIVATE
     MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS=1)
