@@ -17,7 +17,8 @@ add_library(charged_original_boot_scene_sources OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/SH/SHTitleScreen.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/BaseGameSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
-    "${MSCHARGED_PREPARED}/src/Game/Render/FrontEndPresentation.cpp")
+    "${MSCHARGED_PREPARED}/src/Game/Render/FrontEndPresentation.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Render/StadiumLoading.cpp")
 add_dependencies(charged_original_boot_scene_sources verify_prepared)
 set_target_properties(charged_original_boot_scene_sources PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden

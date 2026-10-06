@@ -220,3 +220,4 @@
 0279-restore-original-loading-scene-handlers.patch
 0276-restore-original-front-end-buttons.patch
 0280-retain-original-vertex-animation-native-records.patch
+0281-native-stadium-singleton-declaration.patch
