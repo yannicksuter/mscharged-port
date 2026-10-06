@@ -1,6 +1,7 @@
 # Legacy diagnostics use the same real core services as the original source.
 # Keep their extracted entry and setup/check helpers out of the core library.
 include_guard(GLOBAL)
+include(cmake/NativeAI.cmake)
 include(cmake/OriginalCore.cmake)
 include(cmake/OriginalStringStorage.cmake)
 include(cmake/OriginalAllocation.cmake)
