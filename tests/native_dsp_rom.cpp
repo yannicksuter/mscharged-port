@@ -287,6 +287,122 @@ void RegisterMoveGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std:
     Same(state,expected);
 }
 
+void SingleInstructionLoopGate(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
+                               NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
+    const auto Program=[&](std::initializer_list<std::uint16_t> words) {
+        std::size_t i=0;for(auto word:words)PutWord(backing,i++,word);
+        DSPInstructionCore core(mailboxes,control);
+        core.LoadInstructionMemory(memory,physical,static_cast<std::uint32_t>(i*2),0x100);
+        return core;
+    };
+    DSPInstructionRegisters input{0x100,0x19ad,0x9c,{0x120003abcdULL,0xfe0003dcbaULL},11,
+        {0x1111,0x2222,0x3333,0x4444},{0x5555,0x6666,0x7777,0x8888},
+        {0x9999,0xaaaa,0xbbbb,0xcccc}};
+    input.stack={0xbabe,0xdead,0x7777,0};
+    // Literal hardware instruction traces, authored without the candidate's
+    // decoder helpers: LOOP itself executes once; the following NOP executes3.
+    constexpr std::array<unsigned,14> regs{0,1,2,3,4,5,6,7,8,9,10,11,30,31};
+    constexpr std::array<std::uint16_t,4> pcs{0x101,0x101,0x101,0x102};
+    constexpr std::array<std::uint16_t,4> counts{3,2,1,0};
+    for(unsigned reg:regs) {
+        auto context=input;
+        if(reg<4)context.address[reg]=3;
+        else if(reg<8)context.index[reg-4]=3;
+        else if(reg<12)context.wrap[reg-8]=3;
+        auto core=Program({static_cast<std::uint16_t>(0x0040+reg),0,0});
+        core.BeginExecution(context);
+        for(unsigned i=0;i<pcs.size();++i) {
+            const auto actual=core.Step();
+            Check(actual.pc==pcs[i] && actual.instructions==12u+i && actual.loop_depth==(i==3?0:1),
+                  "LOOP repeat order/instruction count differs from literal trace");
+            Check(actual.status==context.status && actual.control==context.control &&
+                  actual.accumulator==context.accumulator && actual.address==context.address &&
+                  actual.index==context.index && actual.wrap==context.wrap && actual.stack[1]==0xdead,
+                  "LOOP changed original counter register, flags or unrelated cells");
+            if(counts[i])Check(actual.stack[0]==0x101 && actual.stack[2]==0x101 &&
+                actual.stack[3]==counts[i],"LOOP hardware repeat/endpoint/counter cell differs");
+            else Check(actual.stack==context.stack,"LOOP did not restore prior source stack tops");
+        }
+        Check(core.Registers().loop_stack[0]==std::array<std::uint16_t,3>{0xbabe,0x7777,0},
+              "LOOP backing lost exact prior saved stack cells");
+    }
+    // Signed40 saturation is an initial read, never signed iteration or an
+    // altered authored accumulator. Large counts need only two actual steps.
+    struct Counter {std::uint64_t cell;std::uint16_t word;};
+    constexpr std::array<Counter,6> saturated{{
+        {0x0100000000ULL,0x7fff},{0x7fffffffffULL,0x7fff},
+        {0x8000000000ULL,0x8000},{0xff00000000ULL,0x8000},
+        {0xff80000000ULL,0x8000},{0xffffffffffULL,0xffff}}};
+    for(unsigned selected:{0u,1u})for(auto value:saturated) {
+        auto context=input;context.status|=0x4000;context.accumulator[selected]=value.cell;
+        auto core=Program({static_cast<std::uint16_t>(0x005eu + selected),0,0});
+        core.BeginExecution(context);auto actual=core.Step();
+        Check(actual.pc==0x101 && actual.stack[3]==value.word && actual.accumulator==context.accumulator,
+              "LOOP ACM initial saturation narrowed or changed source hardware cells");
+        actual=core.Step();
+        Check(actual.pc==0x101 && actual.stack[3]==value.word-1u && actual.status==context.status,
+              "LOOP large raw counter was signed, eagerly consumed or updated flags");
+    }
+    for(auto count:std::array<std::uint16_t,3>{1,2,0xffff}) {
+        auto context=input;context.index[0]=count;
+        auto core=Program({0x0044,0,0});core.BeginExecution(context);
+        auto actual=core.Step();Check(actual.stack[3]==count && actual.pc==0x101,"LOOP initial raw unsigned count differs");
+        actual=core.Step();
+        Check(actual.pc==(count==1?0x102:0x101) && actual.loop_depth==(count==1?0:1) &&
+              actual.index[0]==count && actual.instructions==13,
+              "LOOP zero transition/preserve authored count differs");
+        if(count!=1)Check(actual.stack[3]==count-1u,"LOOP high-bit raw count decremented incorrectly");
+    }
+    // Zero iteration observes only declared width, never skipped body effects.
+    for(auto body:std::array<std::uint16_t,6>{0,0x0080,0x004c,0x1d8c,0x1b1e,0x006c}) {
+        auto context=input;context.index[0]=0;
+        auto core=Program({0x0044,body,0xabcd,0});core.BeginExecution(context);
+        auto expected=context;expected.pc=(body==0x0080 || body==0x006c)?0x103:0x102;++expected.instructions;
+        Same(core.Step(),expected);
+    }
+    // Count is copied once; the repeated body may change its source register.
+    auto context=input;context.address[0]=3;context.index[0]=9;
+    auto changed=Program({0x0040,0x1c04,0});changed.BeginExecution(context);
+    changed.Step();auto actual=changed.Step();
+    Check(actual.address[0]==9 && actual.stack[3]==2 && actual.pc==0x101,
+          "LOOP reread an authored counter register changed by its real body");
+    changed.Step();actual=changed.Step();
+    Check(actual.address[0]==9 && actual.pc==0x102 && actual.loop_depth==0 && actual.stack==context.stack,
+          "LOOP changed body counter ownership or failed final source pop");
+    // An outer block has a separate inclusive endpoint; its original saved
+    // counter resumes after each inner single-instruction loop completes.
+    auto nested=Program({0x0064,0x0105,0x0045,0,0,0,0});
+    context=input;context.index[0]=2;context.index[1]=3;nested.BeginExecution(context);
+    struct Expected {std::uint16_t pc,count;std::uint8_t depth;};
+    constexpr std::array<Expected,13> trace{{
+        {0x102,2,1},{0x103,3,2},{0x103,2,2},{0x103,1,2},{0x104,2,1},
+        {0x105,2,1},{0x102,1,1},{0x103,3,2},{0x103,2,2},{0x103,1,2},
+        {0x104,1,1},{0x105,1,1},{0x106,0,0}}};
+    for(unsigned i=0;i<trace.size();++i) {
+        const auto value=nested.Step();const auto expected=trace[i];
+        Check(value.pc==expected.pc && value.loop_depth==expected.depth && value.instructions==12u+i,
+              "BLOOP/LOOP nesting traversal differs from independent literal trace");
+        if(expected.depth)Check(value.stack[3]==expected.count &&
+              value.stack[0]==(expected.depth==2?0x103:0x102) &&
+              value.stack[2]==(expected.depth==2?0x103:0x105),"nested LOOP lost retained outer counter/endpoint");
+        else Check(value.stack==context.stack,"nested LOOP lost prior source stack baseline");
+        Check(value.index==context.index && value.status==context.status && value.accumulator==context.accumulator,
+              "nested LOOP changed original count registers/flags/accumulators");
+    }
+    const auto Rejected=[&](DSPInstructionCore& core,const DSPInstructionRegisters& before) {
+        core.BeginExecution(before);Throws([&]{core.Step();},"unsupported LOOP body/register/history silently advanced");
+        Same(core.Registers(),before);
+    };
+    auto unknown_reg=Program({0x004c,0});Rejected(unknown_reg,input);
+    auto unknown_body=Program({0x0044,0x0210});context=input;context.index[0]=0;Rejected(unknown_body,context);
+    auto missing=Program({0x0044});Rejected(missing,context);
+    auto positive_wide=Program({0x0044,0x0080,0xabcd});Rejected(positive_wide,input);
+    auto nested_single=Program({0x0044,0x0045,0});Rejected(nested_single,input);
+    auto overflow=Program({0x0044,0});context=input;context.index[0]=1;
+    context.loop_depth=4;context.stack={0x100,0xdead,0x101,1};Rejected(overflow,context);
+    Check(!DSPCheckInit() && !DSPCheckMailFromDSP(),"partial LOOP support fabricated ROM/init/source mail");
+}
+
 void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,std::uint32_t physical,
                          NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) {
     // This generated bank is hardware test input, not Nintendo/FreeDSP ROM.
@@ -321,9 +437,14 @@ void GeneratedSourceWalk(unsigned char* backing,NativeDSPMemoryEndpoint memory,s
     state=walk.Step();Check(state.pc==0x20 && state.instructions==8203 && state.address[0]==0 &&
           state.accumulator[0]==0 && state.status==0xe1e4 && state.index[0]==0x1000,
           "original MRR did not copy the cleared middle word into AR0 with source flags/count intact");
+    state=walk.Step();
+    Check(state.pc==0x21 && state.instructions==8204 && state.loop_depth==1 &&
+          state.stack[0]==0x21 && state.stack[2]==0x21 && state.stack[3]==0x1000 &&
+          state.address[0]==0 && state.index[0]==0x1000 && state.status==0xe1e4,
+          "original LOOP setup did not retain actual4096-word DRAM clear request");
     const auto before=walk.Registers();bool held=false;
-    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x20 && gap.opcode==0x0044;}
-    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated later LOOP/source readiness");
+    try{walk.Step();}catch(const DSPUnsupportedInstruction& gap){held=gap.pc==0x21 && gap.opcode==0x1b1e;}
+    Check(held && !DSPCheckInit() && !DSPCheckMailFromDSP(),"generated-bank qualifier fabricated SRRI/source readiness");
     Same(walk.Registers(),before);
 }
 
@@ -437,6 +558,7 @@ void Run(int argc,char** argv) {
     Same(init.Registers(),loop_hold);
     RegisterMoveGate(backing,memory,physical,mailboxes,control);
     GeneratedSourceWalk(backing,memory,physical,mailboxes,control);
+    SingleInstructionLoopGate(backing,memory,physical,mailboxes,control);
     LoopGate(backing,memory,physical,mailboxes,control);
     InstructionReadGate(backing,memory,physical,mailboxes,control);
     // Independently authored nonzero context proves each16-bit hardware family
@@ -481,7 +603,7 @@ void Run(int argc,char** argv) {
     OSRestoreInterrupts(TRUE);
     DetachNativeDSPControl();DetachNativeDSPMailboxes();ShutdownNativeInterruptController();
     ReleaseNativeDSPMemory(pin);DetachNativeDSPMEM1();
-    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk executesMRR/reachesLOOP; ROM/reset/task boot remains unavailable\n";
+    std::cout<<"original_dsp_init_prefix: actual128-byte source program runs JMP +4 status clears +AR0/WR0/IX0 loads; executes actual BLOOP; absentIROM holds genuine ILRRI. Separate generated-bank walk executesMRR/LOOPsetup/reachesSRRI; ROM/reset/task boot remains unavailable\n";
 }
 } // namespace
 int main(int argc,char** argv) {

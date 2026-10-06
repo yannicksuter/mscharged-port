@@ -1,5 +1,20 @@
 #include "platform/dsp_instruction_core.h"
 
+namespace {
+std::uint16_t QualifiedInstructionWords(std::uint16_t word) {
+    if(word==0x029f || (word&0xffe0)==0x0080 || word==0x00fe || word==0x00ff ||
+       (word&0xff00)==0x1600 || (word&0xffe0)==0x0060)return 2;
+    if(word==0 || (word&0xfff8)==0x1200 || (word&0xfff8)==0x1300 ||
+       (word>=0x8a00 && word<=0x8f00 && !(word&0xff)) ||
+       word==0x8100 || word==0x8900 || (word&0xfefc)==0x0218 ||
+       (word&0xfc00)==0x1c00 || (word&0xffe0)==0x0040 ||
+       // Exact source SRRI1b1e size only. Its memory/address effects remain
+       // unsupported and cannot be executed by this hardware slice.
+       word==0x1b1e)return 1;
+    return 0;
+}
+}
+
 namespace mscharged::platform {
 DSPUnsupportedInstruction::DSPUnsupportedInstruction(std::uint16_t address,std::uint16_t word,std::uint16_t detail)
     :std::runtime_error("DSP instruction core reached an unimplemented instruction/register/interface"),
@@ -82,6 +97,39 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
     bool branch=false;
     if (opcode==0x0000) {
         // Hardware NOP leaves cells/flags unchanged.
+    } else if ((opcode&0xffe0)==0x0040) {
+        const auto reg=static_cast<unsigned>(opcode&31);
+        std::uint16_t count;
+        if(reg<4)count=next.address[reg];
+        else if(reg<8)count=next.index[reg-4];
+        else if(reg<12)count=next.wrap[reg-8];
+        else if(reg==0x1e || reg==0x1f) {
+            const auto cell=next.accumulator[reg-0x1e];
+            const auto value=static_cast<std::int64_t>(cell)-
+                ((cell&0x8000000000ULL)?0x10000000000LL:0LL);
+            if((next.status&0x4000) && value>0x7fffffffLL)count=0x7fff;
+            else if((next.status&0x4000) && value<(-0x80000000LL))count=0x8000;
+            else count=static_cast<std::uint16_t>(cell>>16);
+        } else throw DSPUnsupportedInstruction(pc,opcode,static_cast<std::uint16_t>(reg));
+        const auto following=static_cast<std::uint16_t>(pc+1);
+        const auto body=InstructionWord(following);
+        const auto width=QualifiedInstructionWords(body);
+        if(!width || (count && (width!=1 || (body&0xffe0)==0x0040)))
+            // Only single-word positive LOOP bodies are qualified. Reject
+            // multiword/nested-LOOP endpoint ambiguity rather than claiming
+            // that the existing inclusive stack check establishes it.
+            throw DSPUnsupportedInstruction(pc,opcode,body);
+        if(count) {
+            if(next.loop_depth==next.loop_stack.size())
+                throw DSPUnsupportedInstruction(pc,opcode,0x0002);
+            next.loop_stack[next.loop_depth++]={next.stack[0],next.stack[2],next.stack[3]};
+            next.stack[0]=following;
+            next.stack[2]=following;
+            next.stack[3]=count;
+        } else {
+            next.pc=static_cast<std::uint16_t>(following+width);
+            branch=true;
+        }
     } else if ((opcode&0xffe0)==0x0060) {
         length=2;
         const auto reg=static_cast<std::uint16_t>(opcode&31);
@@ -102,15 +150,8 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
             next.stack[3]=count;
         } else {
             const auto last=InstructionWord(endpoint);
-            std::uint16_t width;
-            if(last==0x029f || (last&0xffe0)==0x0080 ||
-               last==0x00fe || last==0x00ff || (last&0xff00)==0x1600 ||
-               (last&0xffe0)==0x0060)width=2;
-            else if(last==0 || (last&0xfff8)==0x1200 || (last&0xfff8)==0x1300 ||
-                    (last>=0x8a00 && last<=0x8f00 && !(last&0xff)) ||
-                    last==0x8100 || last==0x8900 || (last&0xfefc)==0x0218 ||
-                    (last&0xfc00)==0x1c00)width=1;
-            else throw DSPUnsupportedInstruction(pc,opcode,last);
+            const auto width=QualifiedInstructionWords(last);
+            if(!width)throw DSPUnsupportedInstruction(pc,opcode,last);
             // Counter0 skips the endpoint instruction, including its operand.
             // Unknown instruction sizes remain an explicit decoder gap.
             next.pc=static_cast<std::uint16_t>(endpoint+width);
