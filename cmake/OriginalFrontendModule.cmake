@@ -22,6 +22,7 @@ add_library(charged_original_frontend_module OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/NL/glx/glxMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxModel.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glView.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glTarget.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glRenderList.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glDraw2.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glDraw3.cpp"
@@ -82,3 +83,10 @@ add_custom_target(charged_original_frontend_module_scan
     DEPENDS charged_original_frontend_module
     COMMENT "Compile original frontend/frame resources; full startup and scenes pending"
     VERBATIM)
+
+if(BUILD_TESTING)
+    add_executable(original_target_layout_tests tests/original_target_layout.cpp)
+    target_link_libraries(original_target_layout_tests PRIVATE charged_original_function_pool_abi)
+    add_dependencies(original_target_layout_tests verify_prepared)
+    add_test(NAME original_target_layout COMMAND original_target_layout_tests)
+endif()
