@@ -93,3 +93,5 @@ include(cmake/OriginalEntryModule.cmake)
 include(cmake/OriginalAudioSource.cmake)
 
 include(cmake/OriginalViewLayers.cmake)
+
+include(cmake/OriginalInterpreter.cmake)
