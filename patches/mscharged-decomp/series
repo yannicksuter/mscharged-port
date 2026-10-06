@@ -170,3 +170,4 @@
 0199-native-original-camera-data-transport.patch
 0202-native-dsp-mailbox-wire-transport.patch
 0204-native-camera-effects-wii-word-transport.patch
+0206-native-dsp-task-mem1-addresses.patch
