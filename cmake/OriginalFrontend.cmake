@@ -19,6 +19,7 @@ add_library(charged_original_frontend_records STATIC
     "${MSCHARGED_PREPARED}/src/Game/FE/tlComponentInstance.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/tlInstance.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feLibObject.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feText.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/tlTextInstance.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/tlTextInstance_runtime.cpp"
     "${MSCHARGED_PREPARED}/src/NL/utility.cpp")
@@ -108,3 +109,5 @@ if(BUILD_TESTING)
         "${original_frontend_fixture}/generated.fen")
     set_tests_properties(original_frontend_abi PROPERTIES TIMEOUT 60)
 endif()
+
+include(cmake/OriginalFrontendRender.cmake)
