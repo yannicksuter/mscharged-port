@@ -36,3 +36,4 @@
 0038-native-pe-finish-sdk-safe-point.patch
 0040-service-only-native-owner-during-thp-decoding.patch
 0039-separate-native-efb-from-window-output.patch
+0041-native-vi-interrupt-service-without-output.patch
