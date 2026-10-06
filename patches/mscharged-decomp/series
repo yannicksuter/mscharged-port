@@ -243,3 +243,4 @@
 0304-preserve-original-audio-memory-size-word.patch
 0305-native-original-audio-resource-metadata.patch
 0309-declare-native-auxiliary-reverb-interrupt-api.patch
+0306-preserve-original-AX-typed-bus-transport.patch

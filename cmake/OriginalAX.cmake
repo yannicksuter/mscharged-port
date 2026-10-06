@@ -34,7 +34,7 @@ target_link_libraries(charged_original_ax PUBLIC aurora::os)
 target_compile_features(charged_original_ax PRIVATE c_std_17)
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(charged_original_ax PRIVATE
-        -ffunction-sections -fdata-sections -fno-strict-aliasing
+        -ffunction-sections -fdata-sections -fexceptions -fno-strict-aliasing
         -Wno-unknown-pragmas)
 endif()
 
