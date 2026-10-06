@@ -214,3 +214,4 @@
 0260-native-signed-registry-scalar.patch
 0277-diagnostic-original-main-system-aspect.patch
 0264-preserve-original-effects-native-data-cells.patch
+0262-native-registry-offset-words.patch
