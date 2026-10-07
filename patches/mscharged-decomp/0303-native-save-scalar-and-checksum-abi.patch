@@ -1,6 +1,6 @@
 Subject: [PATCH] Preserve original Wii32 save scalars and checksum words on native hosts
 
-Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
+Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
 Scope: Native compiler/data ABI only; original checksum loops and save record decisions retained.
 
 diff --git a/src/NL/nlMain.cpp b/src/NL/nlMain.cpp

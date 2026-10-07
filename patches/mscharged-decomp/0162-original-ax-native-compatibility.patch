@@ -1,5 +1,5 @@
 Subject: Compile whole original AX with native SDK metadata
-Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
+Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
 
 Retain all original AX initialization, task waits, callbacks, rings, voice
 selection, control flow and arithmetic. Use canonical native SDK headers

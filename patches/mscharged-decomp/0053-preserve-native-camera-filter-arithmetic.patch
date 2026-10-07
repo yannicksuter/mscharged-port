@@ -1,6 +1,6 @@
 Subject: Preserve Wii noise wrapping and validate native camera filter inputs
 
-Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
+Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
 
 Use defined 32-bit modular noise arithmetic and bounded float-to-index
 conversion on native hosts. Initialize inactive noise displacement. Retain the

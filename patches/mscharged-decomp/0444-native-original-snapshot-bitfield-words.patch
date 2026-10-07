@@ -1,10 +1,11 @@
 Subject: [PATCH] Preserve original snapshot and ball packed-word bit positions natively
-Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
+Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
 
 Reverse only little-endian native bitfield declaration order. Retain original
 32-bit raw masks, field widths, methods, replay word and unused bits. Console
 and big-endian declarations stay unchanged. No missing source is supplied.
 
+diff --git a/include/Game/RenderSnapshot.h b/include/Game/RenderSnapshot.h
 --- a/include/Game/RenderSnapshot.h
 +++ b/include/Game/RenderSnapshot.h
 @@ -24,12 +24,22 @@
@@ -30,6 +31,7 @@ and big-endian declarations stay unchanged. No missing source is supplied.
      } bits;
  };
  
+diff --git a/include/Game/Drawable/DrawableBall.h b/include/Game/Drawable/DrawableBall.h
 --- a/include/Game/Drawable/DrawableBall.h
 +++ b/include/Game/Drawable/DrawableBall.h
 @@ -38,6 +38,16 @@

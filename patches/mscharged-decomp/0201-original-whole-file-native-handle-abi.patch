@@ -1,6 +1,6 @@
 Subject: [PATCH] adapt original NL whole-file pointer handles and native owner cleanup
 
-Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
+Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
 
 Keep source requests/callbacks/cancellation decisions. Represent actual raw
 entry addresses across the u32 public API without pointer truncation; wire
