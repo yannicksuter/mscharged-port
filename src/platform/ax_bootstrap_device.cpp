@@ -262,10 +262,15 @@ struct NativeAXBootstrapDevice::State {
     void Poll() {
         RequireOwner();
         if(servicing) {
-            // The original handler synchronously waits for its CONTINUE mail
-            // to be consumed. This nested register safe point may acknowledge
-            // only that real word; it never dispatches an IRQ or next job.
-            if(CommandsEnabled()&&frames.phase==NativeAXFramePhase::WaitingContinue&&
+            // Original handlers synchronously wait for CONTINUE consumption.
+            // A late AI period may also make the source resume callback send
+            // the next list before this outer interrupt service returns. Consume
+            // only actual expected mail at these register safe points; publish
+            // real job causes, but never recursively dispatch another IRQ.
+            if(CommandsEnabled()&&
+               (frames.phase==NativeAXFramePhase::WaitingContinue||
+                frames.phase==NativeAXFramePhase::ReadyForListSize||
+                frames.phase==NativeAXFramePhase::ReadyForListAddress)&&
                !(GetNativeDSPControlStatus().csr&Halt)) {
                 try {ConsumePending();}
                 catch(...) {phase=NativeAXBootstrapPhase::Faulted;frames.phase=NativeAXFramePhase::Faulted;throw;}
