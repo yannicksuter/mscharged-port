@@ -63,6 +63,9 @@ struct AIState {
     bool next_programmed{};
     std::uint64_t cause_ns{};
     bool queue_observed{};
+    // DMA waiting at a completed block until the owner takes the earlier cause.
+    bool held{};
+    std::uint64_t hold_start_ns{};
     mscharged::platform::NativeAIDeliveryStatus delivery{};
     char error[256]{};
 };
@@ -79,6 +82,14 @@ struct Packet {
 
 int Frequency(u32 rate) { return rate == AI_SAMPLERATE_32KHZ ? 32000 : 48000; }
 
+// Host delivery allowance. Native AI causes reach the original callback only at
+// owner safe points; the output keeps this much transferred PCM beyond one
+// device pull and one DMA block so a short owner delay is not audible. It also
+// bounds DMA catch-up after a longer host stall.
+constexpr std::uint64_t kDeliveryAllowanceNs = 12000000;
+std::uint64_t AllowanceCells(int frequency) {
+    return (kDeliveryAllowanceNs * std::uint64_t(frequency) / 1000000000ull + 7) / 8;
+}
 std::runtime_error SDLError(const char* operation) {
     return std::runtime_error(std::string(operation) + ": " + SDL_GetError());
 }
@@ -202,12 +213,13 @@ void StartOutputIfReady(AIState& state, SDL_AudioStream* stream) noexcept {
         std::snprintf(state.error, sizeof(state.error), "AI output lead query: %s", SDL_GetError());
         return;
     }
-    // One actual device pull plus one source-selected completed DMA period.
-    // Ceiling conversion keeps the margin in output-frame units at either
-    // supported source rate, including a resampled physical audio device.
+    // One actual device pull, one source-selected completed DMA period and the
+    // owner delivery allowance. Ceiling conversion keeps the margin in output
+    // frames at either source rate, including a resampled physical device.
     const auto dma_output_frames = (std::uint64_t(dma_frames) * output.freq + input.freq - 1) / input.freq;
     const auto device_output_frames = (std::uint64_t(device_frames) * output.freq + device.freq - 1) / device.freq;
-    const auto required = device_output_frames + dma_output_frames;
+    const auto allowance_output_frames = (kDeliveryAllowanceNs * std::uint64_t(output.freq) + 999999999ull) / 1000000000ull;
+    const auto required = device_output_frames + dma_output_frames + allowance_output_frames;
     const auto ready = std::uint64_t(available / SDL_AUDIO_FRAMESIZE(output));
     {
         std::lock_guard lock(state.mutex);
@@ -233,6 +245,9 @@ std::size_t Transfer(AIState& state, SDL_AudioStream* stream, bool* blocked = nu
     // stream lock. A source critical section defers this native safe point.
     NativeInterruptRead source_access;
     const auto now = SDL_GetTicksNS();
+    // The owner's own masked section or IRQ context keeps hardware replay below.
+    const bool unmasked = mscharged::platform::NativeInterruptsEnabled() &&
+                          !mscharged::platform::NativeInterruptDispatchActive();
     std::vector<Packet*> packets;
     {
         std::lock_guard lock(state.mutex);
@@ -250,8 +265,29 @@ std::size_t Transfer(AIState& state, SDL_AudioStream* stream, bool* blocked = nu
         }
         state.maximum_service_gap = std::max(state.maximum_service_gap, now - state.last_service);
         state.last_service = now;
+        // On the Wii the AID callback runs long before the next block ends. A
+        // native cause waits for an owner safe point instead. While that owner
+        // can take it, latch the next registers only after delivery; replaying
+        // registers the source has not rewritten would repeat old PCM. A masked
+        // owner, or no registered callback, keeps the hardware replay/latching.
+        const bool deliverable = state.callback &&
+            (state.owner != std::this_thread::get_id() || unmasked);
         try {
-            while (state.running && state.epoch_cells < due) {
+            if (state.held && !(state.pending && deliverable)) {
+                // Bounded catch-up: the output lead or device silence already
+                // covered a longer stall; more backlog would only add latency.
+                const auto limit = AllowanceCells(Frequency(state.rate)) + state.active_length / 32;
+                if (due > state.epoch_cells + limit) {
+                    const auto skip = due - state.epoch_cells - limit;
+                    state.epoch_cells += skip;
+                    if (state.observing) state.delivery.skipped_cells += skip;
+                }
+                if (state.observing)
+                    state.delivery.maximum_hold_ns = std::max(state.delivery.maximum_hold_ns, now - state.hold_start_ns);
+                state.held = false;
+                LatchNext(state, now);
+            }
+            while (!state.held && state.running && state.epoch_cells < due) {
                 std::memcpy(state.fifo.data() + state.active_offset,
                             reinterpret_cast<const void*>(state.active_address + state.active_offset), 32);
                 state.active_offset += 32;
@@ -270,6 +306,12 @@ std::size_t Transfer(AIState& state, SDL_AudioStream* stream, bool* blocked = nu
                 ++state.retained;
                 ++state.submitted;
                 if (state.observing) ClassifyBlock(state, packet->Data(), state.fifo.size());
+                if (state.pending && deliverable) {
+                    state.held = true;
+                    state.hold_start_ns = now;
+                    if (state.observing) ++state.delivery.held_boundaries;
+                    break;
+                }
                 LatchNext(state, ClockTime(state));
             }
         } catch (const std::exception& error) {
@@ -344,6 +386,7 @@ SDL_AudioStream* Stop(AIState& state) {
         std::lock_guard lock(state.mutex);
         state.running = false;
         state.pending = false;
+        state.held = false;
         state.output_started = false;
         ++state.generation;
         stream = state.stream;
@@ -457,6 +500,7 @@ extern "C" void AIStartDMA() {
         state.first_edge = true;
         state.error[0] = 0;
         state.pending = false;
+        state.held = false;
         ++state.generation;
         state.running = true;
     }

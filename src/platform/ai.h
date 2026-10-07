@@ -30,6 +30,9 @@ struct NativeAIStatus {
 // selection. SDL consumes each resulting FIFO block once; its pull size and
 // buffer-release callback do not determine source interrupts. Original
 // callbacks execute only at initialization/game-thread hardware safe points.
+// While that owner can take the AID cause, a completed block waits for its
+// delivery before latching the next registers, as prompt Wii interrupts would;
+// an owner inside a masked section still gets the hardware's register replay.
 bool ServiceNativeAI();
 NativeAIStatus GetNativeAIStatus();
 void ShutdownNativeAI();
@@ -77,8 +80,9 @@ void EndNativeAIObservations();
 NativeAIObservationStatus GetNativeAIObservationStatus();
 
 // The hardware DMA clock starts immediately. The separate host device starts
-// after already-transferred PCM covers its actual pull quantum plus one DMA
-// quantum; no future source PCM or interrupt is generated for this lead.
+// after already-transferred PCM covers its actual pull quantum, one DMA quantum
+// and a 12 ms owner delivery allowance; no future source PCM or interrupt is
+// generated for this lead.
 // Separate return ABI keeps the existing three status structures unchanged.
 struct NativeAIOutputStatus {
     std::uint64_t dma_start_ns{};
@@ -122,6 +126,11 @@ struct NativeAIDeliveryStatus {
     // Smallest queued input after a device pull, once output has started.
     std::uint64_t minimum_queued_input_bytes{};
     std::uint64_t maximum_queued_input_bytes{};
+    // Completed blocks that waited for owner delivery of the previous cause,
+    // the longest such wait and DMA clock cells dropped by bounded catch-up.
+    std::uint64_t held_boundaries{};
+    std::uint64_t maximum_hold_ns{};
+    std::uint64_t skipped_cells{};
 };
 NativeAIDeliveryStatus GetNativeAIDeliveryStatus();
 

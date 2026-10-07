@@ -577,11 +577,14 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                     audio.device_frequency,audio.device_frames,audio.queued_input_bytes);
         mscharged::platform::EndNativeAIObservations();
         const auto delivery=mscharged::platform::GetNativeAIDeliveryStatus();
-        std::printf("Native AI delivery: latched%llu replayed%llu coalesced%llu, callback latency max%lluns; "
-                    "source silent blocks%llu zero-tail blocks%llu/frames%llu; device short pulls%llu.\n",
+        std::printf("Native AI delivery: latched%llu replayed%llu coalesced%llu held%llu (max%lluns) skipped%llu cells, "
+                    "callback latency max%lluns; source silent blocks%llu zero-tail blocks%llu/frames%llu; device short pulls%llu.\n",
                     static_cast<unsigned long long>(delivery.latched_blocks),
                     static_cast<unsigned long long>(delivery.replayed_latches),
                     static_cast<unsigned long long>(delivery.coalesced_causes),
+                    static_cast<unsigned long long>(delivery.held_boundaries),
+                    static_cast<unsigned long long>(delivery.maximum_hold_ns),
+                    static_cast<unsigned long long>(delivery.skipped_cells),
                     static_cast<unsigned long long>(delivery.maximum_dispatch_latency_ns),
                     static_cast<unsigned long long>(delivery.silent_blocks),
                     static_cast<unsigned long long>(delivery.zero_tail_blocks),
