@@ -106,6 +106,7 @@ include(cmake/OriginalCharacterLoading.cmake)
 
 include(cmake/OriginalNPC.cmake)
 include(cmake/OriginalWorldAnimations.cmake)
+include(cmake/OriginalSpecularModule.cmake)
 
 include(cmake/OriginalSaveSources.cmake)
 
