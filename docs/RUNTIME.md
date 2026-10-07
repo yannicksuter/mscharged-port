@@ -32,12 +32,13 @@ CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset frontend
 ```
 
 The `frontend` preset reuses `build/graphics`. It runs original `main`, loading,
-frontend world setup, Boot/Intro, Title and the initial menu/save prompt.
+frontend world setup, Boot/Intro, Title and Main Menu, including the initial save prompt.
 **Menus and gameplay are still being integrated; this test can stop at
 unfinished host services.** Audio quality and performance remain in progress.
 
 Press **Enter or Space** (Wii A) to skip the intro movie through the original
-handler. Keep the game window focused. The launcher also offers **Try boot
+handler. Use the mouse pointer and Enter/Space to select menu items; Escape/Backspace
+is Wii B. Keep the game window focused. The launcher also offers **Try boot
 sequence**. Close the window to exit; omitting `--window` runs a bounded test.
 The separate `--experimental-options` shortcut requires a build without the
 original Boot script.
