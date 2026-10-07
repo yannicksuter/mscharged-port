@@ -28,11 +28,12 @@ memory. Windows, macOS, other disc regions and Wii peripherals remain unverified
 
 ```sh
 CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset frontend
-./build/graphics/mscharged --experimental-frontend --disc ./game/R4QE01.rvz --window
+./build/graphics/mscharged --disc ./game/R4QE01.rvz --window
 ```
 
 The `frontend` preset reuses `build/graphics`. It runs original `main`, loading,
 frontend world setup, Boot/Intro, Title and Main Menu, including the initial save prompt.
+An explicit `--experimental-frontend` remains available, including for INI-only startup.
 **Menus and gameplay are still being integrated; this test can stop at
 unfinished host services.** Audio quality and performance remain in progress.
 

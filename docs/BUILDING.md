@@ -74,8 +74,11 @@ containing spaces.
 ./build/release/mscharged --disc ./game/R4QE01.rvz --window --size 1280x720
 ```
 
-This still opens the launcher. Select an experimental mode explicitly; these
-settings do not select or complete game startup.
+Supplying `--disc` starts the original game runtime directly when that runtime
+is included in the build. The default launcher build reports that it is missing;
+see [experimental builds](RUNTIME.md) for the current Linux runtime. Add
+`--launcher` to open settings with a disc override. Explicit experimental modes
+keep their selected mode.
 
 ## Experimental builds
 
