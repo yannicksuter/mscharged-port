@@ -300,4 +300,7 @@
 0405-original-nis-source-and-address-compatibility.patch
 0410-original-main-audio-initialize-diagnostic.patch
 0411-admit-original-frontend-audio-task.patch
+0412-original-async-audio-diagnostic.patch
 0413-admit-original-nis-constructor-diagnostic.patch
+0414-original-boot-script-diagnostic.patch
+0415-original-main-boot-script-diagnostic.patch

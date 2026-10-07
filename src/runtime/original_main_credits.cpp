@@ -163,6 +163,13 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
     try {
         const bool frontend = scene != OriginalMainScene::Credits;
         const bool optionsScene = scene == OriginalMainScene::FrontendOptions;
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_BOOT_SCRIPT)
+        const bool sourceBoot = frontend;
+#else
+        const bool sourceBoot = false;
+#endif
+        Check(!sourceBoot || !optionsScene,
+              "Authored Boot script builds do not yet advance to Options; use FRONTEND_BOOT_SCRIPT=OFF for that diagnostic");
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         const bool sourceAudio = frontend;
 #else
@@ -345,6 +352,34 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                   "Original audio owner/initialization/configuration callback incomplete");
             std::puts("Original main audio: source owner initialized, nlxgs configuration genuinely loaded.");
         }
+        auto observeBootScript=sourceBoot ? reinterpret_cast<ObserveAudio>(
+            dlsym(module,"charged_original_boot_script_observe")) : nullptr;
+        auto bootInstruction=sourceBoot ? reinterpret_cast<int(*)()>(
+            dlsym(module,"charged_original_boot_script_instruction")) : nullptr;
+        auto bootPhase=sourceBoot ? reinterpret_cast<int(*)()>(
+            dlsym(module,"charged_original_boot_scene_phase")) : nullptr;
+        Check(!sourceBoot || (observeBootScript && bootInstruction && bootPhase),
+              "Original authored Boot observation exports unavailable");
+        unsigned lastBootFlags=0;
+        int lastBootInstruction=-2, lastBootPhase=-2;
+        std::chrono::steady_clock::time_point bootLogoStart{};
+        bool bootReady=!sourceBoot;
+        auto observeBoot = [&] {
+            if(!sourceBoot)return;
+            const auto flags=observeBootScript();
+            const int instruction=bootInstruction(), phase=bootPhase();
+            Check((flags & 27u)==27u,"Original Boot bytecode callback/header/idle owner is incomplete");
+            if(phase==3 && lastBootPhase!=3)bootLogoStart=std::chrono::steady_clock::now();
+            if(flags!=lastBootFlags || instruction!=lastBootInstruction || phase!=lastBootPhase) {
+                std::printf("Original authored Boot: VM flags%u instruction%d phase%d.\n",flags,instruction,phase);
+                std::fflush(stdout);
+                lastBootFlags=flags;lastBootInstruction=instruction;lastBootPhase=phase;
+            }
+            bootReady=flags==31u && phase==4 && idleAudio();
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+            if(bootReady)bootReady=gameAudioHardware->Status().last_active_voices==0;
+#endif
+        };
         auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
         Check(frame,"Same original-main module scene-frame export unavailable");
         auto stopMovie=reinterpret_cast<void(*)()>(dlsym(module,"charged_original_scene_stop_movie"));
@@ -391,6 +426,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // retained. No host GXInit, source pool restart or fixture font setup.
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         unsigned frames=0,draws=0,quiet=0; bool snapshot=false,encoded=false,exit=false,nativePresented=false;
+        bool bootLogoCaptured=false;
         const auto start=std::chrono::steady_clock::now(); auto previous=start;
         auto stageStart=start; unsigned resizeStage=0; bool stageAnnounced=false;
         wgpu::Texture retainedEFB;
@@ -408,12 +444,12 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 }
             }
             const auto now=std::chrono::steady_clock::now();
-            Check(interactive || now-start<std::chrono::seconds(40),"Original main Credits Vulkan pipeline timed out");
+            Check(interactive || now-start<std::chrono::seconds(sourceBoot?90:40),"Original source scene diagnostic timed out");
             if(nativeSend) {
                 const auto receipt=AuroraGXBeginDrawReceipt();
                 Check(receipt,"Native source draw receipt unavailable");
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
-                frame(delta); observeOptions(); AuroraGXEndDrawReceipt();
+                frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt();
                 AuroraGXSync(); aurora::gfx::synchronize();
                 encoded=encoded || AuroraGXWasDrawEncoded(receipt);
                 draws+=aurora_get_stats()->drawCallCount; ++frames;
@@ -421,6 +457,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 const auto presentedCopy=aurora::gfx::scanout::presented_snapshot(output);
                 nativePresented=output.framebuffer && !output.black &&
                     output.copy_revision && output.presentation_sequence>=3;
+                if(sourceBoot && lastBootPhase==3 && nativePresented && encoded && !bootLogoCaptured &&
+                        now-bootLogoStart>=std::chrono::milliseconds(600)) {
+                    ReadSelectedXFB(output,presentedCopy,dataDirectory/"original-boot-logo-xfb.ppm");
+                    bootLogoCaptured=true;
+                }
                 if(!stageAnnounced && nativePresented && encoded && now-stageStart>=std::chrono::milliseconds(500)) {
                     const auto size=aurora_get_window_size();
                     const auto& efb=aurora::webgpu::g_frameBuffer;
@@ -443,7 +484,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                     std::fflush(stdout); stageAnnounced=true;
                 }
                 if(now-stageStart>=std::chrono::seconds(resizeStage?8:3) && nativePresented && encoded &&
-                   (!optionsScene || optionsReady)) {
+                   (!optionsScene || optionsReady) && bootReady) {
                     if(!snapshot) {
                         const auto filename=resizeCheck?
                             "original-main-native-xfb-stage"+std::to_string(resizeStage)+".ppm":
@@ -465,9 +506,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if(!aurora_begin_frame()){std::this_thread::yield();continue;}
             const auto receipt=AuroraGXBeginDrawReceipt();Check(receipt,"Real source frame draw receipt unavailable");
             const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
-            frame(delta); observeOptions(); AuroraGXEndDrawReceipt();
+            frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt();
             const bool sample=!snapshot && now-start>=std::chrono::seconds(3) && quiet>=2 &&
-                (!optionsScene || optionsReady);
+                (!optionsScene || optionsReady) && bootReady;
             if(sample){EndWithSnapshot(dataDirectory/"original-main-credits.ppm");snapshot=true;}
             else aurora_end_frame();
             aurora::gfx::synchronize();
@@ -481,7 +522,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
               "Original main Credits real source draw/presentation incomplete");
         if(nativeSend) {
             std::printf("Original main selected %s: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full startup/AX/world/reset/CRT remain incomplete.\n",
-                optionsScene ? "Options tasks" : frontend ? "Boot/Intro tasks" : "Credits",frames);
+                sourceBoot ? "authored Boot script0" : optionsScene ? "Options tasks" : frontend ? "Boot/Intro tasks" : "Credits",frames);
         } else {
         std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Actual original THP/movie/mode0 audio; digital input endpoints selected; full task/automatic swap reset/AX/motion/CRT scopes remain held.\n",frames,draws);
         }
