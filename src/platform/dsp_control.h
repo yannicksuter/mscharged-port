@@ -16,6 +16,19 @@ NativeDSPControlEndpoint AttachNativeDSPControl(NativeDSPMailboxEndpoint mailbox
 void DetachNativeDSPControl();
 NativeDSPControlStatus GetNativeDSPControlStatus();
 
+// Optional native processor owns the actual cold/reset/INIT/HALT lifecycle.
+// The default diagnostic endpoint retains its original unsupported-bit failures.
+// Validate runs before CSR mutation; Apply runs after actual CSR publication.
+// Neither hook may call a source callback or write source task/global state.
+struct NativeDSPProcessorControl {
+    void (*validate)(void*, std::uint16_t previous, std::uint16_t request);
+    void (*apply)(void*, std::uint16_t previous, std::uint16_t request);
+    void* context;
+};
+void AttachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,
+                                     NativeDSPProcessorControl processor);
+void DetachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint, void* context);
+
 // Exact observed IFX DIRQ values 0/1. Nonzero unknown bits remain unsupported.
 // Requests latch DSPINT; source CPU acknowledgment is separate W1C hardware.
 void DSPBackendWriteInterruptRequest(NativeDSPControlEndpoint endpoint,std::uint16_t value);

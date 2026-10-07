@@ -18,6 +18,7 @@ struct Control {
     std::uint16_t csr{};
     NativeDSPMailboxEndpoint mailboxes{};
     NativeInterruptSource interrupt{};
+    NativeDSPProcessorControl processor{};
 };
 Control& State() {static Control state;return state;}
 void RequireCPU(const Control& state) {
@@ -50,15 +51,29 @@ extern "C" std::uint16_t ChargedDSPControlRead() {
     return state.csr;
 }
 extern "C" void ChargedDSPControlWrite(std::uint16_t value) {
-    NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);RequireCPU(state);
-    if (value&0x0801)throw std::logic_error("native DSP reset/ROM bootstrap execution is unsupported");
-    if (value&~std::uint16_t(0x01fe))
-        throw std::logic_error("native DSP DMA/ROM/status control bits are unsupported");
-    // DSPINT is W1C. Other device causes are inactive in this bounded DSP-only
-    // endpoint; AI/ARAM DMA cause transport is a separate unqualified boundary.
-    auto next=static_cast<std::uint16_t>((value&(HardwareMasks|Halt|PiInterrupt))|(state.csr&DspInterrupt));
-    if (value&DspInterrupt)next=static_cast<std::uint16_t>(next&~DspInterrupt);
-    Publish(state,next);
+    NativeInterruptGuard exclusion;auto& state=State();
+    NativeDSPProcessorControl processor{};std::uint16_t previous{};
+    {
+        std::lock_guard lock(state.mutex);RequireCPU(state);
+        processor=state.processor;previous=state.csr;
+        if (!processor.context && (value&0x0801))
+            throw std::logic_error("native DSP reset/ROM bootstrap execution is unsupported");
+        const auto allowed=processor.context?std::uint16_t(0x09ff):std::uint16_t(0x01fe);
+        if (value&~allowed)
+            throw std::logic_error("native DSP DMA/ROM/status control bits are unsupported");
+    }
+    if (processor.context)processor.validate(processor.context,previous,value);
+    {
+        std::lock_guard lock(state.mutex);RequireCPU(state);
+        // Reset is synchronous only when the attached real processor validates
+        // and completes its reset operation below. Hardware RESET self-clears;
+        // INIT remains a mode bit. Ordinary causes retain existing W1C semantics.
+        auto next=static_cast<std::uint16_t>((value&(HardwareMasks|Halt|PiInterrupt|
+            (processor.context?0x0800:0)))|(state.csr&DspInterrupt));
+        if ((value&DspInterrupt)||(value&1))next=static_cast<std::uint16_t>(next&~DspInterrupt);
+        Publish(state,next);
+    }
+    if (processor.context)processor.apply(processor.context,previous,value);
 }
 namespace mscharged::platform {
 NativeDSPControlEndpoint AttachNativeDSPControl(NativeDSPMailboxEndpoint mailboxes) {
@@ -85,10 +100,26 @@ NativeDSPControlEndpoint AttachNativeDSPControl(NativeDSPMailboxEndpoint mailbox
 void DetachNativeDSPControl() {
     NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);
     if (!state.connected)return;
-    RequireCPU(state);DetachNativeDSPMaskObserver(ApplyOSMask,&state);
+    RequireCPU(state);
+    if(state.processor.context)throw std::logic_error("native DSP control still owns a live processor");
+    DetachNativeDSPMaskObserver(ApplyOSMask,&state);
     if (!SetNativeInterruptPending(state.interrupt,false))
         throw std::logic_error("native DSP controller disappeared before hardware drain");
     state.connected=false;state.owner={};state.csr=0;
+}
+void AttachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,NativeDSPProcessorControl processor) {
+    NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);
+    RequireCPU(state);RequireDevice(state,endpoint);
+    if(!processor.context||!processor.validate||!processor.apply||state.processor.context||!(state.csr&Halt))
+        throw std::logic_error("native DSP processor needs a halted unique validated control owner");
+    state.processor=processor;
+}
+void DetachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,void* context) {
+    NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);
+    RequireCPU(state);RequireDevice(state,endpoint);
+    if(state.processor.context!=context||!(state.csr&Halt))
+        throw std::logic_error("native DSP processor must halt/drain before detachment");
+    state.processor={};
 }
 NativeDSPControlStatus GetNativeDSPControlStatus() {
     NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);

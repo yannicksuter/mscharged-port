@@ -16,6 +16,16 @@ NativeDSPMailboxEndpoint AttachNativeDSPMailboxes();
 void DetachNativeDSPMailboxes();
 NativeDSPMailboxStatus GetNativeDSPMailboxStatus();
 
+// Native processor service at actual CPU mailbox register boundaries. Runs
+// only on the attached owner after the register lock is released. Device workers
+// still cannot run original callbacks; reentrant service is the sink's duty.
+using NativeDSPMailboxService = void (*)(void*);
+void AttachNativeDSPMailboxService(NativeDSPMailboxEndpoint endpoint,
+                                    NativeDSPMailboxService service, void* context);
+void DetachNativeDSPMailboxService(NativeDSPMailboxEndpoint endpoint, void* context);
+// A halted/drained real processor resets only its hardware mail cells.
+void DSPBackendResetMailboxes(NativeDSPMailboxEndpoint endpoint);
+
 // Actual device endpoint: low reads acknowledge; low writes publish. Device
 // firmware separately requests/acknowledges its interrupt, as on the hardware.
 std::uint16_t DSPBackendMailToHigh(NativeDSPMailboxEndpoint endpoint);
