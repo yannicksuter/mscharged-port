@@ -1,4 +1,3 @@
-# Apply in this order to the exact commit in base.
 0001-use-standard-fabs-in-nlMath-header.patch
 0002-keep-mt-seed-state-32-bit.patch
 0003-fix-native-rvl-scalar-types.patch
@@ -289,13 +288,11 @@
 0384-original-material-construction-and-lifetime.patch
 0374-native-original-material-array-and-fifo-transport.patch
 0383-original-module-owned-material-array-bindings.patch
-0382-native-audio-settings-live-view.patch
 0386-native-rlg-matrix-bytes.patch
 0390-original-frontend-material-flow.patch
 0392-original-camera-and-material-render-flow.patch
 0393-original-frontend-material-registry.patch
 0388-original-hbm-resource-diagnostic.patch
-0398-temporary-original-audio-effect-factory.patch
 0396-original-shadow-layer-owners.patch
 0404-original-main-game-audio-owner-diagnostic.patch
 0401-original-sh-menu-diagnostic-factories.patch

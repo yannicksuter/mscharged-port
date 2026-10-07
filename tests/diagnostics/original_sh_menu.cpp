@@ -154,10 +154,10 @@ std::uint32_t charged_original_sh_observe(OriginalSHSnapshot* result, std::uint3
             if (item.scene_id == OptionsID)
             {
                 auto* options = static_cast<OptionsScene*>(handler);
-                out.options_state = options->mState;
-                out.options_initialized = options->mInitialized;
+                out.options_state = options->mScenePhase;
+                out.options_initialized = options->mPointerButtonsInitialized;
                 out.next_scene = static_cast<std::int32_t>(options->mNextScene);
-                if (options->mInitialized)
+                if (options->mPointerButtonsInitialized)
                     for (unsigned j = 0; j < 3; ++j)
                         ObserveButton(out, j, options->mOptionButtons[j]);
             }

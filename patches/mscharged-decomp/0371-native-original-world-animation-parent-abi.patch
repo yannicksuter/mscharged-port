@@ -1,5 +1,5 @@
 Subject: [PATCH] Preserve native world animation numeric fields and parent arrays
-Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
+Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
 
 Retain the Wii numeric/common prefix widths. Original Initialize still requests
 its parent twice and computes native array addresses with its original types.

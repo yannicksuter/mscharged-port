@@ -114,8 +114,8 @@ void Verify(const unsigned char* p,const UserInfo& user,const GameRules* rules,
         Check((first>>28)==v.mCaptain&&((first>>25)&7)==v.mSidekick1&&((first>>22)&7)==v.mSidekick2
             &&((first>>19)&7)==v.mSidekick3&&((first>>14)&31)==v.mDay&&((first>>10)&15)==v.mMonth
             &&(first&1023)==v.mYearOffset,"Original Wii first history bitfield word differs");
-        Check((second>>21)==v.mGoals&&((second>>14)&127)==v.mUnidentified2B
-            &&((second>>7)&127)==v.mUnidentified32&&(second&127)==v.mUnidentified39,
+        Check((second>>21)==v.mGoals&&((second>>14)&127)==v.mWins
+            &&((second>>7)&127)==v.mLosses&&(second&127)==v.mOvertimeLosses,
             "Original Wii second history bitfield word differs");
     }
     Check(std::memcmp(p+912,progress.record.mHistory.mWriteIndex,9)==0,"Original Cup history write indices changed");
@@ -148,7 +148,7 @@ extern "C" __attribute__((visibility("default"))) void SaveGateRun(SaveGateObser
     for(unsigned n=0;n<108;++n){auto& h=progress.record.mHistory.mRecords[n/12][n%12];
         h.mCaptain=n%16;h.mSidekick1=(n+1)%8;h.mSidekick2=(n+2)%8;h.mSidekick3=(n+3)%8;
         h.mDay=(n+5)%32;h.mMonth=(n+7)%16;h.mYearOffset=(n*19)%1024;h.mGoals=(n*31)%2048;
-        h.mUnidentified2B=(n*41)%128;h.mUnidentified32=(n*53)%128;h.mUnidentified39=(n*67)%128;}
+        h.mWins=(n*41)%128;h.mLosses=(n*53)%128;h.mOvertimeLosses=(n*67)%128;}
     for(unsigned n=0;n<9;++n)progress.record.mHistory.mWriteIndex[n]=n+1;
     StrikerChallenge challenge;
     for(unsigned n=0;n<12;++n){auto& d=challenge.mUnlocks.mCompletionDates[n];d.mDay=(n+19)%32;d.mMonth=(n+11)%16;

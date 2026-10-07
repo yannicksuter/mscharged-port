@@ -79,8 +79,8 @@ void History(Bytes* p, bool encode) {
         const std::uint32_t first=(std::uint32_t(record.mCaptain)<<28)|(record.mSidekick1<<25)
             |(record.mSidekick2<<22)|(record.mSidekick3<<19)|(record.mDay<<14)
             |(record.mMonth<<10)|record.mYearOffset;
-        const std::uint32_t second=(std::uint32_t(record.mGoals)<<21)|(record.mUnidentified2B<<14)
-            |(record.mUnidentified32<<7)|record.mUnidentified39;
+        const std::uint32_t second=(std::uint32_t(record.mGoals)<<21)|(record.mWins<<14)
+            |(record.mLosses<<7)|record.mOvertimeLosses;
         Store32(p,OriginalSaveWord(first)); Store32(p+4,OriginalSaveWord(second));
     } else {
         const auto first=OriginalSaveWord(Load32(p));
@@ -89,8 +89,8 @@ void History(Bytes* p, bool encode) {
         record.mSidekick2=(first>>22)&7; record.mSidekick3=(first>>19)&7;
         record.mDay=(first>>14)&31; record.mMonth=(first>>10)&15;
         record.mYearOffset=first&1023; record.mGoals=second>>21;
-        record.mUnidentified2B=(second>>14)&127;
-        record.mUnidentified32=(second>>7)&127; record.mUnidentified39=second&127;
+        record.mWins=(second>>14)&127;
+        record.mLosses=(second>>7)&127; record.mOvertimeLosses=second&127;
         std::memcpy(p,&record,sizeof(record));
     }
 }

@@ -1,22 +1,22 @@
 Subject: [PATCH] Preserve original ordinary-save Wii byte records on native hosts
 
-Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
+Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
 Scope: Serialized-data transport only; original save requests, callbacks, CRC and readiness decisions remain.
 
 diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp
 --- a/src/Game/DB/SaveLoad.cpp
 +++ b/src/Game/DB/SaveLoad.cpp
-@@ -3,6 +3,9 @@
- #endif
- #include "NL/nlSingleton.inl"
+@@ -5,6 +5,9 @@
  #include "Game/DB/SaveLoad.h"
+ #include <revolution/tpl_fwd.h>
+ #include <revolution/nand/NANDBanner.h>
 +#if defined(MSCHARGED_NATIVE)
 +#include "platform/save_data.h"
 +#endif
  #include "Game/TweakRegistry.h"
  
  #include "Game/GameSceneManager.h"
-@@ -654,9 +657,17 @@
+@@ -590,9 +593,17 @@
          GameInfoManager::GetInstance()->SerializeSettings((u8*)SaveBuffer + sizeof(SaveFileHeader));
      }
  
@@ -34,7 +34,7 @@ diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp
      HandleNANDResult(nlFlashWrite(SaveBuffer, alignedSize, WriteSaveFileCallback));
  }
  
-@@ -664,7 +675,11 @@
+@@ -600,7 +611,11 @@
  {
      SaveFileHeader* header = (SaveFileHeader*)SaveBuffer;
      u32 checksum = nlChecksum32((u8*)SaveBuffer + sizeof(SaveFileHeader), size - sizeof(SaveFileHeader));
@@ -46,7 +46,7 @@ diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp
      {
          nlPrintf("SAVE FILE IS CORRUPT: The checksum is incorrect.\n");
          nlFree(SaveBuffer);
-@@ -675,6 +690,10 @@
+@@ -611,6 +626,10 @@
          return false;
      }
  

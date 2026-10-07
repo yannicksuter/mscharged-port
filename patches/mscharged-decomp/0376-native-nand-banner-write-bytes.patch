@@ -1,5 +1,5 @@
 Subject: [PATCH] Keep original NAND banner writes in Wii byte order
-Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
+Upstream-base: a8187061af65aa2022bfd8dc2e32163089ea0090
 Scope: native serialized-data transport only. Retain original localization,
        buffer allocation, pixels, write length, reset pause, callbacks and flow.
 
@@ -13,7 +13,7 @@ diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp
  #endif
  #include "NL/nlSingleton.inl"
  #include "Game/DB/SaveLoad.h"
-@@ -213,7 +214,11 @@
+@@ -149,7 +150,11 @@
      memcpy(BannerBuffer->subtitle, comment, wcslen((const wchar_t*)comment) * sizeof(unsigned short));
  
      ResetTask::s_resetPaused = true;
