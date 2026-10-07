@@ -368,3 +368,5 @@
 0504-restore-original-options-done-bounds.patch
 0505-original-hall-of-fame-cup-admission.patch
 0506-original-offline-domination-selection.patch
+0511-fix-native-character-enum-storage.patch
+0512-native-cup-side-initializer.patch
