@@ -463,6 +463,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // retained. No host GXInit, source pool restart or fixture font setup.
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
         unsigned frames=0,draws=0,quiet=0; bool snapshot=false,encoded=false,exit=false,nativePresented=false;
+        unsigned fieldSlots[4]{}; std::uint32_t lastRetrace=0; bool retraceKnown=false;
         bool bootLogoCaptured=false;
         const auto start=std::chrono::steady_clock::now(); auto previous=start;
         auto stageStart=start; unsigned resizeStage=0; bool stageAnnounced=false;
@@ -483,13 +484,32 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             const auto now=std::chrono::steady_clock::now();
             Check(interactive || now-start<std::chrono::seconds(sourceBoot?90:40),"Original source scene diagnostic timed out");
             if(nativeSend) {
+                {
+                    // Host cadence observation: VI fields spent per source frame.
+                    AuroraVIHardwareState vi{};
+                    if(aurora_get_video_hardware_state(&vi)) {
+                        if(retraceKnown) ++fieldSlots[std::min(vi.retrace_count-lastRetrace,3u)];
+                        lastRetrace=vi.retrace_count; retraceKnown=true;
+                    }
+                }
                 const auto receipt=AuroraGXBeginDrawReceipt();
                 Check(receipt,"Native source draw receipt unavailable");
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
-                frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt();
+                frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt(); ++frames;
+                // The original frame performs every GX/VI wait it needs. Join the
+                // FIFO/render workers only for host observations: until the first
+                // encoded draw, every 30 frames and before a due stage or readback.
+                const bool logoDue=sourceBoot && lastBootPhase==3 && !bootLogoCaptured &&
+                    now-bootLogoStart>=std::chrono::milliseconds(600);
+                const bool stageDue=!stageAnnounced && now-stageStart>=std::chrono::milliseconds(500);
+                const bool captureDue=now-stageStart>=std::chrono::seconds(resizeStage?8:3) &&
+                    (!snapshot || (resizeCheck && resizeStage<2));
+                if(encoded && frames%30 && !logoDue && !stageDue && !captureDue) {
+                    std::this_thread::yield(); continue;
+                }
                 AuroraGXSync(); aurora::gfx::synchronize();
                 encoded=encoded || AuroraGXWasDrawEncoded(receipt);
-                draws+=aurora_get_stats()->drawCallCount; ++frames;
+                draws+=aurora_get_stats()->drawCallCount;
                 AuroraVIPresentedState output{};
                 const auto presentedCopy=aurora::gfx::scanout::presented_snapshot(output);
                 nativePresented=output.framebuffer && !output.black &&
@@ -554,6 +574,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             quiet=std::atomic_ref<const unsigned>(aurora_get_stats()->queuedPipelines).load()?0:quiet+1;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+        // Explicit terminal join: no queued GX or presentation work outlives the loop.
+        if(nativeSend){AuroraGXSync(); aurora::gfx::synchronize();}
         Check(snapshot && encoded && draws &&
               (nativeSend ? nativePresented : aurora_get_last_presentation().sequence != 0),
               "Original main Credits real source draw/presentation incomplete");
@@ -596,6 +618,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::printf("Playback observation: %.3fs, %.2f rendered frames/s; VI retraces%u, elapsed fields%llu.\n",
                     elapsed,frames/elapsed,videoClock.retrace_count,
                     static_cast<unsigned long long>(videoClock.elapsed_fields));
+        if(nativeSend)
+            std::printf("Source frame cadence: %u/%u/%u/%u frames spanned 0/1/2/3+ VI fields.\n",
+                        fieldSlots[0],fieldSlots[1],fieldSlots[2],fieldSlots[3]);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio) {
             const auto status=gameAudioHardware->Status();
