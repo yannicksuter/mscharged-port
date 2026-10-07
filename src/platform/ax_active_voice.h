@@ -44,7 +44,7 @@ struct NativeAXPreparedVoiceFrame {
     // Original mix field order: L/R, AuxA L/R, AuxB L/R, AuxC L/R,
     // S/AuxAS/AuxBS/AuxCS. Signed contributions remain wider than PCM16.
     std::array<std::array<std::int32_t, 96>, 12> buses{};
-    std::array<std::int16_t, 96> resampled{}, enveloped{};
+    std::array<std::int16_t, 96> resampled{}, enveloped{}, filtered{};
     std::uint32_t decoded_samples{};
     std::uint16_t loops{};
     bool was_running{}, end_reached{};
