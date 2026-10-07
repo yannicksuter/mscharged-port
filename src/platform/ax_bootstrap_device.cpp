@@ -1,4 +1,5 @@
 #include "platform/ax_bootstrap_device.h"
+#include "platform/ax_command_service.h"
 #include "platform/dsp_instruction_core.h"
 #include "platform/dsp_control_abi.h"
 #include "platform/interrupt_controller.h"
@@ -69,6 +70,8 @@ struct NativeAXBootstrapDevice::State {
     std::uint16_t words{};
     std::uint64_t resets{};
     std::unique_ptr<DSPInstructionCore> core;
+    bool stopped_voice_commands{};
+    NativeAXStoppedVoiceStatus frames{};
     bool servicing{},attached{};
     void RequireOwner() const {
         if(owner!=std::this_thread::get_id()||phase==NativeAXBootstrapPhase::Retired)
@@ -109,6 +112,7 @@ struct NativeAXBootstrapDevice::State {
         auto& s=*static_cast<State*>(context);s.RequireOwner();
         if(request&1) {
             s.core.reset();s.loader={};s.words=0;++s.resets;
+            s.frames={};
             DSPBackendResetMailboxes(s.mailboxes);s.phase=NativeAXBootstrapPhase::Cold;
         }
         if((request&Init)&&!(request&Halt)&&
@@ -116,6 +120,10 @@ struct NativeAXBootstrapDevice::State {
             s.PublishLoader();
     }
     void Consume(std::uint32_t word) {
+        if(phase==NativeAXBootstrapPhase::InitPrefixCompleted&&stopped_voice_commands) {
+            ConsumeFrameWord(word);
+            return;
+        }
         if(phase!=NativeAXBootstrapPhase::LoaderReady&&phase!=NativeAXBootstrapPhase::Loading)
             throw std::logic_error("AX bootstrap commands/frames are not implemented after device-init prefix");
         constexpr std::array<std::uint32_t,5> commands{0x00f3a001,0x00f3c002,0x00f3a002,0x00f3b002,0x00f3d001};
@@ -140,31 +148,119 @@ struct NativeAXBootstrapDevice::State {
             if(result.pc!=0x30||result.instructions!=21||!(GetNativeDSPControlStatus().csr&0x80))
                 throw std::logic_error("AX source initialization prefix did not complete actual IRQ");
             phase=NativeAXBootstrapPhase::InitPrefixCompleted;
+            if(stopped_voice_commands)frames.phase=NativeAXFramePhase::ReadyForListSize;
         }
     }
+    void PublishFrameCause(std::uint16_t code) {
+        if(GetNativeDSPMailboxStatus().dsp_mail_full ||
+           (GetNativeDSPControlStatus().csr&0x80))
+            throw std::logic_error("AX completed hardware cause would overwrite an unacknowledged mail/IRQ");
+        // Native hardware command semantics, not a guessed ready reply or a
+        // claim that the complete DSP image executed. The real source firmware
+        // output/END contracts are SYNC4 and YIELD2, each with a separate DIRQ.
+        DSPBackendMailFromWriteHigh(mailboxes,0xdcd1);
+        DSPBackendMailFromWriteLow(mailboxes,code);
+        DSPBackendWriteInterruptRequest(control,1);
+    }
+    void ConsumeFrameWord(std::uint32_t word) {
+        switch(frames.phase) {
+        case NativeAXFramePhase::ReadyForListSize:
+            if(word!=0x3abe0080)
+                throw std::invalid_argument("AX device requires original BABE0080 list-size mail");
+            if(GetNativeDSPMailboxStatus().dsp_mail_full ||
+               (GetNativeDSPControlStatus().csr&0x80))
+                throw std::logic_error("AX frame request precedes genuine initialization acknowledgment");
+            frames.phase=NativeAXFramePhase::ReadyForListAddress;
+            break;
+        case NativeAXFramePhase::ReadyForListAddress: {
+            // The actual command service validates contributors and all output
+            // owners before stores. Unsupported work publishes no completion.
+            DSPBackendValidateMemory(memory,word,128,false);
+            const auto result=ExecuteNativeAXZeroInputFrame(memory,word,128);
+            frames.last_list_address=word;frames.written_bytes=result.written_bytes;
+            frames.stopped_voices=result.stopped_voices;
+            frames.stereo_frames=result.stereo_frames;
+            frames.remote_samples=result.remote_samples_per_channel;
+            ++frames.processed_frames;
+            frames.phase=NativeAXFramePhase::WaitingSyncAcknowledgment;
+            PublishFrameCause(4);
+            ++frames.sync_interrupts;
+            break;
+        }
+        case NativeAXFramePhase::WaitingContinue:
+            // Original singleton-task YIELD handler writes this genuine reply,
+            // then invokes the actual source resume callback. No host flag or
+            // callback is written/invoked here.
+            if(word!=0x4dd10003 || GetNativeDSPMailboxStatus().dsp_mail_full ||
+               (GetNativeDSPControlStatus().csr&0x80))
+                throw std::invalid_argument("AX stopped device requires acknowledged source CDD10003 continuation");
+            ++frames.source_continues;++frames.completed_frames;
+            frames.phase=NativeAXFramePhase::ReadyForListSize;
+            break;
+        default:
+            throw std::logic_error("AX frame request is out of order or its hardware service is unavailable");
+        }
+    }
+    void ConsumePending() {
+        const auto high=DSPBackendMailToHigh(mailboxes);
+        if(high&0x8000) {
+            const auto low=DSPBackendMailToLow(mailboxes);
+            Consume((std::uint32_t(high&0x7fff)<<16)|low);
+        }
+    }
+    bool AdvanceAcknowledgedOutput() {
+        if(stopped_voice_commands&&frames.phase==NativeAXFramePhase::WaitingSyncAcknowledgment&&
+           !GetNativeDSPMailboxStatus().dsp_mail_full&&!(GetNativeDSPControlStatus().csr&0x80)) {
+            // Preserve the real SYNC acknowledgment before the END/YIELD cause.
+            frames.phase=NativeAXFramePhase::WaitingContinue;
+            PublishFrameCause(2);++frames.yield_interrupts;return true;
+        }
+        return false;
+    }
     void Poll() {
-        RequireOwner();if(servicing)return;
+        RequireOwner();
+        if(servicing) {
+            // The original handler synchronously waits for its CONTINUE mail
+            // to be consumed. This nested register safe point may acknowledge
+            // only that real word; it never dispatches an IRQ or next job.
+            if(stopped_voice_commands&&frames.phase==NativeAXFramePhase::WaitingContinue&&
+               !(GetNativeDSPControlStatus().csr&Halt)) {
+                try {ConsumePending();}
+                catch(...) {phase=NativeAXBootstrapPhase::Faulted;frames.phase=NativeAXFramePhase::Faulted;throw;}
+            }
+            return;
+        }
         servicing=true;
         struct Guard {bool& value;~Guard(){value=false;}} guard{servicing};
         try {
             if(!(GetNativeDSPControlStatus().csr&Halt)) {
-                const auto high=DSPBackendMailToHigh(mailboxes);
-                if(high&0x8000) {
-                    const auto low=DSPBackendMailToLow(mailboxes);
-                    Consume((std::uint32_t(high&0x7fff)<<16)|low);
-                }
+                ConsumePending();
+                AdvanceAcknowledgedOutput();
             }
             // This safe point only delivers real pending causes, never invokes
             // source callbacks directly. Source masks/context still control it.
             if(NativeInterruptsEnabled())ServiceNativeInterruptController();
-        } catch(...) {phase=NativeAXBootstrapPhase::Faulted;throw;}
+            if(!(GetNativeDSPControlStatus().csr&Halt)&&AdvanceAcknowledgedOutput()&&NativeInterruptsEnabled())
+                ServiceNativeInterruptController();
+        } catch(...) {
+            phase=NativeAXBootstrapPhase::Faulted;
+            if(stopped_voice_commands)frames.phase=NativeAXFramePhase::Faulted;
+            throw;
+        }
     }
     static void Service(void* context) {static_cast<State*>(context)->Poll();}
 };
 NativeAXBootstrapDevice::NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,NativeDSPMailboxEndpoint mailboxes,
                                                NativeDSPControlEndpoint control,std::uint32_t firmware)
+    :NativeAXBootstrapDevice(memory,mailboxes,control,firmware,NativeAXFrameMode::BootstrapOnly) {}
+NativeAXBootstrapDevice::NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,NativeDSPMailboxEndpoint mailboxes,
+                                               NativeDSPControlEndpoint control,std::uint32_t firmware,
+                                               NativeAXFrameMode frame_mode)
     :state_(std::make_unique<State>()) {
     auto& s=*state_;s.memory=memory;s.mailboxes=mailboxes;s.control=control;s.firmware=firmware;
+    if(frame_mode!=NativeAXFrameMode::BootstrapOnly&&frame_mode!=NativeAXFrameMode::StoppedVoices)
+        throw std::invalid_argument("AX device frame mode is unknown");
+    s.stopped_voice_commands=frame_mode==NativeAXFrameMode::StoppedVoices;
     s.RequireOwner();s.ValidateImage();
     const auto cold=GetNativeDSPControlStatus().csr;const auto cells=GetNativeDSPMailboxStatus();
     if(!(cold&Halt)||(cold&0x82)||cells.cpu_mail_full||cells.dsp_mail_full)
@@ -185,6 +281,9 @@ void NativeAXBootstrapDevice::ServiceOwner() {state_->Poll();}
 NativeAXBootstrapStatus NativeAXBootstrapDevice::Status() const {
     const auto& s=*state_;s.RequireOwner();return {s.phase,s.words,s.core?s.core->Registers().instructions:0,s.resets,
         (GetNativeDSPControlStatus().csr&Halt)!=0};
+}
+NativeAXStoppedVoiceStatus NativeAXBootstrapDevice::FrameStatus() const {
+    state_->RequireOwner();return state_->frames;
 }
 void NativeAXBootstrapDevice::Close() {
     auto& s=*state_;s.RequireOwner();if(!(GetNativeDSPControlStatus().csr&Halt)||s.servicing)

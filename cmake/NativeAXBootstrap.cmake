@@ -1,13 +1,16 @@
 include_guard(GLOBAL)
 include(cmake/NativeDSPControl.cmake)
+include(cmake/NativeAXCommandService.cmake)
 
-# Real native reset/loader + executed AX initialization prefix conformance only.
-# No production attachment, completed AXInit, command frames or full voice kernel.
+# Real reset/loader + executed initialization prefix; default rejects frames.
+# Explicit stopped-voice command mode remains bounded native conformance only.
+# No production attachment, active voices or full DSP firmware execution.
 add_library(charged_native_ax_bootstrap STATIC src/platform/ax_bootstrap_device.cpp)
 add_dependencies(charged_native_ax_bootstrap verify_prepared)
 target_include_directories(charged_native_ax_bootstrap PUBLIC src)
 target_compile_features(charged_native_ax_bootstrap PUBLIC cxx_std_17)
-target_link_libraries(charged_native_ax_bootstrap PUBLIC charged_native_dsp_instruction_core)
+target_link_libraries(charged_native_ax_bootstrap PUBLIC
+    charged_native_dsp_instruction_core charged_native_ax_command_service)
 
 if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT MSVC
