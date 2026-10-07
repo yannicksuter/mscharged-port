@@ -245,3 +245,4 @@
 0309-declare-native-auxiliary-reverb-interrupt-api.patch
 0306-preserve-original-AX-typed-bus-transport.patch
 0298-restore-original-options-submenus.patch
+0307-native-original-sp-sample-metadata.patch
