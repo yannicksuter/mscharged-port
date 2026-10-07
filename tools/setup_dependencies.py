@@ -22,9 +22,11 @@ RUNTIME = LAUNCHER + (
 DAWN_COMMON = (
     "third_party/abseil-cpp", "third_party/jinja2", "third_party/markupsafe",
     "third_party/spirv-headers/src",
+    # Required by the shared Dawn preparation patches, including on Metal.
+    "third_party/spirv-tools/src",
 )
 DAWN_VULKAN = (
-    "third_party/spirv-tools/src", "third_party/vulkan-headers/src",
+    "third_party/vulkan-headers/src",
     "third_party/vulkan-utility-libraries/src",
 )
 

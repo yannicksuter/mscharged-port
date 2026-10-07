@@ -106,6 +106,8 @@ class DependencySetupTests(unittest.TestCase):
 
     def test_macos_only_selected_metal_dependencies(self):
         self.run_setup(system="Darwin")
+        # Dawn patch 0002 edits this tree even when its backend is not built.
+        self.assert_leaf_pin("extern/dawn/third_party/spirv-tools/src")
         for path in DAWN_COMMON:
             self.assert_leaf_pin("extern/dawn/" + path)
         for path in (*DAWN_VULKAN, "buildtools"):

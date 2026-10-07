@@ -4,10 +4,12 @@ set(MSCHARGED_DAWN_NESTED
     third_party/abseil-cpp
     third_party/jinja2
     third_party/markupsafe
-    third_party/spirv-headers/src)
+    third_party/spirv-headers/src
+    # The shared patch series also patches this generator on Metal builds.
+    # Its source must be exported even when the SPIR-V backend is disabled.
+    third_party/spirv-tools/src)
 if(NOT APPLE)
     list(APPEND MSCHARGED_DAWN_NESTED
-        third_party/spirv-tools/src
         third_party/vulkan-headers/src
         third_party/vulkan-utility-libraries/src)
 endif()
