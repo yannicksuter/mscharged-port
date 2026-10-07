@@ -1,6 +1,6 @@
 Subject: [PATCH] Preserve original native matrix inverse destination semantics
 
-Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
+Upstream-base: 0f5a757947b8778b680d4d1ae7e6df1792a514f2
 Prepared-preimage: strict-complete-candidate after reviewed 192-patch series
 
 Confine the inherited singular-matrix exception and temporary destination to

@@ -1,6 +1,6 @@
 From: mscharged-port native adaptation
 Subject: [PATCH] Transport original vertex-animation words and retain whole source
-Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
+Upstream-base: 0f5a757947b8778b680d4d1ae7e6df1792a514f2
 
 Keep original GLVertexAnim/GetModel/Update algorithms and source requests.
 Adapt only authored Wii24-byte header,4-byte signed IDs and raw vertex copy
@@ -17,22 +17,22 @@ diff --git a/src/Game/GL/GLVertexAnim.cpp b/src/Game/GL/GLVertexAnim.cpp
 +#include "platform/rlg_record_abi.h"
  #endif
  
- struct UnidentifiedGLVertexAnimHeader_802D3D48
+ struct GLVertexAnimHeader
 @@ -22,8 +23,14 @@
  
  GLVertexAnim::GLVertexAnim(const void* data, const void* extraData)
  {
 +#if defined(MSCHARGED_NATIVE) && !defined(MSCHARGED_DIAGNOSTIC_VERTEX_ANIMATION)
-+    UnidentifiedGLVertexAnimHeader_802D3D48 nativeHeader;
++    GLVertexAnimHeader nativeHeader;
 +    mscharged::platform::DecodeRLGVertexAnimWords(&nativeHeader, data, 6);
-+    const UnidentifiedGLVertexAnimHeader_802D3D48* header = &nativeHeader;
++    const GLVertexAnimHeader* header = &nativeHeader;
 +#else
-     const UnidentifiedGLVertexAnimHeader_802D3D48* header =
-         (const UnidentifiedGLVertexAnimHeader_802D3D48*)data;
+     const GLVertexAnimHeader* header =
+         (const GLVertexAnimHeader*)data;
 +#endif
-     m_uHashID = header->m_00;
-     m_nNumFrames = header->m_04;
-     m_nNumVertices = header->m_08;
+     m_uHashID = header->hashID;
+     m_nNumFrames = header->numFrames;
+     m_nNumVertices = header->numVertices;
 @@ -40,7 +47,11 @@
      m_pModel = 0;
  

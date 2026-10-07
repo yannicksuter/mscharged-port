@@ -24,6 +24,7 @@ function(mscharged_add_original_frontend_network_owner_diagnostic target)
         "${MSCHARGED_PREPARED}/src/NL/plat/SocketNetwork.cpp"
         "${MSCHARGED_PREPARED}/src/Game/NetworkMessageRegistry.cpp"
         "${MSCHARGED_PREPARED}/src/Game/NetworkMessages.cpp"
+        "${MSCHARGED_PREPARED}/src/Game/NetworkGameStartMessage.cpp"
         "${MSCHARGED_PREPARED}/src/Game/InputRouter.cpp"
         "${MSCHARGED_PREPARED}/src/Game/NetTournManager.cpp"
         "${MSCHARGED_PREPARED}/src/Game/NetworkDraft.cpp"

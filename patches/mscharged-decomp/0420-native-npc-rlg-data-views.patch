@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Preserve Wii RLG bytes beneath original native weight and skin consumers
-Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
+Upstream-base: 0f5a757947b8778b680d4d1ae7e6df1792a514f2
 
 diff --git a/src/NL/gl/glLoadModel.cpp b/src/NL/gl/glLoadModel.cpp
 --- a/src/NL/gl/glLoadModel.cpp

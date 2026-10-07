@@ -1,6 +1,6 @@
 From: mscharged-port original-source integration
 Subject: Restore original save-owner construction in the frontend diagnostic
-Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
+Upstream-base: 0f5a757947b8778b680d4d1ae7e6df1792a514f2
 
 Retire the named bootstrap omission for the literal CupManager, StatsTracker
 and StrikerChallenge construction blocks, retaining their original order and

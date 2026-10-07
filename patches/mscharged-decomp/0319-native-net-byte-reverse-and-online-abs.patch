@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Native NET byte-reverse primitives and original integer abs
-Upstream-base: 5f9047649dd6cfcf1a3268cf79be2e3d58d9a6c3
+Upstream-base: 0f5a757947b8778b680d4d1ae7e6df1792a514f2
 
 Original PPC byte-reverse load/store read/write little-endian memory for the
 NET digest helpers. Encode those four bytes explicitly on the host; the
