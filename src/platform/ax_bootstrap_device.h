@@ -1,12 +1,23 @@
 #pragma once
 #include "platform/dsp_control.h"
 #include "platform/dsp_memory.h"
+#include "platform/ax_command_service.h"
 #include <array>
 #include <cstdint>
 #include <memory>
 
 namespace mscharged::platform {
 class DSPInstructionCore;
+// Explicit native hardware processor only: callback returns after genuine
+// checked command/PB/output stores. It never invokes source callbacks or mails.
+struct NativeAXDeviceFrameResult {
+    std::uint16_t consumed_words{},stopped_voices{},stereo_frames{},remote_samples_per_channel{};
+    std::uint32_t written_bytes{};
+};
+struct NativeAXFrameProcessor {
+    void* context{};
+    NativeAXDeviceFrameResult (*process)(void*,NativeDSPMemoryEndpoint,std::uint32_t,std::size_t){};
+};
 enum class NativeAXBootstrapPhase { Cold, LoaderReady, Loading, InitPrefixCompleted, Faulted, Retired };
 struct NativeAXBootstrapStatus {
     NativeAXBootstrapPhase phase;
@@ -33,7 +44,9 @@ struct NativeAXStoppedVoiceStatus {
 // owns all task flags/callbacks. The default still rejects every frame request.
 // Explicit StoppedVoices mode implements native hardware command semantics
 // for the qualified zero-input slice only, not full DSP firmware execution.
-// Active voices/AUX/nonzero inputs remain errors, never silence or readiness.
+// Explicit native providers can attach only after the acknowledged init prefix;
+// each retains its own real processing/bounds/unsupported gates. An attachment
+// is not full firmware/kernel readiness or admission of an original game cue.
 class NativeAXBootstrapDevice {
 public:
     NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,
@@ -55,6 +68,14 @@ public:
     ~NativeAXBootstrapDevice();
     NativeAXBootstrapDevice(const NativeAXBootstrapDevice&)=delete;
     NativeAXBootstrapDevice& operator=(const NativeAXBootstrapDevice&)=delete;
+    // Bounded alternative hardware processing after the actual init prefix and
+    // its source acknowledgment. Default/bootstrap behavior stays unchanged.
+    // Caller owns this provider until actual halt/drain and explicit detach.
+    // Identity gate for borrowing actual initialized chip state, not a caller
+    // context or a separate initialized core.
+    void RequireRetainedChip(const DSPInstructionCore& chip) const;
+    void AttachFrameProcessor(NativeAXFrameProcessor processor);
+    void DetachFrameProcessor(void* context);
     void ServiceOwner();
     NativeAXBootstrapStatus Status() const;
     NativeAXStoppedVoiceStatus FrameStatus() const;

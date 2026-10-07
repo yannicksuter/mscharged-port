@@ -354,3 +354,22 @@ DSPInstructionRegisters DSPInstructionCore::Step() {
     registers_=next;return registers_;
 }
 } // namespace mscharged::platform
+
+namespace mscharged::platform {
+void DSPInstructionCore::ValidateNativeDataWords(std::uint16_t first,const std::uint16_t* expected,
+                                               std::size_t count) const {
+    if(!control_)throw std::logic_error("native DSP data context requires actual connected hardware");
+    RequireHardwareEndpoints(mailboxes_,*control_);
+    if(!expected||!count||first>=WORDS||count>WORDS-first)
+        throw std::invalid_argument("native DSP data context has an invalid extent");
+    for(std::size_t i=0;i<count;++i)
+        if(!data_valid_[first+i]||data_[first+i]!=expected[i])
+            throw std::logic_error("native DSP data context is uninitialized or changed before hardware commit");
+}
+void DSPInstructionCore::CommitNativeDataWords(std::uint16_t first,const std::uint16_t* expected,
+                                             const std::uint16_t* after,std::size_t count) {
+    if(!after)throw std::invalid_argument("native DSP data context has no actual next words");
+    ValidateNativeDataWords(first,expected,count);
+    for(std::size_t i=0;i<count;++i)data_[first+i]=after[i];
+}
+}

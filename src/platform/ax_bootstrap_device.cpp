@@ -77,6 +77,8 @@ struct NativeAXBootstrapDevice::State {
     DSPInstructionCore* core{};
     DSPInstructionCore* retained_chip{};
     bool stopped_voice_commands{};
+    NativeAXFrameProcessor processor{};
+    bool CommandsEnabled() const noexcept {return stopped_voice_commands||processor.process;}
     NativeAXStoppedVoiceStatus frames{};
     bool servicing{},attached{};
     void RequireOwner() const {
@@ -108,6 +110,8 @@ struct NativeAXBootstrapDevice::State {
     static void ValidateControl(void* context,std::uint16_t previous,std::uint16_t request) {
         auto& s=*static_cast<State*>(context);s.RequireOwner();
         if(request&2)throw std::logic_error("AX bootstrap PI interrupt/task continuation is not implemented");
+        if((request&1)&&s.processor.process)
+            throw std::logic_error("AX hardware processor must halt/drain/detach before reset");
         if((request&1)&&!(request&Halt))
             throw std::logic_error("AX bootstrap reset requires actual halted/drained source device");
         if((request&Init)&&(!(previous&Init)||(!(request&Halt)&&s.phase==NativeAXBootstrapPhase::Cold)))s.ValidateImage();
@@ -128,7 +132,7 @@ struct NativeAXBootstrapDevice::State {
             s.PublishLoader();
     }
     void Consume(std::uint32_t word) {
-        if(phase==NativeAXBootstrapPhase::InitPrefixCompleted&&stopped_voice_commands) {
+        if(phase==NativeAXBootstrapPhase::InitPrefixCompleted&&CommandsEnabled()) {
             ConsumeFrameWord(word);
             return;
         }
@@ -185,7 +189,13 @@ struct NativeAXBootstrapDevice::State {
             // The actual command service validates contributors and all output
             // owners before stores. Unsupported work publishes no completion.
             DSPBackendValidateMemory(memory,word,128,false);
-            const auto result=ExecuteNativeAXZeroInputFrame(memory,word,128);
+            NativeAXDeviceFrameResult result;
+            if(processor.process)result=processor.process(processor.context,memory,word,128);
+            else {
+                const auto zero=ExecuteNativeAXZeroInputFrame(memory,word,128);
+                result={zero.consumed_words,zero.stopped_voices,zero.stereo_frames,
+                        zero.remote_samples_per_channel,zero.written_bytes};
+            }
             frames.last_list_address=word;frames.written_bytes=result.written_bytes;
             frames.stopped_voices=result.stopped_voices;
             frames.stereo_frames=result.stereo_frames;
@@ -218,7 +228,7 @@ struct NativeAXBootstrapDevice::State {
         }
     }
     bool AdvanceAcknowledgedOutput() {
-        if(stopped_voice_commands&&frames.phase==NativeAXFramePhase::WaitingSyncAcknowledgment&&
+        if(CommandsEnabled()&&frames.phase==NativeAXFramePhase::WaitingSyncAcknowledgment&&
            !GetNativeDSPMailboxStatus().dsp_mail_full&&!(GetNativeDSPControlStatus().csr&0x80)) {
             // Preserve the real SYNC acknowledgment before the END/YIELD cause.
             frames.phase=NativeAXFramePhase::WaitingContinue;
@@ -232,7 +242,7 @@ struct NativeAXBootstrapDevice::State {
             // The original handler synchronously waits for its CONTINUE mail
             // to be consumed. This nested register safe point may acknowledge
             // only that real word; it never dispatches an IRQ or next job.
-            if(stopped_voice_commands&&frames.phase==NativeAXFramePhase::WaitingContinue&&
+            if(CommandsEnabled()&&frames.phase==NativeAXFramePhase::WaitingContinue&&
                !(GetNativeDSPControlStatus().csr&Halt)) {
                 try {ConsumePending();}
                 catch(...) {phase=NativeAXBootstrapPhase::Faulted;frames.phase=NativeAXFramePhase::Faulted;throw;}
@@ -253,7 +263,7 @@ struct NativeAXBootstrapDevice::State {
                 ServiceNativeInterruptController();
         } catch(...) {
             phase=NativeAXBootstrapPhase::Faulted;
-            if(stopped_voice_commands)frames.phase=NativeAXFramePhase::Faulted;
+            if(CommandsEnabled())frames.phase=NativeAXFramePhase::Faulted;
             throw;
         }
     }
@@ -292,6 +302,31 @@ NativeAXBootstrapDevice::~NativeAXBootstrapDevice() {
         std::terminate();
     }
 }
+void NativeAXBootstrapDevice::RequireRetainedChip(const DSPInstructionCore& chip) const {
+    const auto& s=*state_;s.RequireOwner();
+    if(s.phase!=NativeAXBootstrapPhase::InitPrefixCompleted||s.retained_chip!=&chip||s.core!=&chip)
+        throw std::logic_error("AX normal context must belong to the actual initialized retained chip");
+}
+void NativeAXBootstrapDevice::AttachFrameProcessor(NativeAXFrameProcessor processor) {
+    NativeInterruptGuard exclusion;auto& s=*state_;s.RequireOwner();
+    if(!processor.context||!processor.process||s.processor.process||s.servicing||
+       s.phase!=NativeAXBootstrapPhase::InitPrefixCompleted||
+       (s.frames.phase!=NativeAXFramePhase::Unavailable&&s.frames.phase!=NativeAXFramePhase::ReadyForListSize)||
+       GetNativeDSPMailboxStatus().cpu_mail_full||GetNativeDSPMailboxStatus().dsp_mail_full||
+       (GetNativeDSPControlStatus().csr&0x84))
+        throw std::logic_error("AX native frame processor requires an acknowledged idle original init prefix");
+    s.processor=processor;s.frames.phase=NativeAXFramePhase::ReadyForListSize;
+}
+void NativeAXBootstrapDevice::DetachFrameProcessor(void* context) {
+    NativeInterruptGuard exclusion;auto& s=*state_;s.RequireOwner();
+    if(!s.processor.process||s.processor.context!=context||s.servicing||
+       !(GetNativeDSPControlStatus().csr&Halt)||
+       GetNativeDSPMailboxStatus().cpu_mail_full||GetNativeDSPMailboxStatus().dsp_mail_full||
+       (GetNativeDSPControlStatus().csr&0x80)||
+       (s.frames.phase!=NativeAXFramePhase::ReadyForListSize&&s.frames.phase!=NativeAXFramePhase::Faulted))
+        throw std::logic_error("AX native frame processor needs real halted/drained owner retirement");
+    s.processor={};if(!s.stopped_voice_commands)s.frames.phase=NativeAXFramePhase::Unavailable;
+}
 void NativeAXBootstrapDevice::ServiceOwner() {state_->Poll();}
 NativeAXBootstrapStatus NativeAXBootstrapDevice::Status() const {
     const auto& s=*state_;s.RequireOwner();return {s.phase,s.words,(s.core&&s.words==10)?s.core->Registers().instructions:0,s.resets,
@@ -303,6 +338,7 @@ NativeAXStoppedVoiceStatus NativeAXBootstrapDevice::FrameStatus() const {
 void NativeAXBootstrapDevice::Close() {
     auto& s=*state_;s.RequireOwner();if(!(GetNativeDSPControlStatus().csr&Halt)||s.servicing)
         throw std::logic_error("AX bootstrap processor must halt/drain before owner retirement");
+    if(s.processor.process)throw std::logic_error("AX hardware processor must detach before device retirement");
     DetachNativeDSPMailboxService(s.mailboxes,&s);DetachNativeDSPProcessorControl(s.control,&s);
     if(s.retained_chip)s.retained_chip->PauseHaltedExecution();
     s.owned_core.reset();s.core=nullptr;s.attached=false;s.phase=NativeAXBootstrapPhase::Retired;
