@@ -1,11 +1,14 @@
 #include "platform/rlg_geometry_bytes.h"
 #include "platform/game_allocation_ownership.h"
 #include "platform/host_metadata.h"
+#include "Game/GL/ShaderSkinMesh.h"
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <new>
 #include <stdexcept>
+#include <type_traits>
 
 namespace mscharged::platform
 {
@@ -15,6 +18,18 @@ void RequireWiiCopy(const void* source, std::size_t bytes)
 {
     if (FindGameByteDomain(source, bytes) != GameByteDomain::WiiSerialized)
         throw std::invalid_argument("RLG source copy requires completed owned Wii bytes");
+}
+void RequireOwnedWiiRead(const void* source, std::size_t bytes)
+{
+    GameCompletedSpan completed{};
+    if (!FindGameCompletedSpan(source, bytes, completed))
+        throw std::invalid_argument("RLG skin read leaves its completed original owner");
+    RequireWiiCopy(source, bytes);
+}
+std::uint32_t SkinWord(const unsigned char* source) noexcept
+{
+    return (std::uint32_t(source[0]) << 24) | (std::uint32_t(source[1]) << 16)
+        | (std::uint32_t(source[2]) << 8) | source[3];
 }
 struct WeightRows
 {
@@ -78,6 +93,65 @@ void CopyRLGNativeMatrices(void* output, const void* source, std::size_t bytes)
         std::memcpy(native + offset, &bits, sizeof(bits));
     }
     write.Complete(GameByteDomain::NativeHeader);
+}
+
+std::uint32_t ReadRLGSkinWord(const void* source)
+{
+    RequireOwnedWiiRead(source, sizeof(std::uint32_t));
+    return SkinWord(static_cast<const unsigned char*>(source));
+}
+
+void ReadRLGSkinMatrix(nlMatrix4& output, const void* source)
+{
+    static_assert(sizeof(nlMatrix4) == 64);
+    static_assert(std::is_trivially_copyable_v<nlMatrix4>);
+    RequireOwnedWiiRead(source, sizeof(nlMatrix4));
+    std::array<std::uint32_t, 16> native{};
+    const auto* raw = static_cast<const unsigned char*>(source);
+    for (std::size_t i = 0; i < native.size(); ++i)
+        native[i] = SkinWord(raw + i * 4);
+    // No inversion/pose arithmetic here: the original factory still owns it.
+    std::memcpy(&output, native.data(), sizeof(output));
+}
+
+const MorphDelta* ReadRLGSkinMorphDeltas(const void* source,
+    std::size_t count, std::size_t sourceStride)
+{
+    static_assert(sizeof(MorphDelta) == 16);
+    static_assert(offsetof(MorphDelta, delta) == 0);
+    static_assert(offsetof(MorphDelta, index) == 12);
+    static_assert(sizeof(MorphDelta::index) == 4);
+    static_assert(std::is_trivially_copyable_v<MorphDelta>);
+    // A zero-count original list retains its source pointer without reading or
+    // allocating a record. The sixteen current NPC templates use this path.
+    if (!count) return static_cast<const MorphDelta*>(source);
+    if (sourceStride != sizeof(MorphDelta))
+        throw std::invalid_argument("Authored morph record stride remains unqualified");
+    if (count > std::numeric_limits<std::size_t>::max() / sizeof(MorphDelta))
+        throw std::length_error("Original morph record byte extent overflows");
+    const auto bytes = count * sizeof(MorphDelta);
+    RequireOwnedWiiRead(source, bytes);
+    GameNativeBackingSpan previous{};
+    if (FindGameNativeBacking(source, bytes, previous))
+    {
+        if (previous.bytes != bytes)
+            throw std::invalid_argument("Original morph owner has a different native view");
+        return static_cast<const MorphDelta*>(previous.data);
+    }
+    GameNativeBackingReservation backing(source, bytes, bytes);
+    auto* output = static_cast<MorphDelta*>(backing.Data());
+    const auto* raw = static_cast<const unsigned char*>(source);
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        std::array<std::uint32_t, 4> words{};
+        for (std::size_t j = 0; j < words.size(); ++j)
+            words[j] = SkinWord(raw + i * 16 + j * 4);
+        MorphDelta native;
+        std::memcpy(&native, words.data(), sizeof(native));
+        new (output + i) MorphDelta(native);
+    }
+    backing.Commit();
+    return output;
 }
 
 NativeRLGWeightRows::NativeRLGWeightRows(const void* source, std::size_t vertices,

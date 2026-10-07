@@ -1,5 +1,10 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
+
+class nlMatrix4;
+struct MorphDelta;
+
 namespace mscharged::platform
 {
 // Preserve opaque Wii GPU vertex bytes and publish their real completed source
@@ -10,6 +15,14 @@ void CopyRLGNativeIndices(void* output, const void* source, std::size_t bytes);
 // Original GLMatrix records are sixteen numeric float words consumed by the CPU.
 // The caller retains its original 64-byte size mask and owning allocation.
 void CopyRLGNativeMatrices(void* output, const void* source, std::size_t bytes);
+
+// The original skin factory keeps its chunk walk, counts and allocations.
+// Its serialized IDs/counts are Wii32 and bind matrices contain sixteen
+// big-endian float words. Morph records remain borrowed from their raw owner.
+std::uint32_t ReadRLGSkinWord(const void* source);
+void ReadRLGSkinMatrix(nlMatrix4& output, const void* source);
+const MorphDelta* ReadRLGSkinMorphDeltas(const void* source,
+    std::size_t count, std::size_t sourceStride);
 
 enum class RLGWeightAccess { ReadOnly, ReadWrite };
 // Only original CPU float consumers use this scoped row view. The original
