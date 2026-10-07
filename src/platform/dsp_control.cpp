@@ -136,4 +136,8 @@ void DSPBackendRequireInstructionExecution(NativeDSPControlEndpoint endpoint,std
     if ((state.csr&PiInterrupt) && (dsp_status&0x0800))
         throw std::logic_error("native DSP external interrupt vector/stack execution is unsupported");
 }
+void DSPBackendHaltExecution(NativeDSPControlEndpoint endpoint) {
+    auto& state=State();std::lock_guard lock(state.mutex);RequireDevice(state,endpoint);
+    Publish(state,static_cast<std::uint16_t>(state.csr|Halt));
+}
 } // namespace mscharged::platform

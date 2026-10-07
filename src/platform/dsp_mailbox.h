@@ -30,6 +30,9 @@ void DSPBackendResetMailboxes(NativeDSPMailboxEndpoint endpoint);
 // firmware separately requests/acknowledges its interrupt, as on the hardware.
 std::uint16_t DSPBackendMailToHigh(NativeDSPMailboxEndpoint endpoint);
 std::uint16_t DSPBackendMailToLow(NativeDSPMailboxEndpoint endpoint);
+// DSP-side read of its own outgoing high/status cell. It neither acknowledges
+// the mail nor calls CPU service/handlers; the CPU low read owns acknowledgment.
+std::uint16_t DSPBackendMailFromHigh(NativeDSPMailboxEndpoint endpoint);
 void DSPBackendMailFromWriteHigh(NativeDSPMailboxEndpoint endpoint,std::uint16_t value);
 void DSPBackendMailFromWriteLow(NativeDSPMailboxEndpoint endpoint,std::uint16_t value);
 bool DSPBackendSetInterrupt(NativeDSPMailboxEndpoint endpoint,bool asserted);

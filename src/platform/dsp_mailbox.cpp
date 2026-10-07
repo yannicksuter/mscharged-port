@@ -117,6 +117,10 @@ std::uint16_t DSPBackendMailToLow(NativeDSPMailboxEndpoint endpoint) {
     auto& state=State();std::lock_guard lock(state.mutex);RequireBackend(state,endpoint);
     return state.to_dsp.Low();
 }
+std::uint16_t DSPBackendMailFromHigh(NativeDSPMailboxEndpoint endpoint) {
+    auto& state=State();std::lock_guard lock(state.mutex);RequireBackend(state,endpoint);
+    return state.from_dsp.High();
+}
 void DSPBackendMailFromWriteHigh(NativeDSPMailboxEndpoint endpoint,std::uint16_t value) {
     auto& state=State();std::lock_guard lock(state.mutex);RequireBackend(state,endpoint);
     state.from_dsp.WriteHigh(value);

@@ -33,4 +33,7 @@ void DetachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint, void* co
 // Requests latch DSPINT; source CPU acknowledgment is separate W1C hardware.
 void DSPBackendWriteInterruptRequest(NativeDSPControlEndpoint endpoint,std::uint16_t value);
 void DSPBackendRequireInstructionExecution(NativeDSPControlEndpoint endpoint,std::uint16_t dsp_status);
+// The actual DSP HALT opcode sets the hardware CSR bit. It preserves causes,
+// enables and other control state and invokes no CPU/source callback.
+void DSPBackendHaltExecution(NativeDSPControlEndpoint endpoint);
 } // namespace mscharged::platform
