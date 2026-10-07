@@ -36,3 +36,5 @@ if(BUILD_TESTING AND TARGET native_ax_source_fixture)
             ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
     endif()
 endif()
+
+include(cmake/NativeAXADPCM.cmake)
