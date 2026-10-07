@@ -331,3 +331,4 @@
 0445-native-rfl-shape-data.patch
 0441-native-rfl-cached-resource.patch
 0448-adapt-original-character-skin-array-byte-domains.patch
+0449-native-original-drawable-ball-owner-addresses.patch
