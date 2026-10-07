@@ -262,3 +262,4 @@
 0333-native-original-ipc-heap-addresses.patch
 0329-native-original-os-message-cell-abi.patch
 0336-native-original-nand-compiler-abi.patch
+0332-native-lower-camera-owner-compiler-and-address-abi.patch
