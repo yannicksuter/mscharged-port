@@ -98,6 +98,21 @@ struct DeviceLease
 struct MemoryStorage { std::size_t bytes; const void* owner; std::uint64_t incarnation; };
 using MemoryStorageSpans=std::map<std::uintptr_t,MemoryStorage,std::less<std::uintptr_t>,
     HostMetadataAllocator<std::pair<const std::uintptr_t,MemoryStorage>>>;
+struct HeapMetadata {
+    void* data;
+    std::size_t bytes;
+    std::uintptr_t source;
+    std::size_t source_bytes;
+    HeapMetadata(std::uintptr_t base,std::size_t logical,std::size_t physical)
+        : data(ChargedNativeMetadataAllocate(physical)),bytes(physical),source(base),source_bytes(logical) {}
+    HeapMetadata(const HeapMetadata&)=delete;
+    HeapMetadata& operator=(const HeapMetadata&)=delete;
+    HeapMetadata(HeapMetadata&& other) noexcept
+        : data(std::exchange(other.data,nullptr)),bytes(other.bytes),source(other.source),source_bytes(other.source_bytes) {}
+    ~HeapMetadata() { ChargedNativeMetadataRelease(data); }
+};
+using HeapMetadataRecords=std::map<std::uintptr_t,HeapMetadata,std::less<std::uintptr_t>,
+    HostMetadataAllocator<std::pair<const std::uintptr_t,HeapMetadata>>>;
 struct Allocation
 {
     MemoryAllocator* owner;
@@ -111,6 +126,7 @@ struct Allocation
     GraphicsStorageSpans graphics_storage;
     NativeBackings native_backings;
     MemoryStorageSpans memory_storage;
+    HeapMetadataRecords heap_metadata;
     DeviceLease device;
 };
 using Records = std::map<std::uintptr_t, Allocation, std::less<std::uintptr_t>,
@@ -157,11 +173,20 @@ void RetireDeviceRange(Records& records, std::uintptr_t address, unsigned long b
     auto last = records.lower_bound(address + bytes);
     for (auto it = first; it != last; ++it) it->second.device.Reset();
 }
+bool Overlaps(std::uintptr_t a, std::size_t n, std::uintptr_t b, std::size_t m);
+void ValidateNoLiveHeapMetadata(Records& records,std::uintptr_t address,std::size_t bytes)
+{
+    for(const auto& [base,allocation]:records)
+        for(const auto& [key,heap]:allocation.heap_metadata)
+            if(Overlaps(heap.source,heap.source_bytes,address,bytes))
+                throw std::logic_error("Original allocation still owns live native MEM headers");
+}
 void EraseBackingRange(Records& records, std::uintptr_t address, unsigned long bytes)
 {
     // Child heaps can be contained in an allocation from another original heap.
     // Retiring that backing invalidates their metadata without running new game
     // destructors or altering the original bulk-discard operation.
+    ValidateNoLiveHeapMetadata(records,address,bytes);
     RetireDeviceRange(records, address, bytes);
     auto first = records.lower_bound(address);
     auto last = records.lower_bound(address + bytes);
@@ -199,6 +224,40 @@ GameAllocationSpan Describe(Records::iterator found)
 {
     return {reinterpret_cast<void*>(found->first), found->second.bytes,
             found->second.owner, found->second.incarnation};
+}
+struct HeapFound { Records::iterator allocation; HeapMetadataRecords::iterator heap; };
+HeapFound HeapOwner(Records& records,const void* owner) {
+    const auto address=reinterpret_cast<std::uintptr_t>(owner);
+    for(auto a=records.begin();a!=records.end();++a) {
+        auto h=a->second.heap_metadata.find(address);
+        if(h!=a->second.heap_metadata.end())return {a,h};
+    }
+    return {records.end(),{}};
+}
+GameHeapMetadataSpan DescribeHeap(HeapFound found) {
+    const auto& h=found.heap->second;
+    return {h.data,h.bytes,reinterpret_cast<const void*>(h.source),h.source_bytes,Describe(found.allocation)};
+}
+void ValidateHeapChildren(Records& records,HeapFound found,const void* pointer,std::size_t bytes) {
+    const auto address=reinterpret_cast<std::uintptr_t>(pointer);
+    for(auto& [base,a]:records)for(auto& [key,h]:a.heap_metadata)
+        if(key!=found.heap->first && Overlaps(address,bytes,h.source,h.source_bytes)
+            && Contains(found.heap->second.source,found.heap->second.source_bytes,h.source,h.source_bytes))
+            throw std::logic_error("Source MEM retirement still contains a live child heap");
+}
+void ValidateHeapStorageRetirement(HeapFound found) {
+    // Exactly the same crossing checks required by RetireMemory, before the
+    // original heap/list or bytes can change. No callback is invoked here.
+    auto& parent=found.allocation->second;
+    for(const auto& [address,child]:parent.memory_storage) {
+        if(child.owner!=reinterpret_cast<const void*>(found.heap->first))continue;
+        for(const auto& [base,span]:parent.byte_spans)
+            if(Overlaps(base,span.bytes,address,child.bytes) && !Contains(address,child.bytes,base,span.bytes))
+                throw std::logic_error("MEM retirement found a crossing completed domain");
+        for(const auto& [base,span]:parent.graphics_storage)
+            if(Overlaps(base,span.bytes,address,child.bytes) && !Contains(address,child.bytes,base,span.bytes))
+                throw std::logic_error("MEM retirement cuts live graphics storage");
+    }
 }
 MemoryStorageSpans::iterator ContainingMemory(Allocation& allocation, std::uintptr_t address, std::size_t count) {
     auto& spans=allocation.memory_storage;
@@ -384,6 +443,17 @@ void RetireNativeBackings(Allocation& owner,std::uintptr_t address,std::size_t b
         else ++i;
     }
 }
+struct PendingHeapMetadata {
+    std::uintptr_t allocation;
+    std::uint64_t incarnation;
+    HeapMetadataRecords::node_type record;
+    PendingHeapMetadata(Records::iterator parent,std::uintptr_t base,std::size_t logical,std::size_t physical)
+        : allocation(parent->first),incarnation(parent->second.incarnation) {
+        HeapMetadataRecords temporary;
+        temporary.emplace(0,HeapMetadata(base,logical,physical));
+        record=temporary.extract(0);
+    }
+};
 struct PendingMemoryStorage {
     std::uintptr_t allocation;
     std::uint64_t incarnation;
@@ -857,9 +927,113 @@ std::uint32_t ReadGameChunkWord(const void* header, unsigned word)
     return word ? size : id;
 }
 
+GameHeapMetadataReservation::GameHeapMetadataReservation(const void* source,std::size_t sourceBytes,
+                                                             std::size_t nativeBytes):pending_(nullptr) {
+    if(!source || !sourceBytes || !nativeBytes)
+        throw std::invalid_argument("MEM metadata requires a real positive source region");
+    auto& state=State();std::lock_guard lock(state.mutex);
+    const auto address=reinterpret_cast<std::uintptr_t>(source);
+    auto parent=Containing(state.records,address,sourceBytes);
+    if(parent==state.records.end())throw std::invalid_argument("MEM region has no live original allocation");
+    void* storage=ChargedNativeMetadataAllocate(sizeof(PendingHeapMetadata));
+    try {pending_=new(storage) PendingHeapMetadata(parent,address,sourceBytes,nativeBytes);}
+    catch(...) {ChargedNativeMetadataRelease(storage);throw;}
+}
+GameHeapMetadataReservation::~GameHeapMetadataReservation() {
+    if(pending_) {static_cast<PendingHeapMetadata*>(pending_)->~PendingHeapMetadata();ChargedNativeMetadataRelease(pending_);}
+}
+void* GameHeapMetadataReservation::Data() const noexcept {
+    auto* token=static_cast<PendingHeapMetadata*>(pending_);
+    return token && !token->record.empty()?token->record.mapped().data:nullptr;
+}
+void GameHeapMetadataReservation::Commit(const void* sourceOwner) {
+    if(!pending_)throw std::logic_error("MEM metadata reservation is inactive");
+    auto& token=*static_cast<PendingHeapMetadata*>(pending_);
+    if(token.record.empty() || sourceOwner!=token.record.mapped().data)
+        throw std::invalid_argument("MEM metadata requires its exact native header owner");
+    auto& state=State();std::lock_guard lock(state.mutex);
+    auto parent=state.records.find(token.allocation);
+    const auto& h=token.record.mapped();
+    if(parent==state.records.end() || parent->second.incarnation!=token.incarnation
+        || Containing(state.records,h.source,h.source_bytes)!=parent)
+        throw std::invalid_argument("MEM metadata source was retired or reused");
+    for(const auto& [base,a]:state.records)for(const auto& [key,live]:a.heap_metadata) {
+        if(live.source==h.source || (Overlaps(live.source,live.source_bytes,h.source,h.source_bytes)
+            && !Contains(live.source,live.source_bytes,h.source,h.source_bytes)))
+            throw std::invalid_argument("MEM metadata regions overlap or replace live child heaps");
+    }
+    token.record.key()=reinterpret_cast<std::uintptr_t>(sourceOwner);
+    auto inserted=parent->second.heap_metadata.insert(std::move(token.record));
+    if(!inserted.inserted) {token.record=std::move(inserted.node);throw std::logic_error("MEM metadata owner conflict");}
+}
+bool FindGameHeapMetadata(const void* sourceOwner,GameHeapMetadataSpan& result) {
+    auto& state=State();std::lock_guard lock(state.mutex);
+    auto found=HeapOwner(state.records,sourceOwner);
+    if(found.allocation==state.records.end())return false;
+    result=DescribeHeap(found);return true;
+}
+bool FindGameHeapMetadataNative(const void* pointer,std::size_t bytes,GameHeapMetadataSpan& result) {
+    if(!pointer || !bytes)return false;
+    auto& state=State();std::lock_guard lock(state.mutex);
+    const auto address=reinterpret_cast<std::uintptr_t>(pointer);
+    for(auto a=state.records.begin();a!=state.records.end();++a)
+        for(auto h=a->second.heap_metadata.begin();h!=a->second.heap_metadata.end();++h)
+            if(Contains(reinterpret_cast<std::uintptr_t>(h->second.data),h->second.bytes,address,bytes)) {
+                result=DescribeHeap({a,h});return true;
+            }
+    return false;
+}
+bool FindGameHeapMetadataSource(const void* pointer,std::size_t bytes,GameHeapMetadataSpan& result) {
+    if(!pointer || !bytes)return false;
+    auto& state=State();std::lock_guard lock(state.mutex);
+    const auto address=reinterpret_cast<std::uintptr_t>(pointer);
+    HeapFound found{state.records.end(),{}};std::size_t shortest=std::numeric_limits<std::size_t>::max();
+    for(auto a=state.records.begin();a!=state.records.end();++a)
+        for(auto h=a->second.heap_metadata.begin();h!=a->second.heap_metadata.end();++h)
+            if(Contains(h->second.source,h->second.source_bytes,address,1) && h->second.source_bytes<shortest) {
+                found={a,h};shortest=h->second.source_bytes;
+            }
+    if(found.allocation==state.records.end())return false;
+    if(!Contains(found.heap->second.source,found.heap->second.source_bytes,address,bytes))
+        throw std::invalid_argument("MEM metadata query leaves its exact logical heap");
+    result=DescribeHeap(found);return true;
+}
+void ValidateGameHeapMetadataRetirement(const void* sourceOwner) {
+    auto& state=State();std::lock_guard lock(state.mutex);
+    auto found=HeapOwner(state.records,sourceOwner);
+    if(found.allocation==state.records.end())throw std::invalid_argument("MEM heap is unknown or retired");
+    const auto& h=found.heap->second;
+    ValidateHeapChildren(state.records,found,reinterpret_cast<const void*>(h.source),h.source_bytes);
+    ValidateHeapStorageRetirement(found);
+}
+void ValidateGameHeapMetadataRangeRetirement(const void* sourceOwner,const void* base,std::size_t bytes) {
+    auto& state=State();std::lock_guard lock(state.mutex);
+    auto found=HeapOwner(state.records,sourceOwner);
+    if(found.allocation==state.records.end())throw std::invalid_argument("MEM heap is unknown or retired");
+    if(!Contains(found.heap->second.source,found.heap->second.source_bytes,reinterpret_cast<std::uintptr_t>(base),bytes))
+        throw std::invalid_argument("MEM free leaves its actual heap backing");
+    ValidateHeapChildren(state.records,found,base,bytes);
+}
+void RetireGameHeapMetadata(const void* sourceOwner) {
+    auto& state=State();std::lock_guard lock(state.mutex);
+    auto found=HeapOwner(state.records,sourceOwner);
+    if(found.allocation==state.records.end())throw std::invalid_argument("MEM heap is unknown or retired");
+    const auto& h=found.heap->second;
+    ValidateHeapChildren(state.records,found,reinterpret_cast<const void*>(h.source),h.source_bytes);
+    ValidateHeapStorageRetirement(found);
+    auto& parent=found.allocation->second;
+    for(auto i=parent.memory_storage.begin();i!=parent.memory_storage.end();) {
+        auto current=i++;
+        if(current->second.owner==sourceOwner)RetireMemory(parent,current);
+    }
+    parent.heap_metadata.erase(found.heap);
+}
+
 GameMemoryStorageReservation::GameMemoryStorageReservation(const void* sourceOwner,std::size_t bytes):pending_(nullptr) {
     auto& state=State();std::lock_guard lock(state.mutex);
-    auto parent=Containing(state.records,reinterpret_cast<std::uintptr_t>(sourceOwner),1);
+    auto projected=HeapOwner(state.records,sourceOwner);
+    auto parent=projected.allocation!=state.records.end()?projected.allocation:
+        Containing(state.records,reinterpret_cast<std::uintptr_t>(sourceOwner),1);
     if(parent==state.records.end())throw std::invalid_argument("MEM heap has no live original backing allocation");
     if(!state.next_memory_incarnation)throw std::overflow_error("MEM storage incarnation exhausted");
     void* storage=ChargedNativeMetadataAllocate(sizeof(PendingMemoryStorage));
@@ -1091,6 +1265,7 @@ void ValidateGameAllocationFree(MemoryAllocator& owner, const void* pointer)
     if (found->second.arena != reinterpret_cast<std::uintptr_t>(owner.m_memory)
         || found->second.arena_bytes != owner.m_memory_size)
         throw std::invalid_argument("Game free uses a different allocator arena");
+    ValidateNoLiveHeapMetadata(state.records,found->first,found->second.bytes);
 }
 void FinishGameAllocationFree(const void* pointer)
 {
@@ -1106,6 +1281,9 @@ void DiscardGameAllocatorRecords(MemoryAllocator& owner)
 {
     auto& state = State();
     std::lock_guard lock(state.mutex);
+    // Preflight all affected regions before retiring any unrelated record.
+    for(const auto& [base,allocation]:state.records)
+        if(allocation.owner==&owner)ValidateNoLiveHeapMetadata(state.records,base,allocation.bytes);
     // Initialize replaces the original free-list backing. Walk without holding
     // iterators across descendant retirement; reset is infrequent and allocates
     // no native metadata.
