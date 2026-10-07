@@ -46,6 +46,7 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/feOptionsSubMenus.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHStadiumSelect.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHMainMenu.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHOnlineLogin.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feScene.cpp"
@@ -125,3 +126,16 @@ if(BUILD_TESTING)
 endif()
 
 include(cmake/OriginalFrontendRender.cmake)
+
+# Fixed four-byte NET hardware primitive gate; no network/digest readiness.
+if(BUILD_TESTING)
+    add_executable(original_net_digest_tests tests/original_net_digest.cpp)
+    add_dependencies(original_net_digest_tests verify_prepared)
+    target_compile_features(original_net_digest_tests PRIVATE cxx_std_20)
+    target_compile_definitions(original_net_digest_tests PRIVATE MSCHARGED_NATIVE=1)
+    target_include_directories(original_net_digest_tests PRIVATE
+        "${MSCHARGED_PREPARED}/include"
+        "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
+    add_test(NAME original_net_digest COMMAND original_net_digest_tests)
+    set_tests_properties(original_net_digest PROPERTIES TIMEOUT 10)
+endif()
