@@ -47,3 +47,4 @@
 0050-native-rfl-gx-api-declarations.patch
 0052-opt-in-wii-lighting.patch
 0053-present-native-vi-output-without-owner-gpu-wait.patch
+0054-retire-native-vi-render-mode-outside-device-lock.patch

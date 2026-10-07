@@ -378,6 +378,11 @@ flight; the successful-Present record is unchanged and output shutdown first
 retires queued work. Owner-side readbacks must join the workers explicitly.
 In the original Credits test this removed about 5 ms after every VI retrace.
 
+`0054-retire-native-vi-render-mode-outside-device-lock.patch` releases the VI
+device mutex before shutdown retires the render mode. That retirement can join
+the final GX frame and service owner interrupts; under the lock, the VI service
+deadlocked the owner and froze the window at the end of resize checks.
+
 `0010-retain-dvd-handles-on-allocation-failure.patch` closes opened nod/overlay
 handles if command allocation fails and reports failure through the existing
 DVD admission result. Native NL callers can then restore their reserved request
