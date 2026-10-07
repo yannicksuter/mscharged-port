@@ -304,3 +304,4 @@
 0413-admit-original-nis-constructor-diagnostic.patch
 0414-original-boot-script-diagnostic.patch
 0415-original-main-boot-script-diagnostic.patch
+0416-restore-original-shadow-mesh-writer.patch
