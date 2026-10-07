@@ -105,6 +105,7 @@ include(cmake/OriginalBootSceneSources.cmake)
 include(cmake/OriginalCharacterLoading.cmake)
 
 include(cmake/OriginalNPC.cmake)
+include(cmake/OriginalWorldAnimations.cmake)
 
 include(cmake/OriginalSaveSources.cmake)
 
