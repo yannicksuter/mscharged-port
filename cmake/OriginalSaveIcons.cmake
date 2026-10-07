@@ -16,7 +16,8 @@ function(mscharged_add_original_save_icon_transport target)
     include(cmake/WiiStringFormat.cmake)
     target_sources(${target} PRIVATE
         src/platform/native_tpl.cpp
-        src/platform/save_data.cpp)
+        src/platform/save_data.cpp
+        src/platform/nand_banner.cpp)
     target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
     target_compile_features(${target} PRIVATE cxx_std_20)
     target_link_libraries(${target} PRIVATE charged_wii_msl)

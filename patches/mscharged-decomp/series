@@ -285,3 +285,4 @@
 0375-original-specular-game-module-flow.patch
 0370-native-network-message-storage-capacity.patch
 0381-original-game-material-vertex-formats.patch
+0376-native-nand-banner-write-bytes.patch
