@@ -184,7 +184,11 @@ if(BUILD_TESTING OR MSCHARGED_BUILD_SCENE_PREVIEW OR MSCHARGED_BUILD_GAME_STARTU
     include(cmake/WorldObjects.cmake)
 endif()
 
-if(MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC)
+if(MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC)
+    # The game runtime enters original main. The older selected-scene fixture
+    # has a separate Linux-only module and is not a prerequisite for this path.
+    include(cmake/OriginalMainCreditsDiagnostic.cmake)
+elseif(MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC)
     include(cmake/OriginalCreditsDiagnostic.cmake)
 endif()
 
