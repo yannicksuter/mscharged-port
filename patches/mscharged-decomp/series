@@ -345,3 +345,4 @@
 0473-native-gamespy-cxx-minmax-scope.patch
 0478-native-shadow-view-casts.patch
 0475-native-rfl-face-texture-data.patch
+0474-native-replay-manager-object-allocation.patch
