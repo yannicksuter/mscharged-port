@@ -265,3 +265,4 @@
 0332-native-lower-camera-owner-compiler-and-address-abi.patch
 0339-native-original-ipc-boot-memory.patch
 0334-native-original-audio-owner-fields-and-emission.patch
+0340-native-original-audio-pool-teardown-strides.patch
