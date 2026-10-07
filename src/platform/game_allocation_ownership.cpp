@@ -771,6 +771,35 @@ bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
     }
     return false;
 }
+bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
+    GameNativeBackingSourceSpan& result)
+{
+    result = {};
+    if (!native || !nativeBytes) return false;
+    auto& state = State(); std::lock_guard lock(state.mutex);
+    const auto address = reinterpret_cast<std::uintptr_t>(native);
+    GameNativeBackingSourceSpan candidate{};
+    for (auto owner = state.records.begin(); owner != state.records.end(); ++owner)
+    {
+        for (const auto& entry : owner->second.native_backings)
+        {
+            const auto& backing = entry.second;
+            if (!Contains(reinterpret_cast<std::uintptr_t>(backing.data),
+                          backing.bytes, address, nativeBytes)) continue;
+            ByteSpan origin{};
+            if (Containing(state.records, entry.first, backing.source_bytes) != owner
+                || !Completed(owner->second, entry.first, backing.source_bytes, origin)
+                || origin.logical_tag != backing.logical_tag) return false;
+            ValidateMemoryExtent(owner->second, entry.first, backing.source_bytes);
+            if (candidate.source) return false;
+            candidate = {reinterpret_cast<const void*>(entry.first), backing.source_bytes,
+                         {backing.data, backing.bytes, Describe(owner)}};
+        }
+    }
+    if (!candidate.source) return false;
+    result = candidate;
+    return true;
+}
 std::uint32_t ReadGameChunkWord(const void* header, unsigned word)
 {
     if (word > 1) throw std::invalid_argument("Chunk header has exactly two words");

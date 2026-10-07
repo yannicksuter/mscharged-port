@@ -137,6 +137,13 @@ struct GameNativeBackingSourceSpan {
 bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
     const void* sourceProbe, std::size_t sourceProbeBytes,
     GameNativeBackingSourceSpan& result);
+// Identify the unique currently live backing containing these native bytes.
+// Only registry metadata is read; neither pointer is dereferenced. A successful
+// lookup reports the actual raw source anchor and its allocation incarnation,
+// without granting a lease or validating a pointer retained after address reuse.
+// The caller must already retain the original source owner's lifetime.
+bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
+    GameNativeBackingSourceSpan& result);
 class GameNativeBackingReservation {
 public:
     GameNativeBackingReservation(const void* source, std::size_t sourceBytes, std::size_t nativeBytes);
