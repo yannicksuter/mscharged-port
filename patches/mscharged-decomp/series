@@ -324,3 +324,4 @@
 0436-native-arc-serialized-data.patch
 0432-adapt-original-software-skin-live-data.patch
 0440-native-rfl-fog-call-abi.patch
+0446-resolve-original-nis-native-read-handle.patch
