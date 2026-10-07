@@ -24,34 +24,23 @@ git -C extern/freetype -c submodule.recurse=false submodule update --init --chec
 The first graphics build is large. Adjust the build parallelism for available
 memory. Windows, macOS, other disc regions and Wii peripherals remain unverified.
 
-## Original Boot scene
+## Original frontend sequence
 
 ```sh
 CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset frontend
 ./build/graphics/mscharged --experimental-frontend --disc ./game/R4QE01.rvz --window
 ```
 
-The `frontend` preset reuses `build/graphics`. It runs original `main`, loading
-and frontend tasks through the authored Boot script, including the static Next
-Level logo and its original sound request. Earlier startup steps are still
-omitted; Intro movie initialization and progression to later menus remain in
-development. Audio quality and performance are still being validated.
+The `frontend` preset reuses `build/graphics`. It runs original `main`, loading,
+frontend world setup and the Boot/Intro sequence. **Title rendering and menu
+progression are still in development; this test can stop at unfinished host
+services.** Audio quality and performance also remain in progress.
 
-The launcher offers **Try boot sequence**. Close the window to exit, or omit
-`--window` for a bounded run. A build with the authored Boot script enabled does
-not support the separate `--experimental-options` shortcut.
-
-To also run the original frontend world and Mii resource loading:
-
-```sh
-cmake --preset frontend -DMSCHARGED_DIAGNOSTIC_FRONTEND_BOOT_TO_FE=ON \
-  -DMSCHARGED_DIAGNOSTIC_FRONTEND_CLEAN_BOOT=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_WORLD=ON \
-  -DMSCHARGED_DIAGNOSTIC_MAIN_NETWORK_OWNER=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_MII_RESOURCES=ON
-cmake --build --preset frontend -j3
-./build/graphics/mscharged --experimental-frontend --disc ./game/R4QE01.rvz --window
-```
-
-This loads the original world and Mii resources, then stops before the menus.
+Press **Enter or Space** (Wii A) to skip the intro movie through the original
+handler. Keep the game window focused. The launcher also offers **Try boot
+sequence**. Close the window to exit; omitting `--window` runs a bounded test.
+The separate `--experimental-options` shortcut requires a build without the
+original Boot script.
 
 ## Original Credits scene
 
