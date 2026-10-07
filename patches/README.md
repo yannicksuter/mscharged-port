@@ -371,6 +371,13 @@ rectangle and window identity only after successful surface presentation. Native
 pointer routing uses that retained snapshot; discarded frames do not advance it.
 The snapshot is empty with GX disabled and resets on initialization/shutdown.
 
+`0053-present-native-vi-output-without-owner-gpu-wait.patch` queues each native
+VI desktop presentation on the render worker without making the source owner
+wait for it or for an idle GPU before `Present`. One presentation stays in
+flight; the successful-Present record is unchanged and output shutdown first
+retires queued work. Owner-side readbacks must join the workers explicitly.
+In the original Credits test this removed about 5 ms after every VI retrace.
+
 `0010-retain-dvd-handles-on-allocation-failure.patch` closes opened nod/overlay
 handles if command allocation fails and reports failure through the existing
 DVD admission result. Native NL callers can then restore their reserved request

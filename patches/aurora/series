@@ -46,3 +46,4 @@
 0049-filter-desktop-vi-pixel-centers.patch
 0050-native-rfl-gx-api-declarations.patch
 0052-opt-in-wii-lighting.patch
+0053-present-native-vi-output-without-owner-gpu-wait.patch
