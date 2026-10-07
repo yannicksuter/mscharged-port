@@ -343,3 +343,4 @@
 0470-native-rfl-model-texture-data.patch
 0471-native-controller-replay-address-words.patch
 0473-native-gamespy-cxx-minmax-scope.patch
+0478-native-shadow-view-casts.patch
