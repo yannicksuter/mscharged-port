@@ -18,4 +18,8 @@ struct DiscInfo
 // Opens the image read-only and checks the Charged header and data partition.
 // This is a metadata/readability check, not a full-disc integrity check.
 DiscInfo InspectDisc(const std::filesystem::path& path);
+
+// Actual data-partition TMD title identity for native ES/storage services.
+// Does not derive a title from the disc ID or authenticate the TMD signature.
+std::uint64_t ReadDiscTitleId(const std::filesystem::path& path);
 }
