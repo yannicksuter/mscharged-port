@@ -44,11 +44,29 @@ using ByteSpans = std::map<std::uintptr_t, ByteSpan, std::less<std::uintptr_t>,
 struct PendingWrite { std::size_t bytes; std::uint64_t tag; };
 using PendingWrites = std::map<std::uintptr_t, PendingWrite, std::less<std::uintptr_t>,
     HostMetadataAllocator<std::pair<const std::uintptr_t, PendingWrite>>>;
+struct GraphicsArrayBound
+{
+    std::size_t bytes;
+    std::uintptr_t logical_base;
+    std::size_t logical_bytes;
+    std::uint64_t logical_tag;
+    GameByteDomain domain;
+};
+bool SameArrayOrigin(const GraphicsArrayBound& bound, const ByteSpan& origin)
+{
+    return bound.logical_base == origin.logical_base
+        && bound.logical_bytes == origin.logical_bytes
+        && bound.logical_tag == origin.logical_tag && bound.domain == origin.domain;
+}
+using GraphicsArrayBounds = std::map<std::uintptr_t, GraphicsArrayBound, std::less<std::uintptr_t>,
+    HostMetadataAllocator<std::pair<const std::uintptr_t, GraphicsArrayBound>>>;
 struct GraphicsStorage
 {
     std::size_t bytes;
     std::uint64_t incarnation;
     ByteSpans::node_type native_publication;
+    GraphicsArrayBounds array_bounds;
+    bool array_aliases = false;
 };
 using GraphicsStorageSpans = std::map<std::uintptr_t, GraphicsStorage, std::less<std::uintptr_t>,
     HostMetadataAllocator<std::pair<const std::uintptr_t, GraphicsStorage>>>;
@@ -1209,6 +1227,48 @@ void PublishGameGraphicsNativeBytes(const void* base, const void* writtenEnd)
         old->second = ready; // Original repeated End/continued cursor writes are not forbidden.
     }
 }
+void RegisterGameGraphicsArray(const void* pointer, std::size_t bytes)
+{
+    if (!bytes) return;
+    const auto address = reinterpret_cast<std::uintptr_t>(pointer);
+    auto& state = State(); std::lock_guard lock(state.mutex);
+    auto owner = Containing(state.records, address, bytes);
+    if (owner == state.records.end()) throw std::invalid_argument("Vertex stream has no real allocation owner");
+    ValidateMemoryExtent(owner->second, address, bytes);
+    auto graphics = ContainingGraphics(owner->second, address, bytes);
+    if (graphics == owner->second.graphics_storage.end())
+        throw std::invalid_argument("Vertex stream has no exact source graphics storage");
+    ByteSpan completed{};
+    if (!Completed(owner->second, address, bytes, completed)
+        || (completed.domain != GameByteDomain::WiiSerialized && completed.domain != GameByteDomain::NativePayload))
+        throw std::invalid_argument("Vertex stream leaves its completed original payload");
+    auto& bounds = graphics->second.array_bounds;
+    auto next = bounds.lower_bound(address);
+    if (next != bounds.end() && next->first == address)
+    {
+        if (SameArrayOrigin(next->second, completed))
+        {
+            // Equal-base aliases retain the enclosing authored extent. No
+            // source packet is forbidden or given an arbitrary native size.
+            if (next->second.bytes >= bytes) return;
+        }
+        next->second = {bytes, completed.logical_base, completed.logical_bytes,
+                        completed.logical_tag, completed.domain};
+        graphics->second.array_aliases = true;
+        return;
+    }
+    bool aliases = graphics->second.array_aliases;
+    if (next != bounds.end() && Overlaps(address, bytes, next->first, next->second.bytes)) aliases = true;
+    if (next != bounds.begin())
+    {
+        auto prior = next; --prior;
+        if (Overlaps(address, bytes, prior->first, prior->second.bytes))
+            aliases = true;
+    }
+    bounds.emplace(address, GraphicsArrayBound{bytes, completed.logical_base, completed.logical_bytes,
+                                              completed.logical_tag, completed.domain});
+    graphics->second.array_aliases = aliases;
+}
 GameGraphicsArraySpan ResolveGameGraphicsArray(const void* pointer)
 {
     const auto address = reinterpret_cast<std::uintptr_t>(pointer);
@@ -1231,6 +1291,26 @@ GameGraphicsArraySpan ResolveGameGraphicsArray(const void* pointer)
     if (domainBytes < bytes) bytes = domainBytes;
     const auto logicalBytes = span->second.logical_bytes - (address - span->second.logical_base);
     if (logicalBytes < bytes) bytes = logicalBytes;
+    const auto& bounds = graphics->second.array_bounds;
+    if (!bounds.empty())
+    {
+        auto array = bounds.upper_bound(address);
+        std::size_t arrayBytes = 0;
+        while (array != bounds.begin())
+        {
+            --array;
+            if (Contains(array->first, array->second.bytes, address, 1)
+                && SameArrayOrigin(array->second, span->second))
+            {
+                const auto remaining = array->second.bytes - (address - array->first);
+                if (remaining > arrayBytes) arrayBytes = remaining;
+            }
+            if (!graphics->second.array_aliases) break;
+        }
+        // A new raw producer or changed scalar domain must not inherit old
+        // asset bounds, even if the graphics address/incarnation is unchanged.
+        if (arrayBytes && arrayBytes < bytes) bytes = arrayBytes;
+    }
     if (Containing(state.records, address, bytes) != owner)
         throw std::invalid_argument("GX array crosses a live nested allocation");
     ValidateMemoryExtent(owner->second,address,bytes);

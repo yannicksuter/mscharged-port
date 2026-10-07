@@ -230,6 +230,11 @@ bool FindGameGraphicsStorage(const void* pointer, std::size_t bytes, GameGraphic
 // Source writer cursors supply the genuinely written range. No vertex/index
 // count, normalization or alternate game-side readiness flag is used.
 void PublishGameGraphicsNativeBytes(const void* base, const void* writtenEnd);
+// A parsed original vertex stream supplies its actual count * wire stride.
+// Bounds attach to its existing live graphics storage, never to a new owner.
+// The completed logical tag/domain qualify each bound; rewind/free retires it
+// with that storage's original incarnation. Shared aliases remain enclosing.
+void RegisterGameGraphicsArray(const void* pointer, std::size_t bytes);
 struct GameGraphicsArraySpan
 {
     const void* data;
