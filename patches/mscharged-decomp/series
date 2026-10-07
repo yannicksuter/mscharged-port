@@ -256,3 +256,4 @@
 0315-admit-original-title-sequence-diagnostic.patch
 0313-native-original-audio-rpc-metadata.patch
 0322-preserve-original-audio-silence-addresses.patch
+0326-native-original-fs-compiler-abi.patch
