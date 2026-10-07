@@ -275,3 +275,4 @@
 0352-native-os-reset-source-thread-registry.patch
 0353-native-original-animation-data-transport.patch
 0358-native-network-producer-compiler-layouts.patch
+0360-preserve-native-world-numeric-field-widths.patch
