@@ -41,16 +41,17 @@ The launcher offers **Try boot sequence**. Close the window to exit, or omit
 `--window` for a bounded run. A build with the authored Boot script enabled does
 not support the separate `--experimental-options` shortcut.
 
-To also run the original frontend world-loading sequence:
+To also run the original frontend world and Mii resource loading:
 
 ```sh
 cmake --preset frontend -DMSCHARGED_DIAGNOSTIC_FRONTEND_BOOT_TO_FE=ON \
-  -DMSCHARGED_DIAGNOSTIC_FRONTEND_CLEAN_BOOT=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_WORLD=ON
+  -DMSCHARGED_DIAGNOSTIC_FRONTEND_CLEAN_BOOT=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_WORLD=ON \
+  -DMSCHARGED_DIAGNOSTIC_MAIN_NETWORK_OWNER=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_MII_RESOURCES=ON
 cmake --build --preset frontend -j3
 ./build/graphics/mscharged --experimental-frontend --disc ./game/R4QE01.rvz --window
 ```
 
-This currently stops at unfinished Mii resource initialization, before the menus.
+This loads the original world and Mii resources, then stops before the menus.
 
 ## Original Credits scene
 

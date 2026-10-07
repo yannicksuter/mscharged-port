@@ -352,3 +352,4 @@
 0477-native-blowfish-word-and-byte-abi.patch
 0482-native-rfl-matrix-provider-aliases.patch
 0481-original-main-network-task-owner-admission.patch
+0488-original-frontend-mii-resource-admission.patch
