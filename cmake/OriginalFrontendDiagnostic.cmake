@@ -81,6 +81,22 @@ function(mscharged_add_original_frontend_diagnostic)
     mscharged_select_original_frontend_main_menu(mscharged_original_frontend_module)
     mscharged_select_original_frontend_hall_of_fame(mscharged_original_frontend_module)
     mscharged_select_original_frontend_domination(mscharged_original_frontend_module)
+    # dynamic_lookup defers unfinished methods, but missing game vtable/VTT
+    # data must be detected before the owner tries to load this module.
+    set(_vtable_check "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_original_module_vtables.py")
+    if(APPLE)
+        set(_vtable_format macho)
+    else()
+        set(_vtable_format elf)
+    endif()
+    add_custom_command(TARGET mscharged_original_frontend_module POST_BUILD
+        COMMAND "${Python3_EXECUTABLE}" -B "${_vtable_check}"
+            --nm "${CMAKE_NM}" --object-format "${_vtable_format}"
+            --module "$<TARGET_FILE:mscharged_original_frontend_module>"
+        COMMENT "Checking original frontend vtable/VTT imports"
+        VERBATIM)
+    set_property(TARGET mscharged_original_frontend_module APPEND PROPERTY
+        LINK_DEPENDS "${_vtable_check}")
     add_dependencies(charged_original_main_credits_host mscharged_original_frontend_module)
     target_compile_definitions(charged_original_main_credits_host PRIVATE
         MSCHARGED_ORIGINAL_FRONTEND_MODULE_FILENAME="$<TARGET_FILE_NAME:mscharged_original_frontend_module>")
@@ -91,3 +107,9 @@ function(mscharged_add_original_frontend_diagnostic)
 endfunction()
 
 mscharged_add_original_frontend_diagnostic()
+
+if(BUILD_TESTING)
+    add_test(NAME original_module_vtables
+        COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_original_module_vtables.py")
+endif()
