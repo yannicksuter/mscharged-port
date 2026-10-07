@@ -38,6 +38,7 @@
 #include <revolution/os/OSIpc.h>
 #include <revolution/ipc.h>
 #include "credits_movie_hardware.h"
+#include "runtime/frame_rate_title.h"
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
 #include "original_game_audio_hardware.h"
 #endif
@@ -270,6 +271,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         config.appName=optionsScene ? "Mario Strikers Charged | original Options diagnostic" :
             frontend ? "Mario Strikers Charged | original Boot/Intro diagnostic" :
             "Mario Strikers Charged | original-main Credits diagnostic";
+        const std::string windowTitle=config.appName;
         config.userPath=config.cachePath=dataPath.c_str();
         config.desiredBackend=mscharged::platform::NativeGraphicsBackend;
         config.windowWidth=windowWidth;config.windowHeight=windowHeight;
@@ -468,6 +470,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         bool bootLogoCaptured=false;
         const auto start=std::chrono::steady_clock::now(); auto previous=start;
         auto stageStart=start; unsigned resizeStage=0; bool stageAnnounced=false;
+        // Original game frames per second in the title; always shown until a
+        // command-line/launcher toggle exists.
+        mscharged::runtime::FrameRateTitle frameRateTitle(windowTitle);
         wgpu::Texture retainedEFB;
         Check(!resizeCheck || nativeSend, "Resize qualification requires source-native send");
         while(!exit && (interactive || !snapshot)) {
@@ -483,6 +488,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 }
             }
             const auto now=std::chrono::steady_clock::now();
+            if(const auto title=frameRateTitle.Sample(frames,now)) SDL_SetWindowTitle(host.window,title->c_str());
             Check(interactive || now-start<std::chrono::seconds(sourceBoot?90:40),"Original source scene diagnostic timed out");
             if(nativeSend) {
                 {
