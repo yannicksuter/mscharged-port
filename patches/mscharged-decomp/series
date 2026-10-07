@@ -328,3 +328,4 @@
 0447-decode-original-nis-vm-string-addresses.patch
 0444-native-original-snapshot-bitfield-words.patch
 0442-restore-original-character-skin-render-flow.patch
+0445-native-rfl-shape-data.patch
