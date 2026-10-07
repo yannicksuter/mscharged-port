@@ -2,6 +2,7 @@
 #include "platform/alarms.h"
 #include "platform/interrupts.h"
 #include "platform/stm_device.h"
+#include "platform/thread_queues.h"
 
 #include <aurora/hardware.h>
 #include <revolution/wpad/WPAD.h>
@@ -89,6 +90,19 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
     InitializeDesktopWpad(window, desktop);
     try { InitializeNativeAlarms(); }
     catch (...) { ShutdownDesktopWpad(); throw; }
+    try {
+        // Original waits may deschedule this owner. Continue only real native
+        // interrupt delivery there, without desktop scanout or game updates.
+        const auto prior = SetNativeThreadWaitService(aurora_service_hardware_interrupts);
+        if (prior) {
+            SetNativeThreadWaitService(prior);
+            throw std::logic_error("Native owner wait service already has a borrower");
+        }
+    } catch (...) {
+        ShutdownNativeAlarms();
+        ShutdownDesktopWpad();
+        throw;
+    }
     {
         std::lock_guard lock(state.latch);
         state.thread = std::this_thread::get_id();
@@ -102,6 +116,7 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
     }
     if (!SDL_AddEventWatch(Watch, nullptr)) {
         { std::lock_guard lock(state.latch); state.ready = false; }
+        SetNativeThreadWaitService(nullptr);
         ShutdownNativeAlarms();
         ShutdownDesktopWpad();
         throw std::runtime_error(SDL_GetError());
@@ -136,6 +151,11 @@ void ShutdownNativeHardwareInput() {
         if (state.active) throw std::logic_error("Cannot retire an active native hardware callback");
         if (state.registered)
             throw std::logic_error("Retire the exact native SDK owner before borrowed input");
+        const auto prior = SetNativeThreadWaitService(nullptr);
+        if (prior != aurora_service_hardware_interrupts) {
+            SetNativeThreadWaitService(prior);
+            throw std::logic_error("Native owner wait service identity changed");
+        }
         state.ready = false;
     }
     // Remove watchers before releasing the device state they may have borrowed.
