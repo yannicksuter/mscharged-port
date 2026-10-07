@@ -38,6 +38,7 @@ struct Channel {
     bool announced = false;
     bool pending_disconnect = false;
     bool disconnected_this_service = false;
+    bool motor_running = false;
 };
 struct DpdProducer {
     mscharged::platform::NativeDpdSource source{};
@@ -51,6 +52,7 @@ struct Hardware {
     WPADAllocFunc alloc = nullptr;
     WPADFreeFunc free = nullptr;
     bool configured = false, initialized = false, servicing = false;
+    bool motor_enabled = false;
     std::uint64_t generation = 0;
     std::array<DpdProducer, WPAD_MAX_CONTROLLERS> dpd_producers{};
     std::thread::id dpd_owner{};
@@ -99,6 +101,7 @@ void CopyDpdObservation(Channel& channel, WPADStatus& report) {
 void ClearReports(Channel& channel) {
     channel.id = 0;
     channel.buttons = 0;
+    channel.motor_running = false;
     channel.head = channel.count = 0;
     channel.dpd_command = WPAD_DPD_DISABLE;
     channel.dpd_pending_command = WPAD_DPD_DISABLE;
@@ -406,6 +409,7 @@ void WPADInit() {
         throw std::runtime_error(SDL_GetError());
     }
     for (auto& channel : state.channels) ClearReports(channel);
+    state.motor_enabled = state.settings.motor_enabled;
     ++state.generation;
     state.initialized = true;
 }
@@ -542,10 +546,25 @@ void WPADControlMotor(s32 index, u32 command) {
     if (!channel.pad) return;
     if (command != WPAD_MOTOR_STOP && command != WPAD_MOTOR_RUMBLE)
         throw std::invalid_argument("Unknown Wii motor command");
+    // Preserve original WPAD's disabled/repeated-command branches. A physical
+    // request still requires an actual SDL actuator and successful submission.
+    if (!State().motor_enabled && (command != WPAD_MOTOR_STOP || !channel.motor_running)) return;
+    if ((command == WPAD_MOTOR_STOP) == !channel.motor_running) return;
     if (!SDL_GetBooleanProperty(SDL_GetGamepadProperties(channel.pad), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false))
         throw std::runtime_error("Wii Remote SDL device has no rumble output");
     const Uint16 intensity = command == WPAD_MOTOR_RUMBLE ? 65535 : 0;
     if (!SDL_RumbleGamepad(channel.pad, intensity, intensity, command == WPAD_MOTOR_RUMBLE ? 0xffffffffu : 0))
         throw std::runtime_error(SDL_GetError());
+    channel.motor_running = command == WPAD_MOTOR_RUMBLE;
+}
+void WPADEnableMotor(BOOL enabled) {
+    RequireOwner();
+    std::lock_guard lock(State().reports);
+    State().motor_enabled = enabled != FALSE;
+}
+BOOL WPADIsMotorEnabled() {
+    RequireOwner();
+    std::lock_guard lock(State().reports);
+    return State().motor_enabled ? TRUE : FALSE;
 }
 }

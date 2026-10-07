@@ -280,7 +280,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
         // and FE methods retain their original mappings and decisions.
-        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,false},
+        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,false,false},
             mscharged::platform::GetNativeSTMInput(),{true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr});
         mscharged::diagnostic::InitializeCreditsMovieHardware(
             mscharged::platform::ServiceNativeHardwareInput);
