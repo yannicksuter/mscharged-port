@@ -2,6 +2,7 @@
 #include "platform/alarms.h"
 #include "platform/interrupts.h"
 #include "platform/stm_device.h"
+#include "platform/ios_device.h"
 #include "platform/thread_queues.h"
 
 #include <aurora/hardware.h>
@@ -71,6 +72,7 @@ void Service() {
         if (state.pending_power && mscharged::platform::SubmitNativeSTMPower(state.stm)) --state.pending_power;
     }
     mscharged::platform::ServiceNativeSTMDevice();
+    mscharged::platform::ServiceNativeIOSRequests();
 }
 }
 
