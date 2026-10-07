@@ -442,6 +442,46 @@ WPADResult WPADProbe(WPADChannel index, WPADDeviceType* type) {
     if (type) *type = channel.pad ? WPAD_DEV_CORE : WPAD_DEV_NOT_FOUND;
     return channel.pad ? WPAD_ERR_OK : WPAD_ERR_NO_CONTROLLER;
 }
+// Native SDL core reports have no qualified Wii speaker HID output. Keep
+// unavailable transport separate from the genuinely supported input channel.
+BOOL WPADIsSpeakerEnabled(s32 index) {
+    (void)GetChannel(index);
+    return FALSE;
+}
+WPADResult WPADControlSpeaker(WPADChannel index, u32 command, WPADCallback callback) {
+    auto& channel = GetChannel(index);
+    WPADResult result = WPAD_ERR_NO_CONTROLLER;
+    if (channel.pad && SDL_GamepadConnected(channel.pad)) {
+        // Original WPAD returns its current status for an unknown command and
+        // immediately succeeds when OFF is requested for an already off
+        // speaker. Neither branch submits a physical operation.
+        switch (command) {
+        case WPAD_SPEAKER_OFF: result = WPAD_ERR_OK; break;
+        case WPAD_SPEAKER_ON:
+        case WPAD_SPEAKER_MUTE:
+        case WPAD_SPEAKER_UNMUTE:
+        case WPAD_SPEAKER_PLAY:
+        case WPAD_SPEAKER_5:
+            result = WPAD_ERR_COMMUNICATION_ERROR;
+            break;
+        default: result = WPAD_ERR_OK; break;
+        }
+    }
+    // Source _end delivers these failed/no-op completions immediately in the
+    // caller's restored interrupt state. No successful HID operation, speaker
+    // enable bit, stream slot or IRQ completion is fabricated.
+    if (callback) callback(index, result);
+    return result;
+}
+BOOL WPADCanSendStreamData(s32 index) {
+    (void)GetChannel(index);
+    return FALSE; // No supported SDL device owns a Wii speaker output queue.
+}
+s32 WPADSendStreamData(s32 index, void*, u16) {
+    auto& channel = GetChannel(index);
+    return channel.pad && SDL_GamepadConnected(channel.pad)
+        ? WPAD_ERR_COMMUNICATION_ERROR : WPAD_ERR_NO_CONTROLLER;
+}
 s32 WPADGetInfoAsync(s32 index, WPADInfo*, WPADCallback callback) {
     auto& channel = GetChannel(index);
     // The supported SDL devices have no complete Wii status report. In
