@@ -1,6 +1,7 @@
 #include "runtime/original_main_credits.h"
 #include "runtime/original_sh_menu_diagnostic.h"
 #include <aurora/aurora.h>
+#include <aurora/hardware.h>
 #include "bootstrap/launch_options.h"
 #include "platform/path.h"
 #include <aurora/event.h>
@@ -84,6 +85,9 @@ struct Snapshot : std::enable_shared_from_this<Snapshot> {
 // source copy output; it submits no game draw or diagnostic frame boundary.
 void ReadSelectedXFB(const AuroraVIPresentedState& presented,
     const std::shared_ptr<const aurora::gfx::xfb::Snapshot>& copy, const std::filesystem::path& output) {
+    // A diagnostic GPU readback must keep the real3ms audio/VI IRQ owner live.
+    // This service runs no game task or presentation and preserves source requests.
+    aurora_service_hardware_interrupts();
     Check(copy && copy->revision==presented.copy_revision &&
           copy->physical==OSCachedToPhysical(const_cast<void*>(presented.framebuffer)),
           "Selected XFB no longer matches the exact successful surface presentation");
@@ -111,6 +115,7 @@ void ReadSelectedXFB(const AuroraVIPresentedState& presented,
         });
     const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
     while(!result->done.load(std::memory_order_acquire) && std::chrono::steady_clock::now()<deadline) {
+        aurora_service_hardware_interrupts();
         device.Tick(); std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     Check(result->done.load(std::memory_order_acquire)==1, "Selected source XFB GPU readback failed");
@@ -118,7 +123,9 @@ void ReadSelectedXFB(const AuroraVIPresentedState& presented,
     std::vector<unsigned char> rgb(std::size_t(copy->width)*copy->height*3);
     auto channel=[](int value) { return static_cast<unsigned char>(std::clamp(value,0,255)); };
     unsigned lit=0;
-    for(unsigned y=0;y<copy->height;++y)for(unsigned x=0;x<copy->width;++x) {
+    for(unsigned y=0;y<copy->height;++y) {
+        if((y&15)==0)aurora_service_hardware_interrupts();
+        for(unsigned x=0;x<copy->width;++x) {
         const auto* pair=bytes+std::size_t(y)*pitch+(x/2)*4;
         const int c=int(pair[(x&1)?2:0])-16,d=int(pair[1])-128,e=int(pair[3])-128;
         auto* pixel=rgb.data()+3*(std::size_t(y)*copy->width+x);
@@ -126,11 +133,22 @@ void ReadSelectedXFB(const AuroraVIPresentedState& presented,
         pixel[1]=channel((298*c-100*d-208*e+128)>>8);
         pixel[2]=channel((298*c+516*d+128)>>8);
         if(pixel[0]||pixel[1]||pixel[2])++lit;
+        }
     }
+    aurora_service_hardware_interrupts();
     buffer.Unmap(); Check(lit!=0, "Source-selected native XFB is entirely black");
     auto* file=std::fopen(output.c_str(),"wb"); Check(file,"Cannot create selected XFB snapshot");
     std::fprintf(file,"P6\n%u %u\n255\n",copy->width,copy->height);
-    const auto written=std::fwrite(rgb.data(),1,rgb.size(),file); const auto closed=std::fclose(file);
+    std::size_t written=0;
+    while(written<rgb.size()) {
+        aurora_service_hardware_interrupts();
+        const auto count=std::min<std::size_t>(65536,rgb.size()-written);
+        const auto n=std::fwrite(rgb.data()+written,1,count,file);
+        written+=n;
+        if(n!=count)break;
+    }
+    const auto closed=std::fclose(file);
+    aurora_service_hardware_interrupts();
     Check(written==rgb.size() && !closed,"Selected XFB snapshot write failed");
     std::printf("Actual source-selected XFB %ux%u revision%llu, nonblack pixels%u; saved %s.\n",
         copy->width,copy->height,static_cast<unsigned long long>(copy->revision),lit,output.c_str());
