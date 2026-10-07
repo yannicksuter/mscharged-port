@@ -12,7 +12,9 @@ add_library(charged_original_character_loading_sources OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/CharacterLoader.cpp"
     "${MSCHARGED_PREPARED}/src/Game/AnimInventory.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SAnim/AnimRetargeter.cpp"
-    src/platform/anim_retarget_transport.cpp)
+    src/platform/anim_retarget_transport.cpp
+    src/platform/retarget_replay_projection.cpp
+    src/platform/sanim_replay_projection.cpp)
 add_dependencies(charged_original_character_loading_sources verify_prepared)
 set_target_properties(charged_original_character_loading_sources PROPERTIES
     POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
@@ -47,7 +49,9 @@ function(mscharged_add_original_animation_inventory target)
     foreach(_path IN ITEMS
             "${MSCHARGED_PREPARED}/src/Game/AnimInventory.cpp"
             "${MSCHARGED_PREPARED}/src/Game/SAnim/AnimRetargeter.cpp"
-            "${PROJECT_SOURCE_DIR}/src/platform/anim_retarget_transport.cpp")
+            "${PROJECT_SOURCE_DIR}/src/platform/anim_retarget_transport.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/retarget_replay_projection.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/sanim_replay_projection.cpp")
         file(RELATIVE_PATH _relative "${PROJECT_SOURCE_DIR}" "${_path}")
         if(NOT _path IN_LIST _sources AND NOT _relative IN_LIST _sources)
             target_sources("${target}" PRIVATE "${_path}")

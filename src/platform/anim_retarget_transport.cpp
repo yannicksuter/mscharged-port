@@ -127,4 +127,56 @@ void* NativeAnimRetargetChunkData(const NativeAnimRetargetView& view,nlChunk* ch
     for(std::size_t i=0;i<s.count;++i)if(entries[i].source==child)return entries[i].data;
     throw std::invalid_argument("Retarget child is outside original initializer projection");
 }
+namespace {
+struct RecordProjection {
+    const unsigned char* raw;
+    std::size_t count;
+    const AnimRetarget* native;
+};
+RecordProjection Records(const GameNativeBackingSourceSpan& origin) {
+    auto* root = static_cast<nlChunk*>(const_cast<void*>(origin.source));
+    const auto view = View(root, origin.source_bytes, origin.backing);
+    GameCompletedSpan complete{};
+    if (!FindGameCompletedSpan(root, origin.source_bytes, complete)
+        || complete.allocation.incarnation != origin.backing.allocation.incarnation
+        || FindGameByteDomain(root, origin.source_bytes) != GameByteDomain::WiiSerialized)
+        throw std::invalid_argument("Retarget record has no completed original raw owner");
+    const auto& storage = *static_cast<const Storage*>(view.data);
+    if (storage.count < 2)
+        throw std::invalid_argument("Retarget native backing has no original records child");
+    const auto* entries = reinterpret_cast<const Entry*>(static_cast<const unsigned char*>(view.data) + storage.entries);
+    const auto& entry = entries[1];
+    const auto limit = reinterpret_cast<std::uintptr_t>(root) + origin.source_bytes;
+    const auto child = Describe(entry.source, limit);
+    if (entry.bytes % sizeof(AnimRetarget) || entry.bytes / sizeof(AnimRetarget) != child.bytes / 16)
+        throw std::invalid_argument("Retarget native records extent differs from original raw records");
+    const auto begin = reinterpret_cast<std::uintptr_t>(view.data);
+    const auto recordAt = reinterpret_cast<std::uintptr_t>(entry.data);
+    if (recordAt < begin || recordAt - begin > view.native_bytes || entry.bytes > view.native_bytes - (recordAt - begin))
+        throw std::out_of_range("Retarget native records leave their current backing");
+    return {child.raw, entry.bytes / sizeof(AnimRetarget), static_cast<const AnimRetarget*>(entry.data)};
+}
+}
+const void* NativeAnimRetargetRawRecord(const AnimRetarget* record) {
+    GameNativeBackingSourceSpan origin{};
+    if (!record || !FindGameNativeBackingSource(record, sizeof(AnimRetarget), origin))
+        throw std::invalid_argument("Retarget record has no current native source backing");
+    const auto records = Records(origin);
+    const auto begin = reinterpret_cast<std::uintptr_t>(records.native);
+    const auto at = reinterpret_cast<std::uintptr_t>(record);
+    if (at < begin || (at - begin) % sizeof(AnimRetarget) || (at - begin) / sizeof(AnimRetarget) >= records.count)
+        throw std::invalid_argument("Retarget pointer is not an exact original native record");
+    return records.raw + ((at - begin) / sizeof(AnimRetarget)) * 16;
+}
+const AnimRetarget* NativeAnimRetargetRecordFromRaw(const void* record) {
+    GameNativeBackingSourceSpan origin{};
+    if (!record || !FindGameNativeBackingForSource(record, 16, origin))
+        throw std::invalid_argument("Retarget raw record has no current initialized native backing");
+    const auto records = Records(origin);
+    const auto begin = reinterpret_cast<std::uintptr_t>(records.raw);
+    const auto at = reinterpret_cast<std::uintptr_t>(record);
+    if (at < begin || (at - begin) % 16 || (at - begin) / 16 >= records.count)
+        throw std::invalid_argument("Retarget word is not an exact original raw record");
+    return records.native + (at - begin) / 16;
+}
 }
