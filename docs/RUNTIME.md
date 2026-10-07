@@ -65,7 +65,7 @@ Audio can repeat during host scheduling delays. Full game audio remains pending.
 ## Original Boot and Intro test
 
 ```sh
-cmake --preset graphics -DMSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC=ON -DMSCHARGED_BUILD_LAUNCHER=ON
+cmake --preset graphics -DMSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC=ON -DMSCHARGED_BUILD_LAUNCHER=ON -DMSCHARGED_DIAGNOSTIC_FRONTEND_MATERIALS=ON
 cmake --build --preset graphics --target mscharged -j 3
 ./build/graphics/mscharged --experimental-frontend --disk ./game/R4QE01.rvz --window --aspect 16:9
 ```
