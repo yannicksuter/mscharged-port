@@ -1141,9 +1141,14 @@ void GameGraphicsStorageReservation::Commit(void* pointer)
     auto owner = Containing(state.records, address, bytes);
     if (owner == state.records.end()) throw std::invalid_argument("Graphics storage has no real allocation owner");
     ValidateMemoryExtent(owner->second,address,bytes);
-    for (const auto& [base, live] : owner->second.graphics_storage)
-        if (Overlaps(base, live.bytes, address, bytes))
-            throw std::invalid_argument("Graphics suballocation overlaps live source storage");
+    // Every live span passed this check when inserted, so live spans never
+    // overlap: only the first span at or after the address and its
+    // predecessor can intersect it.
+    auto& spans = owner->second.graphics_storage;
+    const auto next = spans.lower_bound(address);
+    if ((next != spans.end() && Overlaps(next->first, next->second.bytes, address, bytes)) ||
+        (next != spans.begin() && Overlaps(std::prev(next)->first, std::prev(next)->second.bytes, address, bytes)))
+        throw std::invalid_argument("Graphics suballocation overlaps live source storage");
     RetireByteRange(owner->second, address, bytes, pending.split);
     pending.record.key() = address;
     auto inserted = owner->second.graphics_storage.insert(std::move(pending.record));
