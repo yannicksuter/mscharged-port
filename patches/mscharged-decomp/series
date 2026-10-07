@@ -335,3 +335,4 @@
 0451-native-rfl-temporary-lifetimes.patch
 0455-declare-original-mutex-scheduler-imports.patch
 0454-native-replay-placement-new-declaration.patch
+0452-native-rfl-wii16-name-cells.patch
