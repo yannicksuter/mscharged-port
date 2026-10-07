@@ -299,6 +299,7 @@ function(mscharged_link_original_main_credits target)
         mscharged_original_main_credits_vi aurora::core)
     target_link_options(${target} PRIVATE
         -Wl,--gc-sections -Wl,--export-dynamic
+        -Wl,--require-defined=SCGetSimpleAddressID,--export-dynamic-symbol=SCGetSimpleAddressID
         "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
     set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")

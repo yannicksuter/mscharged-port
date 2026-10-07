@@ -298,6 +298,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // Explicit USA diagnostic backing; independent SC and VI settings.
         const mscharged::NativeSystemSettings settings{1,0,0,std::uint8_t(widescreen),1};
         mscharged::ConfigureNativeSystemSettings(settings);
+        // No virtual Wii address record has been supplied. Original SC queries
+        // retain their unavailable-record result, without inferring a country.
+        mscharged::ConfigureNativeSystemSimpleAddress(std::nullopt);
         mscharged::platform::ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT,false);
         if(nativeSend) {
             mscharged::platform::ConfigureNativeVideoOutputHardware(settings);
