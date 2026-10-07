@@ -379,7 +379,7 @@ void InitializeNativeFilesystem(NativeFilesystemSettings settings) {
             for(const auto& path:paths) {
                 fs::create_directories(Physical(d,path));
                 const bool owned=path==d.home;
-                d.entries.emplace(path,Metadata{owned?d.settings.uid:0,owned?d.settings.gid:u16(0),3,3,u8(path=="/tmp"?3:1),0,true,d.next_order++});
+                d.entries.emplace(path,Metadata{owned?d.settings.uid:0,owned?d.settings.gid:u16(0),3,u8(owned?0:3),u8(owned?0:path=="/tmp"?3:1),0,true,d.next_order++});
             }
             Persist(d,d.entries);
         }
