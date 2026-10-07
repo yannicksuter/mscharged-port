@@ -4,7 +4,7 @@ include(cmake/NativeAXFrameCommands.cmake)
 
 # Explicit bounded functional-native hardware contract, not authentic Wii ROM
 # or full DSP-ISA execution. Source owners/requests/callbacks remain unchanged.
-# No production activation; unsupported voice/Studio/compressor work still faults.
+# No production activation; unsupported voice/remote Studio/surround/compressor work still faults.
 add_library(charged_native_ax_functional STATIC src/platform/ax_functional_device.cpp)
 add_dependencies(charged_native_ax_functional verify_prepared)
 target_include_directories(charged_native_ax_functional PUBLIC src)

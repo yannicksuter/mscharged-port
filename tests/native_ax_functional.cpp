@@ -1,6 +1,7 @@
 #include "platform/ax_bootstrap_device.h"
 #include "platform/ax_command_service.h"
 #include "platform/ax_functional_device.h"
+#include "platform/ax_studio_depop.h"
 #include "platform/ai.h"
 #include "platform/ax_storage_abi.h"
 #include "platform/dsp_control_abi.h"
@@ -402,21 +403,86 @@ void Run(int argc, char** argv) {
               device.Status().protocol.firmware_instructions==0&&
               GetNativeInterruptControllerStatus().dispatched==irq_before_reload+1,
           "actual original reload did not reinitialize native history and deliver one true INIT cause");
-    // Real source Stop builds nonzero Studio depop history. The current bounded
-    // kernel must hold that request rather than clear source history or return
-    // successful silence after restart.
+    // Source Stop, __AXSyncPBs and __AXPrintStudio own actual PB→Studio
+    // accumulation and fade history. The native processor only executes its
+    // literal Setup arithmetic, then existing original list output operations.
+    DSPBackendReadMemory(memory,active_address,active_pb.data(),active_pb.size());
+    constexpr unsigned dpop_index[12]={0,4,8,1,5,9,2,6,10,3,7,11};
+    std::array<s32,12> remaining{};
+    for(unsigned i=0;i<12;++i) {
+        const u16 bits=half(active_pb.data()+0x52+dpop_index[i]*2);
+        s16 value;std::memcpy(&value,&bits,2);remaining[i]=value;
+    }
+    Check(remaining[0]!=0||remaining[1]!=0,"actual active PB has no depop contributor");
+    const auto source_callbacks_before_depop=source_frame_callbacks;
+    bool exhausted{};unsigned depop_frames{};
+    for(;depop_frames<32&&!exhausted;++depop_frames) {
+        const auto prior=device.Status();
+        const auto prior_irqs=GetNativeInterruptControllerStatus().dispatched;
+        source_frame();device.ServiceOwner();
+        const auto completed=device.Status();
+        const auto requested=ReadNativeAXCommandList(memory,completed.frames.last_list_address,128);
+        u32 output_address{};u16 requested_gain{};
+        for(unsigned i=0;i<requested.command_count;++i)if(requested.commands[i].opcode==NativeAXOpcode::Output) {
+            const auto& c=requested.commands[i];requested_gain=c.arguments[0];
+            output_address=(u32(c.arguments[3])<<16)|c.arguments[4];
+        }
+        Check(output_address!=0,"actual Stop list omitted output request");
+        Check(completed.protocol.phase==NativeAXBootstrapPhase::NativeKernelInitialized&&
+                  completed.frames.completed_frames==prior.frames.completed_frames+1&&
+                  completed.frames.processed_frames==prior.frames.processed_frames+1&&
+                  GetNativeInterruptControllerStatus().dispatched==prior_irqs+2&&
+                  completed.last_active_voices==0&&completed.frames.stopped_voices==96,
+              "actual source Stop did not complete one real Studio/output/SYNC/YIELD/CONTINUE frame");
+        std::array<unsigned char,120> studio_wire{};
+        DSPBackendReadMemory(memory,spans[7].mapping.physical_address,studio_wire.data(),120);
+        bool any{};
+        for(unsigned i=0;i<12;++i) {
+            s32 expected_value{};s16 expected_delta{};
+            if(remaining[i]/96) {
+                const auto fade=std::max<s32>(-20,std::min<s32>(20,remaining[i]/96));
+                expected_value=remaining[i];expected_delta=-fade;remaining[i]-=fade*96;
+            } else remaining[i]=0;
+            const auto bits=word(studio_wire.data()+i*6);s32 value;std::memcpy(&value,&bits,4);
+            const auto dbits=half(studio_wire.data()+i*6+4);s16 delta;std::memcpy(&delta,&dbits,2);
+            Check(value==expected_value&&delta==expected_delta,"original packed Studio accumulation/fade history differs");
+            any=any||value!=0;
+        }
+        const auto lv=word(studio_wire.data()),rv=word(studio_wire.data()+6);
+        s32 left,right;std::memcpy(&left,&lv,4);std::memcpy(&right,&rv,4);
+        const auto ld=half(studio_wire.data()+4),rd=half(studio_wire.data()+10);
+        s16 left_delta,right_delta;std::memcpy(&left_delta,&ld,2);std::memcpy(&right_delta,&rd,2);
+        const auto gain=NativeAXCommandGainRamp(prior.history.master,requested_gain);
+        const auto expected_pcm=NativeAXPackStereo(NativeAXStudioDepop96(left,left_delta),
+            NativeAXStudioDepop96(right,right_delta),gain);
+        std::array<unsigned char,384> pcm_wire{};
+        DSPBackendReadMemory(memory,output_address,pcm_wire.data(),384);
+        for(unsigned i=0;i<192;++i)Check(half(pcm_wire.data()+i*2)==u16(expected_pcm[i]),
+            "true source Stop PCM differs from independently qualified Setup/ramp/output arithmetic");
+        Check(source_frame_callbacks==source_callbacks_before_depop+depop_frames+1,
+              "actual Stop replaced source callback ownership");
+        exhausted=!any;
+    }
+    Check(exhausted&&depop_frames>1,"original depop totals did not decay through their true source frames");
+    // Controlled negative through the actual source accumulation API. Remote
+    // Setup arithmetic is qualified independently; remote output/mix remains
+    // an explicit unsupported request, never fabricated silent completion.
+    auto source_depop=Load<decltype(&__AXDepopVoice)>(image,"__AXDepopVoice");
+    AXPB remote_contributor{};remote_contributor.rmtDpop.aMain0=200;
+    source_depop(&remote_contributor);
     std::array<unsigned char,1152> stopped_output_before{};
     std::memcpy(stopped_output_before.data(),spans[8].storage.address,1152);
     const auto irq_before_depop=GetNativeInterruptControllerStatus().dispatched;
-    bool exact_depop_hold{};
+    const auto before_remote=device.Status();bool exact_depop_hold{};
     try {source_frame();device.ServiceOwner();}
     catch(const NativeAXCommandError& error){exact_depop_hold=error.failure()==NativeAXFailure::NonzeroStudio;}
     Check(exact_depop_hold&&device.Status().protocol.phase==NativeAXBootstrapPhase::Faulted&&
-              device.Status().frames.processed_frames==0&&device.Status().frames.completed_frames==0&&
-              device.Status().history.master==0x8000&&
+              device.Status().frames.processed_frames==before_remote.frames.processed_frames&&
+              device.Status().frames.completed_frames==before_remote.frames.completed_frames&&
+              device.Status().history==before_remote.history&&
               GetNativeInterruptControllerStatus().dispatched==irq_before_depop&&
               std::memcmp(stopped_output_before.data(),spans[8].storage.address,1152)==0,
-          "real source depop hold was hidden by partial PCM/history/IRQ success");
+          "unsupported remote Studio hold was hidden by partial PCM/history/IRQ success");
     register_callback(nullptr);
     ShutdownNativeAI();
     ChargedDSPControlWrite(0x0804);

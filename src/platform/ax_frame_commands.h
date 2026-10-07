@@ -38,7 +38,7 @@ struct NativeAXPreparedCommandFrame {
     std::uint32_t written_bytes{};
 };
 // A staged normal-output hardware conformance slice. Genuine source order and
-// source-owned AUX callback/ring transfers are retained. Nonzero Studio/prior
+// source-owned AUX callback/ring transfers are retained. Nonzero remote Studio/prior
 // surround, DPL2, compressor attack/history and unsupported voice features fail
 // before stores. It never calls effects, selects a cue, changes source flags,
 // replies to a DSP mailbox, or marks the device ready.
