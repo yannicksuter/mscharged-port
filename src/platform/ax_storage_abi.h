@@ -16,6 +16,12 @@ void ChargedAXGetVoiceStorage(ChargedAXStorage output[2]); // AXPB, opaque ITD.
 void ChargedAXGetAuxStorage(ChargedAXStorage output[3]);
 ChargedAXStorage ChargedAXGetCompressorStorage(void);
 
+// Actual AXOut backing: LR stereo PCM16, surround numeric32, remote PCM16,
+// opaque DRAM context and raw firmware, in that order. Task metadata is CPU-only;
+// it retains native pointers/callbacks and must not be pinned as a DSP record.
+void ChargedAXGetOutputStorage(ChargedAXStorage output[5]);
+ChargedAXStorage ChargedAXGetTaskStorage(void);
+
 #ifdef __cplusplus
 }
 #endif

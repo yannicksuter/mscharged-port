@@ -249,3 +249,4 @@
 0314-native-original-AX-halfword-word-copies.patch
 0312-native-owned-audio-sample-pins.patch
 0316-preserve-original-frontend-result-cue-width.patch
+0311-preserve-original-AX-output-address-transport.patch
