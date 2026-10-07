@@ -1,0 +1,59 @@
+Subject: [PATCH] Preserve original ordinary-save Wii byte records on native hosts
+
+Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
+Scope: Serialized-data transport only; original save requests, callbacks, CRC and readiness decisions remain.
+
+diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp
+--- a/src/Game/DB/SaveLoad.cpp
++++ b/src/Game/DB/SaveLoad.cpp
+@@ -3,6 +3,9 @@
+ #endif
+ #include "NL/nlSingleton.inl"
+ #include "Game/DB/SaveLoad.h"
++#if defined(MSCHARGED_NATIVE)
++#include "platform/save_data.h"
++#endif
+ #include "Game/TweakRegistry.h"
+ 
+ #include "Game/GameSceneManager.h"
+@@ -654,9 +657,17 @@
+         GameInfoManager::GetInstance()->SerializeSettings((u8*)SaveBuffer + sizeof(SaveFileHeader));
+     }
+ 
++#if defined(MSCHARGED_NATIVE)
++    mscharged::platform::EncodeOriginalSavePayload((u8*)SaveBuffer + sizeof(SaveFileHeader),
++        dataSize - sizeof(SaveFileHeader), OnlineMode);
++#endif
+     SaveFileHeader* header = (SaveFileHeader*)SaveBuffer;
+     header->Size = dataSize;
+     header->CRC = nlChecksum32((u8*)SaveBuffer + sizeof(SaveFileHeader), alignedSize - sizeof(SaveFileHeader));
++#if defined(MSCHARGED_NATIVE)
++    header->Size = mscharged::platform::OriginalSaveWord(header->Size);
++    header->CRC = mscharged::platform::OriginalSaveWord(header->CRC);
++#endif
+     HandleNANDResult(nlFlashWrite(SaveBuffer, alignedSize, WriteSaveFileCallback));
+ }
+ 
+@@ -664,7 +675,11 @@
+ {
+     SaveFileHeader* header = (SaveFileHeader*)SaveBuffer;
+     u32 checksum = nlChecksum32((u8*)SaveBuffer + sizeof(SaveFileHeader), size - sizeof(SaveFileHeader));
++#if defined(MSCHARGED_NATIVE)
++    if (mscharged::platform::OriginalSaveWord(header->CRC) != checksum)
++#else
+     if (header->CRC != checksum)
++#endif
+     {
+         nlPrintf("SAVE FILE IS CORRUPT: The checksum is incorrect.\n");
+         nlFree(SaveBuffer);
+@@ -675,6 +690,10 @@
+         return false;
+     }
+ 
++#if defined(MSCHARGED_NATIVE)
++    mscharged::platform::DecodeOriginalSavePayload((u8*)SaveBuffer + sizeof(SaveFileHeader),
++        size - sizeof(SaveFileHeader), OnlineMode);
++#endif
+     void* allocation = SaveBuffer;
+     void* data = (u8*)SaveBuffer + sizeof(SaveFileHeader);
+     SaveBuffer = data;
