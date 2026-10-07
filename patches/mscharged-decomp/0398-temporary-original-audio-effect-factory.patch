@@ -1,0 +1,520 @@
+Subject: [PATCH] Temporarily restore retail-verified original audio effect factory
+Upstream-base: f1e9646a7da6950143e77b1daed33a92c931a638
+Classification: temporary source reconstruction explicitly approved by the owner.
+Scope: restore verified missing factory methods and constructor requests; move
+       shared declarations without changing existing Matching method bodies.
+       Preserve the existing native registry-width adaptation.
+Retirement: replace with reviewed upstream source once these definitions land.
+
+diff --git a/src/Game/Audio/LowPassFilter.cpp b/src/Game/Audio/LowPassFilter.cpp
+--- a/src/Game/Audio/LowPassFilter.cpp
++++ b/src/Game/Audio/LowPassFilter.cpp
+@@ -8,59 +8,7 @@
+ #include "NL/nlSlotPool.h"
+ #include "NL/nlString.h"
+ 
+-class LowPassFilterParameter : public AudioEffectParameter
+-{
+-public:
+-    LowPassFilterParameter();
+-
+-    static void* operator new(unsigned long)
+-    {
+-        LowPassFilterParameter* parameter = 0;
+-        s_Pool.Allocate(parameter);
+-        return parameter;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((LowPassFilterParameter*)pointer);
+-    }
+-
+-    u32 m_On;
+-    u32 m_Frequency;
+-
+-    static SlotPool<LowPassFilterParameter> s_Pool;
+-};
+-
+-class LowPassFilter : public AudioEffectBase
+-{
+-public:
+-    virtual void CreateParameter(unsigned int definition, const void* context,
+-        bool disabled, AudioEffectParameter** output);
+-    virtual void BeginBlend();
+-    virtual void BlendParameter(AudioEffectParameter* destination,
+-        AudioEffectParameter* source);
+-    virtual void EndBlend();
+-    virtual void OnParameterFinished(AudioEffectParameter* parameter);
+-    virtual void ApplyToSound(void* handle);
+-
+-    static void* operator new(unsigned long)
+-    {
+-        LowPassFilter* effect = 0;
+-        s_Pool.Allocate(effect);
+-        return effect;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((LowPassFilter*)pointer);
+-    }
+-
+-    LowPassFilterParameter m_Initial;
+-    LowPassFilterParameter m_Final;
+-    u32 m_FilterCount;
+-
+-    static SlotPool<LowPassFilter> s_Pool;
+-};
++#include "Game/Audio/LowPassFilter.h"
+ 
+ static u32 sLowPassFilterFrequency = 1000;
+ static u32 sLowPassFilterEnabled = 1;
+diff --git a/include/Game/Audio/LowPassFilter.h b/include/Game/Audio/LowPassFilter.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/LowPassFilter.h
+@@ -0,0 +1,70 @@
++#ifndef GAME_AUDIO_LOWPASSFILTER_H
++#define GAME_AUDIO_LOWPASSFILTER_H
++
++#include "Game/Audio/AudioEffect.h"
++#include "NL/nlSlotPool.h"
++
++class LowPassFilterParameter : public AudioEffectParameter
++{
++public:
++    LowPassFilterParameter();
++
++    static void* operator new(unsigned long)
++    {
++        LowPassFilterParameter* parameter = 0;
++        s_Pool.Allocate(parameter);
++        return parameter;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((LowPassFilterParameter*)pointer);
++    }
++
++    u32 m_On;
++    u32 m_Frequency;
++
++    static SlotPool<LowPassFilterParameter> s_Pool;
++};
++
++class LowPassFilter : public AudioEffectBase
++{
++public:
++    LowPassFilter()
++        : AudioEffectBase("LowPassFilter")
++    {
++        m_CurrentParameter = &m_Initial;
++        m_ResultParameter = &m_Final;
++        m_Initial.m_On = 0;
++        m_Initial.m_Frequency = 16000;
++    }
++
++    virtual void CreateParameter(unsigned int definition, const void* context,
++        bool disabled, AudioEffectParameter** output);
++    virtual void BeginBlend();
++    virtual void BlendParameter(AudioEffectParameter* destination,
++        AudioEffectParameter* source);
++    virtual void EndBlend();
++    virtual void OnParameterFinished(AudioEffectParameter* parameter);
++    virtual void ApplyToSound(void* handle);
++
++    static void* operator new(unsigned long)
++    {
++        LowPassFilter* effect = 0;
++        s_Pool.Allocate(effect);
++        return effect;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((LowPassFilter*)pointer);
++    }
++
++    LowPassFilterParameter m_Initial;
++    LowPassFilterParameter m_Final;
++    u32 m_FilterCount;
++
++    static SlotPool<LowPassFilter> s_Pool;
++};
++
++#endif // GAME_AUDIO_LOWPASSFILTER_H
+diff --git a/src/Game/Audio/Pitch.cpp b/src/Game/Audio/Pitch.cpp
+--- a/src/Game/Audio/Pitch.cpp
++++ b/src/Game/Audio/Pitch.cpp
+@@ -9,58 +9,7 @@
+ #include "NL/nlSlotPool.h"
+ #include "NL/nlString.h"
+ 
+-class PitchParameter : public AudioEffectParameter
+-{
+-public:
+-    PitchParameter();
+-    virtual ~PitchParameter();
+-
+-    static void* operator new(unsigned long)
+-    {
+-        PitchParameter* parameter = 0;
+-        s_Pool.Allocate(parameter);
+-        return parameter;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((PitchParameter*)pointer);
+-    }
+-
+-    float m_Semitones;
+-
+-    static SlotPool<PitchParameter> s_Pool;
+-};
+-
+-class Pitch : public AudioEffectBase
+-{
+-public:
+-    virtual void CreateParameter(unsigned int definition, const void* context,
+-        bool negate, AudioEffectParameter** output);
+-    virtual void BeginBlend();
+-    virtual void BlendParameter(AudioEffectParameter* destination,
+-        AudioEffectParameter* source);
+-    virtual void EndBlend();
+-    virtual void OnParameterFinished(AudioEffectParameter* parameter);
+-    virtual void ApplyToSound(void* handle);
+-
+-    static void* operator new(unsigned long)
+-    {
+-        Pitch* effect = 0;
+-        s_Pool.Allocate(effect);
+-        return effect;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((Pitch*)pointer);
+-    }
+-
+-    PitchParameter m_Initial;
+-    PitchParameter m_Final;
+-
+-    static SlotPool<Pitch> s_Pool;
+-};
++#include "Game/Audio/Pitch.h"
+ 
+ static float sPitchSemitones = 1.0f;
+ 
+diff --git a/include/Game/Audio/Pitch.h b/include/Game/Audio/Pitch.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/Pitch.h
+@@ -0,0 +1,68 @@
++#ifndef GAME_AUDIO_PITCH_H
++#define GAME_AUDIO_PITCH_H
++
++#include "Game/Audio/AudioEffect.h"
++#include "NL/nlSlotPool.h"
++
++class PitchParameter : public AudioEffectParameter
++{
++public:
++    PitchParameter();
++    virtual ~PitchParameter();
++
++    static void* operator new(unsigned long)
++    {
++        PitchParameter* parameter = 0;
++        s_Pool.Allocate(parameter);
++        return parameter;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((PitchParameter*)pointer);
++    }
++
++    float m_Semitones;
++
++    static SlotPool<PitchParameter> s_Pool;
++};
++
++class Pitch : public AudioEffectBase
++{
++public:
++    Pitch()
++        : AudioEffectBase("Pitch")
++    {
++        m_CurrentParameter = &m_Initial;
++        m_ResultParameter = &m_Final;
++        m_Initial.m_Semitones = 0.0f;
++    }
++
++    virtual void CreateParameter(unsigned int definition, const void* context,
++        bool negate, AudioEffectParameter** output);
++    virtual void BeginBlend();
++    virtual void BlendParameter(AudioEffectParameter* destination,
++        AudioEffectParameter* source);
++    virtual void EndBlend();
++    virtual void OnParameterFinished(AudioEffectParameter* parameter);
++    virtual void ApplyToSound(void* handle);
++
++    static void* operator new(unsigned long)
++    {
++        Pitch* effect = 0;
++        s_Pool.Allocate(effect);
++        return effect;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((Pitch*)pointer);
++    }
++
++    PitchParameter m_Initial;
++    PitchParameter m_Final;
++
++    static SlotPool<Pitch> s_Pool;
++};
++
++#endif // GAME_AUDIO_PITCH_H
+diff --git a/src/Game/Audio/CategoryVolume.cpp b/src/Game/Audio/CategoryVolume.cpp
+--- a/src/Game/Audio/CategoryVolume.cpp
++++ b/src/Game/Audio/CategoryVolume.cpp
+@@ -11,57 +11,7 @@
+ #include "Game/Audio/RegistryPools.h"
+ #include "Game/UnidentifiedStaticStorage.h"
+ 
+-class CategoryVolumeParameter
+-    : public AudioEffectParameter
+-{
+-public:
+-    CategoryVolumeParameter();
+-    virtual ~CategoryVolumeParameter();
+-
+-    static void* operator new(unsigned long)
+-    {
+-        CategoryVolumeParameter* parameter = 0;
+-        s_Pool.Allocate(parameter);
+-        return parameter;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((CategoryVolumeParameter*)pointer);
+-    }
+-
+-    float m_Volume;
+-    u32 m_Category;
+-
+-    static SlotPool<CategoryVolumeParameter> s_Pool;
+-};
+-
+-class CategoryVolume : public AudioEffectBase
+-{
+-public:
+-    virtual void CreateParameter(u32 definition, const void* context, bool negate,
+-        AudioEffectParameter** output);
+-    virtual void BeginBlend();
+-    virtual void BlendParameter(AudioEffectParameter* destination,
+-        AudioEffectParameter* source);
+-
+-    static void* operator new(unsigned long)
+-    {
+-        CategoryVolume* effect = 0;
+-        s_Pool.Allocate(effect);
+-        return effect;
+-    }
+-
+-    static void operator delete(void* pointer)
+-    {
+-        s_Pool.Free((CategoryVolume*)pointer);
+-    }
+-
+-    CategoryVolumeParameter m_Initial;
+-    CategoryVolumeParameter m_Final;
+-
+-    static SlotPool<CategoryVolume> s_Pool;
+-};
++#include "Game/Audio/CategoryVolume.h"
+ 
+ struct CategoryEntry
+ {
+diff --git a/include/Game/Audio/CategoryVolume.h b/include/Game/Audio/CategoryVolume.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/CategoryVolume.h
+@@ -0,0 +1,66 @@
++#ifndef GAME_AUDIO_CATEGORYVOLUME_H
++#define GAME_AUDIO_CATEGORYVOLUME_H
++
++#include "Game/Audio/AudioEffect.h"
++#include "NL/nlSlotPool.h"
++
++class CategoryVolumeParameter
++    : public AudioEffectParameter
++{
++public:
++    CategoryVolumeParameter();
++    virtual ~CategoryVolumeParameter();
++
++    static void* operator new(unsigned long)
++    {
++        CategoryVolumeParameter* parameter = 0;
++        s_Pool.Allocate(parameter);
++        return parameter;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((CategoryVolumeParameter*)pointer);
++    }
++
++    float m_Volume;
++    u32 m_Category;
++
++    static SlotPool<CategoryVolumeParameter> s_Pool;
++};
++
++class CategoryVolume : public AudioEffectBase
++{
++public:
++    CategoryVolume()
++        : AudioEffectBase("CategoryVolume")
++    {
++        m_CurrentParameter = &m_Initial;
++        m_ResultParameter = &m_Final;
++    }
++
++    virtual void CreateParameter(u32 definition, const void* context, bool negate,
++        AudioEffectParameter** output);
++    virtual void BeginBlend();
++    virtual void BlendParameter(AudioEffectParameter* destination,
++        AudioEffectParameter* source);
++
++    static void* operator new(unsigned long)
++    {
++        CategoryVolume* effect = 0;
++        s_Pool.Allocate(effect);
++        return effect;
++    }
++
++    static void operator delete(void* pointer)
++    {
++        s_Pool.Free((CategoryVolume*)pointer);
++    }
++
++    CategoryVolumeParameter m_Initial;
++    CategoryVolumeParameter m_Final;
++
++    static SlotPool<CategoryVolume> s_Pool;
++};
++
++#endif // GAME_AUDIO_CATEGORYVOLUME_H
+diff --git a/include/Game/Audio/AudioEffects.h b/include/Game/Audio/AudioEffects.h
+--- a/include/Game/Audio/AudioEffects.h
++++ b/include/Game/Audio/AudioEffects.h
+@@ -5,6 +5,7 @@
+ #include "Game/Audio/AudioGlobals.h"
+ #include "NL/nlArrayAllocator.h"
+ #include "NL/nlSlotPool.h"
++#include "string.h"
+ 
+ class AudioEffectFactory
+ {
+@@ -46,7 +47,15 @@
+ class Volume : public AudioEffectBase
+ {
+ public:
+-    Volume();
++    Volume()
++        : AudioEffectBase("Volume")
++    {
++        m_Initial.m_Unknown10 = 0.0f;
++        m_Initial.m_Unknown14_00 = false;
++        m_Initial.m_Unknown14_01 = m_Initial.m_Unknown14_00;
++        m_CurrentParameter = &m_Initial;
++        m_ResultParameter = &m_Final;
++    }
+     virtual ~Volume();
+     virtual void CreateParameter(unsigned int, const void*, bool, AudioEffectParameter**);
+     virtual void BeginBlend();
+@@ -81,7 +90,13 @@
+ class ControllerSpeaker : public AudioEffectBase
+ {
+ public:
+-    ControllerSpeaker();
++    ControllerSpeaker()
++        : AudioEffectBase("ControllerSpeaker")
++        , m_Unknown3C(-1)
++        , m_Unknown40(0)
++    {
++        memset(m_Unknown44, 0, sizeof(m_Unknown44));
++    }
+     virtual ~ControllerSpeaker();
+     virtual void CreateParameter(unsigned int, const void*, bool, AudioEffectParameter**);
+     virtual void BeginBlend();
+diff --git a/src/Game/Audio/AudioEffects.cpp b/src/Game/Audio/AudioEffects.cpp
+--- a/src/Game/Audio/AudioEffects.cpp
++++ b/src/Game/Audio/AudioEffects.cpp
+@@ -3,6 +3,11 @@
+ #include "revolution/wpad/WPAD.h"
+ 
+ #include "Game/Audio/AudioEffects.h"
++#include "Game/Audio/Reverb.h"
++#include "Game/Audio/Delay.h"
++#include "Game/Audio/LowPassFilter.h"
++#include "Game/Audio/Pitch.h"
++#include "Game/Audio/CategoryVolume.h"
+ #include "Game/Audio/AudioConfig.h"
+ #if defined(MSCHARGED_NATIVE)
+ #include "platform/native_registry_word.h"
+@@ -39,6 +44,45 @@
+ 
+ void AudioEffectFactory::Update(float)
+ {
++}
++
++void AudioEffectFactory::Shutdown()
++{
++    VolumeParameter::s_Pool.FreeBlocks();
++    Volume::s_Pool.FreeBlocks();
++    ReverbParameter::s_Pool.FreeBlocks();
++    Reverb::s_Pool.FreeBlocks();
++    DelayParameter::s_Pool.FreeBlocks();
++    Delay::s_Pool.FreeBlocks();
++    LowPassFilterParameter::s_Pool.FreeBlocks();
++    LowPassFilter::s_Pool.FreeBlocks();
++    PitchParameter::s_Pool.FreeBlocks();
++    Pitch::s_Pool.FreeBlocks();
++    CategoryVolumeParameter::s_Pool.FreeBlocks();
++    CategoryVolume::s_Pool.FreeBlocks();
++}
++
++AudioEffectBase* AudioEffectFactory::CreateEffect(unsigned int type)
++{
++    switch (type)
++    {
++    case 0xCE5C5677:
++        return new Volume;
++    case 0x7DDB838E:
++        return new ControllerSpeaker;
++    case 0xC457F745:
++        return new Reverb;
++    case 0x04F5A46E:
++        return new Delay;
++    case 0x0BCF338E:
++        return new LowPassFilter;
++    case 0x05D11E37:
++        return new Pitch;
++    case 0xFA8EC255:
++        return new CategoryVolume;
++    default:
++        return 0;
++    }
+ }
+ 
+ void AudioEffectFactory::ReleaseEffect(AudioEffectBase* effect)
