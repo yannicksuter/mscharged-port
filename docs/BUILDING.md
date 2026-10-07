@@ -66,6 +66,9 @@ resolve from the INI's directory. To use another configuration:
 `--size WIDTHxHEIGHT` override the loaded INI for the current run. They do not
 save settings. Command-line disc paths use the working directory; INI disc
 paths use the INI directory. Later options win.
+Options with values also accept `--disc=FILE`, `--size=1280x720`, etc. Shared
+options can appear before or after the experimental mode flag. Quote paths
+containing spaces.
 
 ```sh
 ./build/release/mscharged --disc ./game/R4QE01.rvz --window --size 1280x720
