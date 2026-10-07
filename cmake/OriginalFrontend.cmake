@@ -49,6 +49,7 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/SH/SHOnlineLogin.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/GameSceneManager.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/NetworkSession.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feScene.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feSceneManager.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feResourceManager.cpp"
