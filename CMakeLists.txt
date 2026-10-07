@@ -204,6 +204,8 @@ if(BUILD_TESTING)
     add_test(NAME foundation COMMAND foundation_tests)
     add_test(NAME source_preparation
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_prepare_sources.py")
+    add_test(NAME dependency_setup
+        COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_setup_dependencies.py")
     add_test(NAME bootstrap_cli
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bootstrap.py"
                 "$<TARGET_FILE:mscharged-bootstrap>")

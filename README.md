@@ -17,21 +17,20 @@ Install the [build prerequisites](docs/BUILDING.md#requirements) first; Mac user
 can follow [macOS tool setup](docs/BUILDING_MACOS.md#install-tools).
 For a **fresh checkout**, run these three lines from the parent directory:
 
-**These commands build and open the launcher.** The default `release` preset
-does not include the experimental game runtime. Direct game startup on macOS
-is still being implemented.
+The Release build includes the incomplete original-source frontend runtime.
+Supply your own USA `R4QE01` revision 1 ISO/RVZ at the path below. Linux startup
+and menus have been tested; macOS runtime validation is still in progress.
 
 ```sh
 git clone --branch main --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git && cd mscharged-port
-git -c submodule.recurse=false submodule update --init --checkout -- extern/mscharged-decomp extern/nod extern/corrosion extern/sdl extern/imgui && cmake --workflow --preset release --fresh
-./build/release/mscharged
+python3 tools/setup_dependencies.py && CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset release --fresh
+./build/release/mscharged --disc ./game/R4QE01.rvz --window
 ```
 
-Use **`main`**, not the older `master` branch. The `extern/` directories are
-pinned dependencies and must stay tracked. For an existing checkout, follow
-the [update instructions](docs/BUILDING_MACOS.md#clone-and-initialize-dependencies).
-See [runtime instructions](docs/RUNTIME.md) to build and run the experimental
-Linux game directly without the launcher.
+Use `main`, not the older `master` branch. The helper initializes only the pinned
+dependencies required by your platform. See the [build guide](docs/BUILDING.md)
+for updates and the smaller launcher build, and [runtime instructions](docs/RUNTIME.md)
+for separate diagnostics.
 
 ## Game data
 
