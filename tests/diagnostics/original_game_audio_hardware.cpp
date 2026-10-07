@@ -59,10 +59,13 @@ void OriginalGameAudioHardware::UnbindOwnerService() {
     service_bound_ = false;
 }
 
-void OriginalGameAudioHardware::CloseAfterAIStop(void (*retire_silence_pin)()) {
+void OriginalGameAudioHardware::CloseAfterAIStop(void (*retire_silence_pin)(),
+    void (*unload_idle_banks)(), void (*shutdown_source)()) {
     using namespace platform;
     if (!device_ || !retire_silence_pin || service_bound_)
         throw std::logic_error("Original audio retirement requires a live source pin receiver");
+    if (bool(unload_idle_banks) != bool(shutdown_source))
+        throw std::logic_error("Original bank retirement and source shutdown must remain paired");
     const auto ai = GetNativeAIStatus();
     if (ai.initialized || ai.running || ai.callback_active || ai.retained_blocks || ai.queued_input_bytes)
         throw std::logic_error("Actual native AI must stop and drain before audio retirement");
@@ -71,6 +74,12 @@ void OriginalGameAudioHardware::CloseAfterAIStop(void (*retire_silence_pin)()) {
     ChargedDSPControlWrite(ChargedDSPControlRead() | 4u);
     device_->Close();
     device_.reset();
+    // Source allocations and the module are still owned after processor close.
+    // Retire original bank callbacks/allocations before device-memory detach.
+    if (unload_idle_banks) {
+        unload_idle_banks();
+        shutdown_source();
+    }
     retire_silence_pin();
     memory_.ReleaseAfterDeviceDrain();
     DetachNativeDSPControl();

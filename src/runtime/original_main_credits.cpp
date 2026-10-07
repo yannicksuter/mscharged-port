@@ -326,14 +326,19 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         Check(result==85, "Original main selected scene did not complete checkpoint 85");
         using ObserveAudio = unsigned(*)();
         using AudioAction = void(*)();
+        using AudioIdle = bool(*)();
         auto observeAudio=sourceAudio ? reinterpret_cast<ObserveAudio>(
             dlsym(module,"charged_original_audio_observe")) : nullptr;
         auto shutdownAudio=sourceAudio ? reinterpret_cast<AudioAction>(
             dlsym(module,"charged_original_audio_shutdown")) : nullptr;
+        auto idleAudio=sourceAudio ? reinterpret_cast<AudioIdle>(
+            dlsym(module,"charged_original_audio_idle")) : nullptr;
+        auto unloadIdleBanks=sourceAudio ? reinterpret_cast<AudioAction>(
+            dlsym(module,"charged_original_audio_unload_idle_banks")) : nullptr;
         auto retireAudioPin=sourceAudio ? reinterpret_cast<AudioAction>(
             dlsym(module,"charged_original_audio_retire_silence_pin")) : nullptr;
         if(sourceAudio) {
-            Check(observeAudio && shutdownAudio && retireAudioPin,
+            Check(observeAudio && shutdownAudio && idleAudio && unloadIdleBanks && retireAudioPin,
                   "Original audio source observations and retirement exports unavailable");
             // True source predicates, before the first original task/frame.
             Check(observeAudio()==7u,
@@ -519,17 +524,23 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         }
 #endif
         stopMovie();
-        if(sourceAudio)shutdownAudio();
+        if(sourceAudio) {
+            Check(idleAudio(),"Active original sounds must retire through original game flow before host detachment");
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+            Check(gameAudioHardware->Status().last_active_voices==0,
+                  "Original stopped voices have not completed a real native AX frame");
+#endif
+        }
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)gameAudioHardware->UnbindOwnerService();
 #endif
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio) {
-            gameAudioHardware->CloseAfterAIStop(retireAudioPin);
+            gameAudioHardware->CloseAfterAIStop(retireAudioPin,unloadIdleBanks,shutdownAudio);
             gameAudioHardware.reset();
             Check(observeAudio()==7u,"Original source shutdown flags unexpectedly changed");
-            std::puts("Original audio stopped: AI drained, native AX halted/closed, source device pins retired; original shutdown flags preserved.");
+            std::puts("Original audio stopped: AI drained, native AX halted/closed, original idle banks/source retired before device pins; original shutdown flags preserved.");
         }
 #endif
         mscharged::platform::ShutdownNativeHardwareInput();

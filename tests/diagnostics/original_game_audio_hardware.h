@@ -14,13 +14,18 @@ public:
     OriginalGameAudioHardware(const OriginalGameAudioHardware&) = delete;
     OriginalGameAudioHardware& operator=(const OriginalGameAudioHardware&) = delete;
     platform::NativeAXFunctionalStatus Status() const;
-    // After original source shutdown, stop borrowing the hardware owner before
+    // After original sounds are idle, stop borrowing the hardware owner before
     // that owner stops/drains AI. No source flag/callback or device request follows.
     void UnbindOwnerService();
-    // Original THP Quit and source AudioSystem::Shutdown must already return,
-    // then the sole AI endpoint must stop/drain. The module first loader handle
-    // and original task/CRT owners remain live through terminal exit.
-    void CloseAfterAIStop(void (*retire_silence_pin)());
+    // Original THP Quit and actual AI stop/drain must already return. Legacy
+    // no-bank callers retire source owners before this call; paired callbacks
+    // retain them through HALT and execute original bank/source retirement here.
+    // The module first handle and source task/CRT owners remain live at exit.
+    // Optional paired original callbacks retire idle banks and source owners
+    // after device close, before releasing any sample/static endpoint lifetime.
+    // Source active handles must have retired naturally through original tasks.
+    void CloseAfterAIStop(void (*retire_silence_pin)(),
+        void (*unload_idle_banks)() = nullptr, void (*shutdown_source)() = nullptr);
 private:
     static void ServiceDevice(void* context);
     bool service_bound_{};
