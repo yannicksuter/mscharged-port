@@ -9,6 +9,7 @@
 #include "gfx/scanout.hpp"
 #include <dolphin/gx/GXAurora.h>
 #include <atomic>
+#include <array>
 #include <algorithm>
 #include <vector>
 #include <memory>
@@ -28,6 +29,10 @@
 #include "platform/video_device.h"
 #include "platform/video_output_device.h"
 #include "platform/interrupt_controller.h"
+#include "platform/filesystem_boot.h"
+#include "platform/ipc_boot_buffer.h"
+#include <revolution/os/OSIpc.h>
+#include <revolution/ipc.h>
 #include "credits_movie_hardware.h"
 #include <SDL3/SDL_video.h>
 #include <dlfcn.h>
@@ -257,6 +262,20 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             // This mode never uses diagnostic aurora_begin/end_frame.
             aurora_configure_native_gx_hardware();
         }
+        if (frontend) {
+            // Physical IPC boot metadata is part of the native OS foundation.
+            // The whole original SDK keeps its advancing IPC buffer cursor;
+            // source nlFlashInitialize/NANDInit still run at their own positions.
+            alignas(32) static std::array<unsigned char, 32768> ipcBootMemory{};
+            mscharged::platform::InstallNativeIPCBootBuffer(
+                ipcBootMemory.data(), ipcBootMemory.size());
+            __OSInitIPCBuffer();
+            IPCInit();
+            // One isolated native title profile. UID is an explicit native IOS
+            // process identity, independent of the host account/retail console.
+            mscharged::platform::InitializeNativeFilesystemForDisc(
+                {launch.disc_path, dataDirectory / "nand", 0x1001});
+        }
         mscharged::platform::InitializeNativeSTMDevice();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
@@ -392,6 +411,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         stopMovie();
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
         mscharged::platform::ShutdownNativeHardwareInput();
+        if (frontend)
+            mscharged::platform::ShutdownNativeFilesystem();
         if(axModuleMemory) {
             // Actual DSP jobs must halt/drain before this point when admitted.
             // Current selected frontend still omits original AX initialization.
