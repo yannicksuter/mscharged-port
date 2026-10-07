@@ -1,6 +1,7 @@
 #pragma once
 #include "platform/dsp_control.h"
 #include "platform/dsp_memory.h"
+#include <array>
 #include <cstdint>
 #include <memory>
 
@@ -49,6 +50,9 @@ public:
     void ServiceOwner();
     NativeAXBootstrapStatus Status() const;
     NativeAXStoppedVoiceStatus FrameStatus() const;
+    // Read actual initialized master/AUX words; reject cold/loading/fault/reset.
+    // Does not expose or invent compressor history or command/kernel readiness.
+    std::array<std::uint16_t,4> InitializedGainWords() const;
     // Requires actual HALT; no thread/job/source flags are repaired here.
     void Close();
 private:

@@ -292,3 +292,13 @@ void NativeAXBootstrapDevice::Close() {
     s.core.reset();s.attached=false;s.phase=NativeAXBootstrapPhase::Retired;
 }
 } // namespace mscharged::platform
+
+namespace mscharged::platform {
+std::array<std::uint16_t,4> NativeAXBootstrapDevice::InitializedGainWords() const {
+    state_->RequireOwner();
+    if(state_->phase!=NativeAXBootstrapPhase::InitPrefixCompleted || !state_->core)
+        throw std::logic_error("AX gain context needs actual completed initialization instructions");
+    return {state_->core->DataWord(0x0ce5),state_->core->DataWord(0x0ce6),
+            state_->core->DataWord(0x0ce7),state_->core->DataWord(0x0ce8)};
+}
+} // namespace mscharged::platform
