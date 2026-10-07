@@ -257,3 +257,4 @@
 0313-native-original-audio-rpc-metadata.patch
 0322-preserve-original-audio-silence-addresses.patch
 0326-native-original-fs-compiler-abi.patch
+0327-original-fedpd-task-diagnostic-admission.patch
