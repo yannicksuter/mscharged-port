@@ -1,3 +1,4 @@
+#include "platform/graphics_stats.h"
 #include "runtime/original_main_credits.h"
 #include "platform/graphics_backend.h"
 #include "runtime/original_sh_menu_diagnostic.h"
@@ -571,7 +572,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             aurora::gfx::synchronize();
             encoded=encoded || AuroraGXWasDrawEncoded(receipt);
             draws+=aurora_get_stats()->drawCallCount;++frames;
-            quiet=std::atomic_ref<const unsigned>(aurora_get_stats()->queuedPipelines).load()?0:quiet+1;
+            quiet=mscharged::platform::GetQueuedPipelineCount()?0:quiet+1;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         // Explicit terminal join: no queued GX or presentation work outlives the loop.
