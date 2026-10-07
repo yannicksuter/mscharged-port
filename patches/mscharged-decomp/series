@@ -261,3 +261,4 @@
 0325-native-ode-array-memory-declaration.patch
 0333-native-original-ipc-heap-addresses.patch
 0329-native-original-os-message-cell-abi.patch
+0336-native-original-nand-compiler-abi.patch
