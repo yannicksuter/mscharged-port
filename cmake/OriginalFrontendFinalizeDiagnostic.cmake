@@ -9,6 +9,7 @@ function(mscharged_select_original_frontend_finalize target)
     endif()
     foreach(_required IN ITEMS
             MSCHARGED_DIAGNOSTIC_FRONTEND_MII_RESOURCES
+            MSCHARGED_DIAGNOSTIC_MAIN_PRESENTATION_OWNER
             MSCHARGED_DIAGNOSTIC_GAME_AUDIO_TASK
             MSCHARGED_DIAGNOSTIC_FRONTEND_CAMERAS
             MSCHARGED_DIAGNOSTIC_FRONTEND_NIS_OWNER)
