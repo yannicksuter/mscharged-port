@@ -277,3 +277,4 @@
 0358-native-network-producer-compiler-layouts.patch
 0360-preserve-native-world-numeric-field-widths.patch
 0361-original-os-audio-hardware-access.patch
+0368-original-frontend-flash-admission.patch
