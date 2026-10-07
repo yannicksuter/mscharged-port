@@ -313,6 +313,25 @@ WPADResult WPADProbe(WPADChannel index, WPADDeviceType* type) {
     if (type) *type = channel.pad ? WPAD_DEV_CORE : WPAD_DEV_NOT_FOUND;
     return channel.pad ? WPAD_ERR_OK : WPAD_ERR_NO_CONTROLLER;
 }
+s32 WPADGetInfoAsync(s32 index, WPADInfo*, WPADCallback callback) {
+    auto& channel = GetChannel(index);
+    // The supported SDL devices have no complete Wii status report. In
+    // particular, a desktop keyboard has no battery, LED, protocol or firmware
+    // report; SDL's coarse power percentage cannot reconstruct the original
+    // HID battery thresholds. Leave the caller's info untouched on failure.
+    const WPADResult result = channel.pad && SDL_GamepadConnected(channel.pad)
+        ? WPAD_ERR_COMMUNICATION_ERROR : WPAD_ERR_NO_CONTROLLER;
+    // Original WPADGetInfoAsync invokes failed-request callbacks immediately
+    // after restoring the caller's interrupt state. No hardware operation or
+    // successful completion is queued for unavailable status information.
+    if (callback) callback(index, result);
+    return result;
+}
+WPADResult WPADGetInfo(WPADChannel index, WPADInfo* output) {
+    // Every qualified request above completes synchronously with an error.
+    // The original sync wrapper returns that same failed-request result.
+    return static_cast<WPADResult>(WPADGetInfoAsync(index, output, nullptr));
+}
 WPADConnectCallback* WPADSetConnectCallback(s32 index, WPADConnectCallback* callback) {
     auto& channel = GetChannel(index); auto old = channel.connect; channel.connect = callback; return old;
 }
