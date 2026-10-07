@@ -1,4 +1,5 @@
 #include "runtime/original_main_credits.h"
+#include "platform/graphics_backend.h"
 #include "runtime/original_sh_menu_diagnostic.h"
 #include <aurora/aurora.h>
 #include <aurora/hardware.h>
@@ -269,7 +270,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             frontend ? "Mario Strikers Charged | original Boot/Intro diagnostic" :
             "Mario Strikers Charged | original-main Credits diagnostic";
         config.userPath=config.cachePath=dataPath.c_str();
-        config.desiredBackend=BACKEND_VULKAN;
+        config.desiredBackend=mscharged::platform::NativeGraphicsBackend;
         config.windowWidth=windowWidth;config.windowHeight=windowHeight;
         config.windowPosX=config.windowPosY=-1;
         config.mem1Size=MEM1_DEFAULT_SIZE;
@@ -277,8 +278,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         config.logLevel=LOG_INFO;config.enableBackendValidation=true;
         config.vsync=true;
         const auto host=aurora_initialize(argc,argv,&config);
-        if(!host.window||host.backend!=BACKEND_VULKAN)
-            throw std::runtime_error("Actual Vulkan foundation unavailable; no fallback acceptance");
+        if(!host.window||host.backend!=mscharged::platform::NativeGraphicsBackend)
+            throw std::runtime_error(std::string("Actual ")+mscharged::platform::NativeGraphicsBackendName
+                +" foundation unavailable; no fallback acceptance");
         Check(SDL_SetWindowFullscreen(host.window,launch.settings.fullscreen), "Requested launch window mode rejected");
         if(nativeSend) {
             // Existing Aurora policy fixes the internal source EFB at 1x.
@@ -356,7 +358,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
 #endif
         auto entry=reinterpret_cast<int(*)()>(dlsym(module,"charged_original_entry"));
         if(!entry)throw std::runtime_error("Original source main export unavailable");
-        std::fprintf(stderr,"Entering actual source main with real Aurora Vulkan/FIFO owner and native PI_VI under temporary MAIN_BOOTSTRAP; flow remains incomplete.\n");
+        std::fprintf(stderr,"Entering actual source main with real Aurora %s/FIFO owner and native PI_VI under temporary MAIN_BOOTSTRAP; flow remains incomplete.\n",
+                     mscharged::platform::NativeGraphicsBackendName);
         std::fflush(nullptr);
         const int result=entry();
         Check(result==85, "Original main selected scene did not complete checkpoint 85");

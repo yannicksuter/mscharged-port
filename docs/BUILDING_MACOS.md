@@ -2,7 +2,8 @@
 
 The default build provides the launcher and ISO/RVZ disc checks. **macOS builds
 are not yet verified.** The experimental game/menu runtime currently requires
-Linux; the `frontend`, `graphics`, and `scene` presets cannot run on macOS yet.
+Linux. Native Metal graphics setup is under development; macOS game startup
+still needs platform integration and testing.
 
 ## Install tools
 
