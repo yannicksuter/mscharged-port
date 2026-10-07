@@ -41,6 +41,7 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/fePointerButton.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feBackButton.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/fePageControls.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feOptionsSubMenus.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHStadiumSelect.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHMainMenu.cpp"
     "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
@@ -54,6 +55,12 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/feSceneResource.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feFinder.cpp")
 add_dependencies(charged_original_frontend verify_prepared)
+# The original Options literal payload is Wii16; its APIs stay unsignedshort.
+# This source-only compiler ABI never changes host-library wchar objects.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/Game/FE/feOptionsSubMenus.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS -fshort-wchar)
+endif()
 target_include_directories(charged_original_frontend PRIVATE
     "${MSCHARGED_PREPARED}/libs/RVL_SDK/include"
     "${MSCHARGED_AURORA_PREPARED}/include")

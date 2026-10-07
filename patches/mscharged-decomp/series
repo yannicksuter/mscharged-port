@@ -244,3 +244,4 @@
 0305-native-original-audio-resource-metadata.patch
 0309-declare-native-auxiliary-reverb-interrupt-api.patch
 0306-preserve-original-AX-typed-bus-transport.patch
+0298-restore-original-options-submenus.patch
