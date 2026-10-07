@@ -350,3 +350,4 @@
 0472-native-world-record-placement.patch
 0480-original-frontend-world-source-admission.patch
 0477-native-blowfish-word-and-byte-abi.patch
+0482-native-rfl-matrix-provider-aliases.patch
