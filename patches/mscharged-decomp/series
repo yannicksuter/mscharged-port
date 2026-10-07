@@ -370,3 +370,4 @@
 0506-original-offline-domination-selection.patch
 0511-fix-native-character-enum-storage.patch
 0512-native-cup-side-initializer.patch
+0513-isolate-native-msl-stdint-guard.patch
