@@ -309,3 +309,4 @@
 0418-protect-original-mesh-writer-profile.patch
 0419-native-flying-camera-event-owner.patch
 0421-native-bundle-placement-allocation.patch
+0423-adapt-original-procedural-mesh-streams.patch
