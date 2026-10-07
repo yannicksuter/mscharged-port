@@ -325,3 +325,4 @@
 0432-adapt-original-software-skin-live-data.patch
 0440-native-rfl-fog-call-abi.patch
 0446-resolve-original-nis-native-read-handle.patch
+0447-decode-original-nis-vm-string-addresses.patch
