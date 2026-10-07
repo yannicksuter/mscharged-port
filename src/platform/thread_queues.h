@@ -11,4 +11,9 @@ using NativeThreadWaitService = void (*)();
 // readiness is supplied when this slot is empty.
 NativeThreadWaitService SetNativeThreadWaitService(NativeThreadWaitService service);
 
+// Borrowed SDK descriptors/callback images must remain alive until their actual
+// workers have ended and attached source joins/detaches have completed. Host
+// teardown retires real execution resources; active lifetimes fail explicitly.
+void DrainNativeThreadLifetimes();
+
 } // namespace mscharged::platform

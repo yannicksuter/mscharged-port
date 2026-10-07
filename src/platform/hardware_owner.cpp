@@ -144,6 +144,15 @@ void InitializeNativeHardwareOwner(SDL_Window* window, WpadSDLSettings settings)
 
 void ShutdownNativeHardwareInput() {
     auto& state = State();
+    {
+        std::lock_guard lock(state.latch);
+        if (!state.ready) return;
+        if (state.thread != std::this_thread::get_id() || state.active || state.registered)
+            throw std::logic_error("Native input retirement requires its inactive, unregistered owner");
+    }
+    // Source joins/detaches must have ended before device, descriptor, callback
+    // image or arena backing retires. Physical joins cannot hold IRQ exclusion.
+    DrainNativeThreadLifetimes();
     NativeInterruptGuard exclusion;
     {
         std::lock_guard lock(state.latch);
@@ -178,6 +187,14 @@ void ShutdownNativeHardwareInput() {
 
 void ShutdownNativeHardwareOwner() {
     auto& state = State();
+    {
+        std::lock_guard lock(state.latch);
+        if (!state.ready) return;
+        if (state.thread != std::this_thread::get_id() || state.active || !state.registered)
+            throw std::logic_error("Native hardware retirement requires its inactive SDK owner");
+    }
+    // Reject unfinished source lifetimes before changing hardware registration.
+    DrainNativeThreadLifetimes();
     {
         NativeInterruptGuard exclusion;
         std::lock_guard lock(state.latch);
