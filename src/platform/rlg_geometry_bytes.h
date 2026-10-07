@@ -3,6 +3,7 @@
 #include <cstdint>
 
 class nlMatrix4;
+class nlVector3;
 struct MorphDelta;
 
 namespace mscharged::platform
@@ -23,6 +24,22 @@ std::uint32_t ReadRLGSkinWord(const void* source);
 void ReadRLGSkinMatrix(nlMatrix4& output, const void* source);
 const MorphDelta* ReadRLGSkinMorphDeltas(const void* source,
     std::size_t count, std::size_t sourceStride);
+
+// Original software skin consumes numeric Float3 rows while its source GPU
+// streams retain their authored byte order. Caller retains the source owner
+// throughout this scoped CPU read; no stream address or raw bytes are changed.
+class NativeRLGFloat3Rows
+{
+public:
+    NativeRLGFloat3Rows(const void* source, std::size_t vertices, std::size_t sourceStride);
+    ~NativeRLGFloat3Rows();
+    NativeRLGFloat3Rows(const NativeRLGFloat3Rows&) = delete;
+    NativeRLGFloat3Rows& operator=(const NativeRLGFloat3Rows&) = delete;
+    const nlVector3* Data() const;
+private:
+    void* state_;
+    const void* source_;
+};
 
 enum class RLGWeightAccess { ReadOnly, ReadWrite };
 // Only original CPU float consumers use this scoped row view. The original

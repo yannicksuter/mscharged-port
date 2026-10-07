@@ -39,6 +39,14 @@ struct WeightRows
     GameByteWriteReservation write;
     float* Data() noexcept { return reinterpret_cast<float*>(this + 1); }
 };
+struct Float3Rows
+{
+    const void* raw;
+    std::size_t bytes;
+    GameCompletedSpan source;
+    GameByteDomain domain;
+    nlVector3* Data() noexcept { return reinterpret_cast<nlVector3*>(this + 1); }
+};
 static_assert(sizeof(float) == sizeof(std::uint32_t));
 static_assert(std::numeric_limits<float>::is_iec559);
 static_assert(alignof(WeightRows) >= alignof(float));
@@ -152,6 +160,64 @@ const MorphDelta* ReadRLGSkinMorphDeltas(const void* source,
     }
     backing.Commit();
     return output;
+}
+
+NativeRLGFloat3Rows::NativeRLGFloat3Rows(const void* source,
+    std::size_t vertices, std::size_t sourceStride) : state_(nullptr), source_(source)
+{
+    static_assert(sizeof(nlVector3) == 12);
+    static_assert(std::is_trivially_copyable_v<nlVector3>);
+    static_assert(alignof(Float3Rows) >= alignof(nlVector3));
+    if (!vertices) return;
+    if (sourceStride != sizeof(nlVector3))
+        throw std::invalid_argument("Original software skin requires qualified Float3 stream stride");
+    if (vertices > (std::numeric_limits<std::size_t>::max() - sizeof(Float3Rows)) / sizeof(nlVector3))
+        throw std::length_error("Original Float3 CPU view byte extent overflows");
+    const auto bytes = vertices * sizeof(nlVector3);
+    GameCompletedSpan span{};
+    if (!FindGameCompletedSpan(source, bytes, span))
+        throw std::invalid_argument("Original Float3 rows leave completed source storage");
+    const auto domain = FindGameByteDomain(source, bytes);
+    if (domain != GameByteDomain::WiiSerialized && domain != GameByteDomain::NativePayload)
+        throw std::invalid_argument("Original Float3 rows have an unknown numeric byte domain");
+    void* storage = ChargedNativeMetadataAllocate(sizeof(Float3Rows) + bytes);
+    auto* rows = new (storage) Float3Rows{source, bytes, span, domain};
+    const auto* raw = static_cast<const unsigned char*>(source);
+    for (std::size_t i = 0; i < vertices; ++i)
+    {
+        std::array<std::uint32_t, 3> words{};
+        for (std::size_t j = 0; j < words.size(); ++j)
+        {
+            const auto at = i * 12 + j * 4;
+            if (domain == GameByteDomain::WiiSerialized) words[j] = SkinWord(raw + at);
+            else std::memcpy(&words[j], raw + at, 4);
+        }
+        auto* record = new (rows->Data() + i) nlVector3;
+        std::memcpy(record, words.data(), sizeof(*record));
+    }
+    state_ = rows;
+}
+
+NativeRLGFloat3Rows::~NativeRLGFloat3Rows()
+{
+    if (!state_) return;
+    auto* rows = static_cast<Float3Rows*>(state_);
+    rows->~Float3Rows();
+    ChargedNativeMetadataRelease(rows);
+}
+
+const nlVector3* NativeRLGFloat3Rows::Data() const
+{
+    if (!state_) return static_cast<const nlVector3*>(source_);
+    const auto& rows = *static_cast<const Float3Rows*>(state_);
+    GameCompletedSpan span{};
+    if (!FindGameCompletedSpan(rows.raw, rows.bytes, span)
+        || span.allocation.base != rows.source.allocation.base
+        || span.allocation.owner != rows.source.allocation.owner
+        || span.allocation.incarnation != rows.source.allocation.incarnation
+        || FindGameByteDomain(rows.raw, rows.bytes) != rows.domain)
+        throw std::invalid_argument("Original Float3 source was retired, reused or changed domain");
+    return const_cast<Float3Rows&>(rows).Data();
 }
 
 NativeRLGWeightRows::NativeRLGWeightRows(const void* source, std::size_t vertices,
