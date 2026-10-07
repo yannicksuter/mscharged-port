@@ -121,3 +121,5 @@ include(cmake/OriginalAudioResourceMetadata.cmake)
 include(cmake/OriginalAudioSampleMetadata.cmake)
 
 include(cmake/OriginalWarbleModule.cmake)
+
+include(cmake/OriginalNetworkProducer.cmake)

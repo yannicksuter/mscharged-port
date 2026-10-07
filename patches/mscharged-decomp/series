@@ -274,3 +274,4 @@
 0350-restore-original-world-effect-scheduling.patch
 0352-native-os-reset-source-thread-registry.patch
 0353-native-original-animation-data-transport.patch
+0358-native-network-producer-compiler-layouts.patch
