@@ -363,6 +363,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::fflush(nullptr);
         const int result=entry();
         Check(result==85, "Original main selected scene did not complete checkpoint 85");
+        // Host AI delivery/starvation observations; they supply no PCM or callback.
+        mscharged::platform::BeginNativeAIObservations();
         using ObserveAudio = unsigned(*)();
         using AudioAction = void(*)();
         using AudioIdle = bool(*)();
@@ -573,6 +575,18 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                     static_cast<unsigned long long>(audioClock.maximum_service_gap_ns));
         std::printf("Native audio device: rate%d, period%d frames, queued%d source bytes.\n",
                     audio.device_frequency,audio.device_frames,audio.queued_input_bytes);
+        mscharged::platform::EndNativeAIObservations();
+        const auto delivery=mscharged::platform::GetNativeAIDeliveryStatus();
+        std::printf("Native AI delivery: latched%llu replayed%llu coalesced%llu, callback latency max%lluns; "
+                    "source silent blocks%llu zero-tail blocks%llu/frames%llu; device short pulls%llu.\n",
+                    static_cast<unsigned long long>(delivery.latched_blocks),
+                    static_cast<unsigned long long>(delivery.replayed_latches),
+                    static_cast<unsigned long long>(delivery.coalesced_causes),
+                    static_cast<unsigned long long>(delivery.maximum_dispatch_latency_ns),
+                    static_cast<unsigned long long>(delivery.silent_blocks),
+                    static_cast<unsigned long long>(delivery.zero_tail_blocks),
+                    static_cast<unsigned long long>(delivery.zero_tail_frames),
+                    static_cast<unsigned long long>(delivery.sdl_short_pulls));
         AuroraVIHardwareState videoClock{};
         Check(aurora_get_video_hardware_state(&videoClock), "Original VI clock observation unavailable");
         const auto elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();

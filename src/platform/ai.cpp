@@ -58,6 +58,12 @@ struct AIState {
     std::atomic_bool observing{};
     std::uint64_t observation_end_ns{};
     mscharged::platform::NativeAIObservationStatus observations{};
+    // Delivery classification: registers rewritten since the last latch and
+    // the DMA clock time of the currently pending hardware cause.
+    bool next_programmed{};
+    std::uint64_t cause_ns{};
+    bool queue_observed{};
+    mscharged::platform::NativeAIDeliveryStatus delivery{};
     char error[256]{};
 };
 
@@ -72,6 +78,7 @@ struct Packet {
 };
 
 int Frequency(u32 rate) { return rate == AI_SAMPLERATE_32KHZ ? 32000 : 48000; }
+
 std::runtime_error SDLError(const char* operation) {
     return std::runtime_error(std::string(operation) + ": " + SDL_GetError());
 }
@@ -110,16 +117,57 @@ void Latch(AIState& state) {
     state.active_address = state.address;
     state.active_length = state.length;
     state.active_offset = 0;
+    state.next_programmed = false;
     state.fifo.resize(state.active_length);
 }
 
-void Edge(AIState& state) {
-    ++state.latch_edges;
-    if (state.pending) ++state.coalesced_edges;
-    state.pending = true; // AID is a latched hardware cause, not a callback queue.
+// Nominal DMA clock time of the current transferred-cell position.
+std::uint64_t ClockTime(const AIState& state) {
+    const auto frequency = std::uint64_t(Frequency(state.rate));
+    const auto frames = state.epoch_cells * 8;
+    return state.clock_epoch + frames / frequency * 1000000000ull +
+           frames % frequency * 1000000000ull / frequency;
 }
 
-void Queue(AIState& state, SDL_AudioStream* stream, Packet* packet) noexcept {
+void Edge(AIState& state, std::uint64_t cause_ns) {
+    ++state.latch_edges;
+    if (state.pending) {
+        ++state.coalesced_edges;
+        if (state.observing) ++state.delivery.coalesced_causes;
+    } else {
+        state.cause_ns = cause_ns;
+    }
+    state.pending = true; // AID is a latched hardware cause, not a callback queue.
+}
+void Edge(AIState& state) { Edge(state, ClockTime(state)); }
+
+// Latch the next registers at a completed block and raise its hardware cause.
+void LatchNext(AIState& state, std::uint64_t cause_ns) {
+    if (state.observing) {
+        ++state.delivery.latched_blocks;
+        if (!state.next_programmed) ++state.delivery.replayed_latches;
+    }
+    Latch(state);
+    Edge(state, cause_ns);
+}
+
+// Observation only: exact digital zero frames at the end of a source block.
+void ClassifyBlock(AIState& state, const u8* bytes, std::size_t size) {
+    const std::size_t frames = size / 4;
+    std::size_t tail = 0;
+    for (; tail < frames; ++tail) {
+        std::uint32_t frame;
+        std::memcpy(&frame, bytes + (frames - 1 - tail) * 4, sizeof(frame));
+        if (frame) break;
+    }
+    if (tail == frames) ++state.delivery.silent_blocks;
+    else if (tail) {
+        ++state.delivery.zero_tail_blocks;
+        state.delivery.zero_tail_frames += tail;
+    }
+}
+
+bool Queue(AIState& state, SDL_AudioStream* stream, Packet* packet) noexcept {
     if (!SDL_PutAudioStreamDataNoCopy(stream, packet->Data(), packet->size, Completed, packet)) {
         std::lock_guard lock(state.mutex);
         --state.retained;
@@ -127,7 +175,9 @@ void Queue(AIState& state, SDL_AudioStream* stream, Packet* packet) noexcept {
         state.running = false;
         std::snprintf(state.error, sizeof(state.error), "AI DMA queue: %s", SDL_GetError());
         std::free(packet);
+        return false;
     }
+    return true;
 }
 
 void StartOutputIfReady(AIState& state, SDL_AudioStream* stream) noexcept {
@@ -177,7 +227,7 @@ void StartOutputIfReady(AIState& state, SDL_AudioStream* stream) noexcept {
     state.output.device_start_ns = SDL_GetTicksNS();
 }
 
-void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
+std::size_t Transfer(AIState& state, SDL_AudioStream* stream, bool* blocked = nullptr) noexcept {
     // This same exclusion protects source DMA writes/stop/free. SDL workers
     // only try the lock; they never wait for source code while holding SDL's
     // stream lock. A source critical section defers this native safe point.
@@ -186,7 +236,7 @@ void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
     std::vector<Packet*> packets;
     {
         std::lock_guard lock(state.mutex);
-        if (!state.initialized || !state.running || state.callback_active) return;
+        if (!state.initialized || !state.running || state.callback_active) return 0;
         const auto elapsed = now - state.clock_epoch;
         const auto frames = (elapsed / 1000000000ull) * Frequency(state.rate) +
                             (elapsed % 1000000000ull) * Frequency(state.rate) / 1000000000ull;
@@ -194,7 +244,10 @@ void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
         // Latching the initial device cause does not read game memory and is
         // independent of the CPU mask. Source delivery remains masked below.
         if (state.first_edge && due) { Edge(state); state.first_edge = false; }
-        if (!source_access) return;
+        if (!source_access) {
+            if (blocked) *blocked = true;
+            return 0;
+        }
         state.maximum_service_gap = std::max(state.maximum_service_gap, now - state.last_service);
         state.last_service = now;
         try {
@@ -216,16 +269,21 @@ void Transfer(AIState& state, SDL_AudioStream* stream) noexcept {
                 state.last_hash = Hash(packet->Data(), state.fifo.size());
                 ++state.retained;
                 ++state.submitted;
-                Latch(state);
-                Edge(state);
+                if (state.observing) ClassifyBlock(state, packet->Data(), state.fifo.size());
+                LatchNext(state, ClockTime(state));
             }
         } catch (const std::exception& error) {
             state.running = false;
             std::snprintf(state.error, sizeof(state.error), "AI hardware FIFO: %s", error.what());
         }
     }
-    for (auto* packet : packets) Queue(state, stream, packet);
+    std::size_t queued = 0;
+    for (auto* packet : packets) {
+        const auto size = std::size_t(packet->size);
+        if (Queue(state, stream, packet)) queued += size;
+    }
     if (source_access) StartOutputIfReady(state, stream);
+    return queued;
 }
 
 void SDLCALL Feed(void* userdata, SDL_AudioStream* stream, int additional, int total) noexcept {
@@ -250,7 +308,30 @@ void SDLCALL Feed(void* userdata, SDL_AudioStream* stream, int additional, int t
     }
     // Device pull granularity can exceed the source's96-frame interval. Only
     // real elapsed DMA transfers enter SDL; demand never repeats a buffer.
-    Transfer(*static_cast<AIState*>(userdata), stream);
+    bool blocked = false;
+    const auto queued = Transfer(state, stream, &blocked);
+    if (state.observing.load(std::memory_order_relaxed)) {
+        // SDL holds its recursive stream lock for this callback. Demand left
+        // unsatisfied here becomes device silence; it is observed, not filled.
+        const int remaining = SDL_GetAudioStreamQueued(stream);
+        std::lock_guard lock(state.mutex);
+        if (state.observing) {
+            auto& delivery = state.delivery;
+            if (blocked) ++delivery.sdl_pulls_without_source_access;
+            const auto demand = static_cast<std::uint64_t>(std::max(additional, 0));
+            if (queued < demand) {
+                ++delivery.sdl_short_pulls;
+                delivery.sdl_short_input_bytes += demand - queued;
+            }
+            if (remaining >= 0) {
+                const auto depth = static_cast<std::uint64_t>(remaining);
+                delivery.minimum_queued_input_bytes = state.queue_observed ?
+                    std::min(delivery.minimum_queued_input_bytes, depth) : depth;
+                delivery.maximum_queued_input_bytes = std::max(delivery.maximum_queued_input_bytes, depth);
+                state.queue_observed = true;
+            }
+        }
+    }
 }
 
 void RequireInitialized(AIState& state) {
@@ -335,6 +416,7 @@ extern "C" void AIInitDMA(std::uintptr_t address, u32 length) {
         state.address = address & ~std::uintptr_t(31);
         const u32 count = (length / 32) & 0xffff;
         state.length = (count & 0x7fff) * 32;
+        state.next_programmed = true;
         // The original SDK ORs all16 count bits into the DSP CSR. Bit15
         // therefore also sets PLAY for an oversized request; retain this
         // hardware quirk instead of treating it as a normal larger DMA.
@@ -471,6 +553,17 @@ bool ServiceNativeAI() {
                 if (call.state.observing) {
                     auto& observed = call.state.observations;
                     observation_start = SDL_GetTicksNS();
+                    auto& delivery = call.state.delivery;
+                    const auto latency = observation_start > call.state.cause_ns ?
+                        observation_start - call.state.cause_ns : 0;
+                    const auto block_ns = std::uint64_t(call.state.active_length / 4) * 1000000000ull /
+                        std::uint64_t(Frequency(call.state.rate));
+                    ++delivery.dispatched_callbacks;
+                    delivery.total_dispatch_latency_ns += latency;
+                    delivery.maximum_dispatch_latency_ns = std::max(delivery.maximum_dispatch_latency_ns, latency);
+                    if (block_ns && latency >= block_ns) ++delivery.callbacks_after_one_block;
+                    if (block_ns && latency >= 2 * block_ns) ++delivery.callbacks_after_two_blocks;
+                    if (block_ns && latency >= 4 * block_ns) ++delivery.callbacks_after_four_blocks;
                     if (observed.last_callback_start_ns)
                         observed.maximum_callback_start_gap_ns = std::max(observed.maximum_callback_start_gap_ns,
                             observation_start - observed.last_callback_start_ns);
@@ -568,6 +661,8 @@ void BeginNativeAIObservations() {
     state.observations = {};
     state.observations.observation_start_ns = SDL_GetTicksNS();
     state.observation_end_ns = 0;
+    state.delivery = {};
+    state.queue_observed = false;
     state.observing = true;
 }
 
@@ -599,6 +694,13 @@ NativeAIOutputStatus GetNativeAIOutputStatus() {
     auto& state = State();
     std::lock_guard lock(state.mutex);
     return state.output;
+}
+
+NativeAIDeliveryStatus GetNativeAIDeliveryStatus() {
+    NativeInterruptGuard scope;
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    return state.delivery;
 }
 
 void ShutdownNativeAI() {

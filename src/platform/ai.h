@@ -89,4 +89,40 @@ struct NativeAIOutputStatus {
 };
 NativeAIOutputStatus GetNativeAIOutputStatus();
 
+// Optional delivery observations inside the Begin/End window above. A separate
+// fixed64 return ABI leaves the existing four structures unchanged. These
+// classify actual latched source blocks, owner callback delivery and SDL
+// demand; they never select a buffer, create PCM or deliver a callback.
+struct NativeAIDeliveryStatus {
+    // Completed96-frame blocks whose next hardware registers were latched.
+    std::uint64_t latched_blocks{};
+    // Latches of registers not reprogrammed by AIInitDMA since the previous
+    // latch: the DMA replays the previously latched source buffer address.
+    std::uint64_t replayed_latches{};
+    // Hardware causes raised while an earlier cause was still undelivered.
+    std::uint64_t coalesced_causes{};
+    // Owner callback delivery measured from the DMA clock time of its cause.
+    std::uint64_t dispatched_callbacks{};
+    std::uint64_t maximum_dispatch_latency_ns{};
+    std::uint64_t total_dispatch_latency_ns{};
+    // Callbacks delivered after one/two/four complete DMA block periods.
+    std::uint64_t callbacks_after_one_block{};
+    std::uint64_t callbacks_after_two_blocks{};
+    std::uint64_t callbacks_after_four_blocks{};
+    // Exact digital-zero content of transferred blocks (source production).
+    std::uint64_t silent_blocks{};
+    std::uint64_t zero_tail_blocks{};
+    std::uint64_t zero_tail_frames{};
+    // SDL demand that already transferred source PCM did not satisfy; SDL
+    // supplies silence for this shortfall. Input-format bytes.
+    std::uint64_t sdl_short_pulls{};
+    std::uint64_t sdl_short_input_bytes{};
+    // Device pulls that found the source buffers inside a critical section.
+    std::uint64_t sdl_pulls_without_source_access{};
+    // Smallest queued input after a device pull, once output has started.
+    std::uint64_t minimum_queued_input_bytes{};
+    std::uint64_t maximum_queued_input_bytes{};
+};
+NativeAIDeliveryStatus GetNativeAIDeliveryStatus();
+
 } // namespace mscharged::platform
