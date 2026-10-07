@@ -29,13 +29,22 @@ Use a Git clone, not GitHub's ZIP download: source preparation reads the recorde
 submodule revisions from Git. Authenticate with GitHub if the repository is private.
 
 ```sh
-git clone --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git
+git clone --branch main --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git
 cd mscharged-port
 git -c submodule.recurse=false submodule update --init --checkout -- \
   extern/mscharged-decomp extern/nod extern/corrosion extern/sdl extern/imgui
 ```
 
-For an existing clone, enter its root and run the submodule command above.
+For an existing clone, enter its root and select the current development branch
+before running the submodule command above:
+
+```sh
+git fetch origin
+git switch main
+git pull --ff-only
+```
+
+The older `master` branch does not contain the current runtime or launch options.
 The `extern/` folders are expected: they are **tracked submodules**, each pinned
 to an exact revision. Do not add them to `.gitignore` or use `--remote` to update
 them. Other dependency folders may remain empty; the default build only needs
