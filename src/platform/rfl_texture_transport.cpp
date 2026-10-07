@@ -67,3 +67,31 @@ extern "C" void ChargedCopyRFLTextureImage(void* destination,const void* texture
         std::memcpy(destination,image,bytes);
     }
 }
+
+static_assert(offsetof(RFLiTexture,lodBias)==26);
+
+extern "C" std::int16_t ChargedReadRFLTextureSignedHalf(const void* source) {
+    const auto value=ChargedReadRFLTextureHalf(source);
+    return value<0x8000 ? static_cast<std::int16_t>(value)
+        : static_cast<std::int16_t>(std::int32_t(value)-0x10000);
+}
+
+extern "C" void* ChargedBorrowRFLTextureImage(const void* texture) {
+    const auto header=Serialized(texture,sizeof(RFLiTexture));
+    const auto* p=static_cast<const unsigned char*>(texture);
+    const auto* word=p+offsetof(RFLiTexture,imageOfs);
+    const auto offset=(std::uint32_t(word[0])<<24)|(std::uint32_t(word[1])<<16)
+        |(std::uint32_t(word[2])<<8)|word[3];
+    const auto address=reinterpret_cast<std::uintptr_t>(texture);
+    const auto base=reinterpret_cast<std::uintptr_t>(header.base);
+    if (address<base || address-base>header.bytes
+        || offset>=header.bytes-(address-base)
+        || offset>std::numeric_limits<std::uintptr_t>::max()-address)
+        throw std::invalid_argument("RFL borrowed texture image offset escaped completed source");
+    auto* image=reinterpret_cast<void*>(address+offset);
+    const auto payload=Serialized(image,header.bytes-(address-base)-offset);
+    if (payload.base!=header.base || payload.bytes!=header.bytes
+        || payload.allocation.incarnation!=header.allocation.incarnation)
+        throw std::invalid_argument("RFL borrowed texture image crosses completed source identity");
+    return image;
+}
