@@ -306,3 +306,4 @@
 0415-original-main-boot-script-diagnostic.patch
 0416-restore-original-shadow-mesh-writer.patch
 0417-original-prior-boot-source-diagnostic.patch
+0418-protect-original-mesh-writer-profile.patch
