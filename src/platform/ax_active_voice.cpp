@@ -49,9 +49,15 @@ std::array<std::int16_t, 4> NativeAXSuppliedCoefficientROM::Row(
     const auto at = std::size_t(bank) * 512 + std::size_t(fraction >> 9) * 4;
     return {words_[at], words_[at + 1], words_[at + 2], words_[at + 3]};
 }
+NativeAXCoefficientView NativeAXSuppliedCoefficientROM::View() const noexcept {
+    return {NativeAXCoefficientPolicy::SuppliedBank,this,
+        [](const void* context,std::uint16_t bank,std::uint16_t fraction) {
+            return static_cast<const NativeAXSuppliedCoefficientROM*>(context)->Row(bank,fraction);
+        }};
+}
 NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
     NativeDSPMemoryEndpoint endpoint, std::uint32_t address,
-    const NativeAXSuppliedCoefficientROM& coefficients) {
+    const NativeAXCoefficientView& coefficients) {
     NativeAXPreparedVoiceFrame result; result.parameter_address = address;
     DSPBackendReadMemory(endpoint, address, result.parameters_before.data(), result.parameters_before.size());
     if (Word(result.parameters_before.data() + 4) != address)
@@ -170,6 +176,11 @@ NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
                 static_cast<std::uint16_t>(Saturate(result.buses[bus].back())));
     }
     return result;
+}
+NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
+    NativeDSPMemoryEndpoint endpoint,std::uint32_t address,
+    const NativeAXSuppliedCoefficientROM& coefficients) {
+    return PrepareNativeAXADPCMVoiceFrame(endpoint,address,coefficients.View());
 }
 void ValidateNativeAXVoiceCommit(NativeDSPMemoryEndpoint endpoint,
                                 const NativeAXPreparedVoiceFrame& frame) {

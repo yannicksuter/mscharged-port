@@ -48,6 +48,12 @@ NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
     NativeDSPMemoryEndpoint memory, std::uint32_t list_address, std::size_t bytes,
     const NativeAXCommandHistory& history,
     const NativeAXSuppliedCoefficientROM& coefficients);
+// Explicit native coefficient-policy entry; source list/PB/output transactions
+// are identical. This overload performs no boot/init/callback or IRQ operation.
+NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
+    NativeDSPMemoryEndpoint memory, std::uint32_t list_address, std::size_t bytes,
+    const NativeAXCommandHistory& history,
+    const NativeAXCoefficientView& coefficients);
 void ValidateNativeAXCommandCommit(NativeDSPMemoryEndpoint memory,
                                   const NativeAXPreparedCommandFrame& frame,
                                   const NativeAXCommandHistory& history);

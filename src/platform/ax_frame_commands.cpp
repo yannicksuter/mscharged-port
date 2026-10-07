@@ -90,7 +90,7 @@ NativeAXStereo96 NativeAXPackStereo(const NativeAXChannel96& left,const NativeAX
 }
 NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
     NativeDSPMemoryEndpoint memory,std::uint32_t address,std::size_t bytes,
-    const NativeAXCommandHistory& history,const NativeAXSuppliedCoefficientROM& coefficients) {
+    const NativeAXCommandHistory& history,const NativeAXCoefficientView& coefficients) {
     if(!bytes || bytes>128 || bytes%2 || address%2)
         throw NativeAXCommandError(NativeAXFailure::InvalidListExtent,0,"AX staged list must be an aligned original128-byte slot");
     NativeAXPreparedCommandFrame f;f.before=f.after=history;
@@ -184,6 +184,11 @@ NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
     for(unsigned i=0;i<192;++i)PutHalf(pcm.data()+i*2,std::uint16_t(packed[i]));
     Stage(f,memory,Address(output,3),std::move(pcm));
     ValidateNativeAXCommandCommit(memory,f,history);return f;
+}
+NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
+    NativeDSPMemoryEndpoint memory,std::uint32_t address,std::size_t bytes,
+    const NativeAXCommandHistory& history,const NativeAXSuppliedCoefficientROM& coefficients) {
+    return PrepareNativeAXCommandFrame(memory,address,bytes,history,coefficients.View());
 }
 void ValidateNativeAXCommandCommit(NativeDSPMemoryEndpoint memory,const NativeAXPreparedCommandFrame& f,
                                   const NativeAXCommandHistory& history) {
