@@ -102,4 +102,24 @@ std::uint64_t ReadDiscTitleId(const std::filesystem::path& path)
         throw std::runtime_error("The game TMD has no title identity.");
     return title;
 }
+
+std::uint16_t ReadDiscTitleGroupId(const std::filesystem::path& path)
+{
+    NodDiscHeader header{};
+    NodDiscMeta metadata{};
+    auto disc = OpenChargedDisc(path, header, metadata);
+    auto partition = OpenGamePartition(disc.get());
+    NodPartitionMeta partition_metadata{};
+    Check(nod_partition_meta(partition.get(), &partition_metadata),
+          "Cannot read game title metadata");
+    const auto& tmd = partition_metadata.raw_tmd;
+    constexpr unsigned char rsa2048[] = {0x00, 0x01, 0x00, 0x01};
+    if (!tmd.data || tmd.size < 0x1e4)
+        throw std::runtime_error("The game data partition has no complete TMD header.");
+    if (!std::equal(std::begin(rsa2048), std::end(rsa2048), tmd.data))
+        throw std::runtime_error("Unsupported game TMD signature layout.");
+    // Pinned nod's fixed RSA-2048 TmdHeader places group_id at0x198.
+    // Read the BE scalar while the owning partition handle is alive.
+    return (std::uint16_t(tmd.data[0x198]) << 8) | tmd.data[0x199];
+}
 }
