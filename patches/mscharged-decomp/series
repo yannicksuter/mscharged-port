@@ -271,3 +271,4 @@
 0344-original-frontend-camera-services-diagnostic.patch
 0347-native-original-hierarchy-data-transport.patch
 0348-native-world-effect-size-assertion-scope.patch
+0350-restore-original-world-effect-scheduling.patch
