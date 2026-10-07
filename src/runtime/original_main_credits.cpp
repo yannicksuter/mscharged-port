@@ -186,6 +186,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
 #else
         const bool sourceBoot = false;
 #endif
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_BOOT_TO_FE)
+        const bool priorBoot = frontend;
+#else
+        const bool priorBoot = false;
+#endif
         Check(!sourceBoot || !optionsScene,
               "Authored Boot script builds do not yet advance to Options; use FRONTEND_BOOT_SCRIPT=OFF for that diagnostic");
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
@@ -240,6 +245,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::printf("%s\n",mscharged::DescribeLaunch(launch).c_str());
         Check(!disc.empty() && std::filesystem::is_regular_file(launch.disc_path),"Supply your own game ISO/RVZ with --disc FILE or [game] disc in the INI");
         Check(!resizeCheck || !launch.settings.fullscreen,"--resize-check requires a windowed launch; add --window");
+        Check(!priorBoot || !resizeCheck,
+              "The prior Boot stage retains original effects/NPC owners; resize teardown is not qualified");
         const char* moduleFilename=MSCHARGED_ORIGINAL_MAIN_CREDITS_MODULE_FILENAME;
         if(frontend) {
 #ifdef MSCHARGED_ORIGINAL_FRONTEND_MODULE_FILENAME
@@ -386,7 +393,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if(!sourceBoot)return;
             const auto flags=observeBootScript();
             const int instruction=bootInstruction(), phase=bootPhase();
-            Check((flags & 27u)==27u,"Original Boot bytecode callback/header/idle owner is incomplete");
+            Check((flags & (priorBoot ? 11u : 27u))==(priorBoot ? 11u : 27u),
+                  "Original Boot bytecode callback/header or required source owner is incomplete");
             if(phase==3 && lastBootPhase!=3)bootLogoStart=std::chrono::steady_clock::now();
             if(flags!=lastBootFlags || instruction!=lastBootInstruction || phase!=lastBootPhase) {
                 std::printf("Original authored Boot: VM flags%u instruction%d phase%d.\n",flags,instruction,phase);
@@ -622,6 +630,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             mscharged::platform::ShutdownNativeInterruptController();
             std::puts("Native resize qualification retired real VI/GX/window hardware.");
         }
+        if(priorBoot)
+            std::puts("Prior Boot diagnostic retains original effects/NPC resources and game arenas at terminal exit; full source cleanup remains pending.");
         std::fflush(nullptr);std::_Exit(0);
         } catch(const std::exception& e) {
             std::fprintf(stderr,"Actual source diagnostic stopped with live owners: %s\n",e.what());
