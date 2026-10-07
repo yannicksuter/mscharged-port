@@ -383,6 +383,13 @@ device mutex before shutdown retires the render mode. That retirement can join
 the final GX frame and service owner interrupts; under the lock, the VI service
 deadlocked the owner and froze the window at the end of resize checks.
 
+`0056-scan-out-newest-completed-xfb-copy.patch` scans out the newest display
+copy into the selected framebuffer whose GPU work has completed. A late
+draw-done callback from the previous frame can release the game's swap wait
+before its new copy finishes; that field now shows the buffer's previous
+completed contents instead of stopping the native VI. Seen at the Credits to
+Options transition.
+
 `0010-retain-dvd-handles-on-allocation-failure.patch` closes opened nod/overlay
 handles if command allocation fails and reports failure through the existing
 DVD admission result. Native NL callers can then restore their reserved request
