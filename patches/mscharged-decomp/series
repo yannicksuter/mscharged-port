@@ -283,3 +283,4 @@
 0369-native-original-save-data.patch
 0371-native-original-world-animation-parent-abi.patch
 0375-original-specular-game-module-flow.patch
+0370-native-network-message-storage-capacity.patch
