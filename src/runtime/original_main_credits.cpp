@@ -1,4 +1,5 @@
 #include "runtime/original_main_credits.h"
+#include "runtime/original_sh_menu_diagnostic.h"
 #include <aurora/aurora.h>
 #include "bootstrap/launch_options.h"
 #include "platform/path.h"
@@ -157,7 +158,8 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 int mscharged::RunOriginalMainCredits(int argc, char** argv,
     const ResolvedLaunch* suppliedLaunch, bool interactive, OriginalMainScene scene) {
     try {
-        const bool frontend = scene == OriginalMainScene::FrontendSequence;
+        const bool frontend = scene != OriginalMainScene::Credits;
+        const bool optionsScene = scene == OriginalMainScene::FrontendOptions;
         bool nativeSend=true, resizeCheck=false;
         mscharged::LaunchOptions launchOptions;
         unsigned windowWidth=800, windowHeight=600;
@@ -222,7 +224,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::filesystem::create_directories(dataDirectory);
         const auto dataPath = dataDirectory.string();
         AuroraConfig config{};
-        config.appName=frontend ? "Mario Strikers Charged | original Boot/Intro diagnostic" :
+        config.appName=optionsScene ? "Mario Strikers Charged | original Options diagnostic" :
+            frontend ? "Mario Strikers Charged | original Boot/Intro diagnostic" :
             "Mario Strikers Charged | original-main Credits diagnostic";
         config.userPath=config.cachePath=dataPath.c_str();
         config.desiredBackend=BACKEND_VULKAN;
@@ -301,6 +304,44 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         Check(frame,"Same original-main module scene-frame export unavailable");
         auto stopMovie=reinterpret_cast<void(*)()>(dlsym(module,"charged_original_scene_stop_movie"));
         Check(stopMovie,"Original main movie-stop export unavailable");
+        using ObserveSH = std::uint32_t(*)(OriginalSHSnapshot*,std::uint32_t);
+        using RequestSH = std::uint32_t(*)();
+        auto observeSH=optionsScene ? reinterpret_cast<ObserveSH>(
+            dlsym(module,"charged_original_sh_observe")) : nullptr;
+        auto requestSH=optionsScene ? reinterpret_cast<RequestSH>(
+            dlsym(module,"charged_original_sh_request_options")) : nullptr;
+        Check(!optionsScene || (observeSH && requestSH),
+              "Original Options diagnostic requires MSCHARGED_DIAGNOSTIC_FRONTEND_SH_MENUS=ON");
+        OriginalSHSnapshot sh{};
+        unsigned lastRequest=0;
+        int lastScene=-1, lastState=-1;
+        bool optionsReady=false;
+        bool optionsBoundsReported=false;
+        auto observeOptions = [&] {
+            if(!optionsScene)return;
+            Check(observeSH(&sh,sizeof(sh)) && sh.version==1 &&
+                  sh.bytes==sizeof(sh) && sh.stack_depth<=32,
+                  "Original SH observation ABI mismatch");
+            if(!sh.stack_depth)return;
+            const auto& top=sh.stack[sh.stack_depth-1];
+            if(top.scene_id!=lastScene || top.resource_state!=lastState) {
+                std::printf("Original SH: scene%d resources%d depth%u, owners%u navigation%u pointers%u.\n",
+                    top.scene_id,top.resource_state,sh.stack_depth,sh.owners,
+                    sh.navigation_ready,sh.pointer_instances);
+                std::fflush(stdout);lastScene=top.scene_id;lastState=top.resource_state;
+            }
+            optionsReady=top.scene_id==13 && top.resource_state==6 && top.visible &&
+                sh.options_initialized && sh.options_state==1 && top.slide_time>=0.2f;
+            if(optionsReady && !optionsBoundsReported) {
+                for(unsigned i=0;i<3;++i) {
+                    const auto& b=sh.buttons[i];
+                    std::printf("Original Options button%u: %.6g..%.6g, %.6g..%.6g; slide%.6g/%.6g, input%u/%u lock%d.\n",
+                        i,b.min_x,b.max_x,b.min_y,b.max_y,top.slide_time,top.slide_duration,
+                        sh.input_allowed,sh.input_enabled,sh.input_lock_depth);
+                }
+                std::fflush(stdout);optionsBoundsReported=true;
+            }
+        };
         // Existing actual source GX/state/material/font/view initialization is
         // retained. No host GXInit, source pool restart or fixture font setup.
         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
@@ -314,13 +355,20 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 if(event->type==AURORA_EXIT)exit=true;
             if(exit)break;
             mscharged::diagnostic::ServiceCreditsMovieHardware();
+            if(requestSH) {
+                const auto status=requestSH();
+                if(status!=lastRequest) {
+                    std::printf("Original Options selection status%u (7 waits for the original audio context owner).\n",status);
+                    std::fflush(stdout);lastRequest=status;
+                }
+            }
             const auto now=std::chrono::steady_clock::now();
             Check(interactive || now-start<std::chrono::seconds(40),"Original main Credits Vulkan pipeline timed out");
             if(nativeSend) {
                 const auto receipt=AuroraGXBeginDrawReceipt();
                 Check(receipt,"Native source draw receipt unavailable");
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
-                frame(delta); AuroraGXEndDrawReceipt();
+                frame(delta); observeOptions(); AuroraGXEndDrawReceipt();
                 AuroraGXSync(); aurora::gfx::synchronize();
                 encoded=encoded || AuroraGXWasDrawEncoded(receipt);
                 draws+=aurora_get_stats()->drawCallCount; ++frames;
@@ -349,7 +397,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                         viewport.left,viewport.top,viewport.width,viewport.height);
                     std::fflush(stdout); stageAnnounced=true;
                 }
-                if(now-stageStart>=std::chrono::seconds(resizeStage?8:3) && nativePresented && encoded) {
+                if(now-stageStart>=std::chrono::seconds(resizeStage?8:3) && nativePresented && encoded &&
+                   (!optionsScene || optionsReady)) {
                     if(!snapshot) {
                         const auto filename=resizeCheck?
                             "original-main-native-xfb-stage"+std::to_string(resizeStage)+".ppm":
@@ -371,8 +420,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if(!aurora_begin_frame()){std::this_thread::yield();continue;}
             const auto receipt=AuroraGXBeginDrawReceipt();Check(receipt,"Real source frame draw receipt unavailable");
             const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
-            frame(delta); AuroraGXEndDrawReceipt();
-            const bool sample=!snapshot && now-start>=std::chrono::seconds(3) && quiet>=2;
+            frame(delta); observeOptions(); AuroraGXEndDrawReceipt();
+            const bool sample=!snapshot && now-start>=std::chrono::seconds(3) && quiet>=2 &&
+                (!optionsScene || optionsReady);
             if(sample){EndWithSnapshot(dataDirectory/"original-main-credits.ppm");snapshot=true;}
             else aurora_end_frame();
             aurora::gfx::synchronize();
@@ -386,7 +436,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
               "Original main Credits real source draw/presentation incomplete");
         if(nativeSend) {
             std::printf("Original main selected %s: %u native source-send frames, draw receipt+chosen-XFB VI presentation. Full startup/AX/world/reset/CRT remain incomplete.\n",
-                frontend ? "Boot/Intro tasks" : "Credits",frames);
+                optionsScene ? "Options tasks" : frontend ? "Boot/Intro tasks" : "Credits",frames);
         } else {
         std::printf("Original main→selected Credits live: %u actual source frames, %u encoded draws; one initialized game/SDK, native owner elapsed time. Actual original THP/movie/mode0 audio; digital input endpoints selected; full task/automatic swap reset/AX/motion/CRT scopes remain held.\n",frames,draws);
         }
