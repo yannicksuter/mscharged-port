@@ -58,6 +58,7 @@ function(mscharged_add_original_world_owners target)
             src/Game/Render/WorldNPC.cpp
             src/Game/FE/feModelManager.cpp
             src/Game/SAnim/pnSAnimController.cpp
+            src/Game/SAnimDecode.cpp
             src/Game/Render/Warble.cpp
             src/Game/GameObjectLighting.cpp
             src/Game/PoseNode.cpp
