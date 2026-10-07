@@ -98,6 +98,8 @@ include(cmake/OriginalRegistry.cmake)
 
 include(cmake/OriginalViewLayers.cmake)
 
+include(cmake/OriginalNisSources.cmake)
+
 include(cmake/OriginalInterpreter.cmake)
 
 include(cmake/OriginalBootSceneSources.cmake)
