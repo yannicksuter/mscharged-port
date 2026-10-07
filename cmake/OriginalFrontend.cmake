@@ -36,6 +36,7 @@ add_library(charged_original_frontend OBJECT EXCLUDE_FROM_ALL
     "${MSCHARGED_PREPARED}/src/Game/FE/BaseSceneHandler.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/FEAudio.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feMusic.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/fePopupMenu.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feInput.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/fePointer.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/fePointerManager.cpp"
