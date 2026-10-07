@@ -311,3 +311,4 @@
 0421-native-bundle-placement-allocation.patch
 0423-adapt-original-procedural-mesh-streams.patch
 0420-native-npc-rlg-data-views.patch
+0425-adapt-original-net-and-fence-live-view-addresses.patch
