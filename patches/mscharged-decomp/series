@@ -268,3 +268,4 @@
 0340-native-original-audio-pool-teardown-strides.patch
 0335-native-original-network-thread-backing.patch
 0343-original-npc-template-flow-and-native-allocation.patch
+0344-original-frontend-camera-services-diagnostic.patch
