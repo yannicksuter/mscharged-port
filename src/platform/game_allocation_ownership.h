@@ -144,6 +144,10 @@ bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
 // The caller must already retain the original source owner's lifetime.
 bool FindGameNativeBackingSource(const void* native, std::size_t nativeBytes,
     GameNativeBackingSourceSpan& result);
+// Resolve an actual completed raw probe to its unique current native backing.
+// This reads metadata only, creates no twin/ID, and grants no lifetime lease.
+bool FindGameNativeBackingForSource(const void* sourceProbe, std::size_t sourceProbeBytes,
+    GameNativeBackingSourceSpan& result);
 class GameNativeBackingReservation {
 public:
     GameNativeBackingReservation(const void* source, std::size_t sourceBytes, std::size_t nativeBytes);
