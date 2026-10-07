@@ -254,3 +254,4 @@
 0319-native-net-byte-reverse-and-online-abs.patch
 0320-native-network-event-owner-pointer-width.patch
 0315-admit-original-title-sequence-diagnostic.patch
+0313-native-original-audio-rpc-metadata.patch
