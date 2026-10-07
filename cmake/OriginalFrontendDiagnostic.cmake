@@ -4,6 +4,7 @@ include_guard(GLOBAL)
 # Both use the same host, with only one module selected for a given run.
 include(cmake/OriginalFrontendSequenceDiagnostic.cmake)
 include(cmake/OriginalFrontendTaskCadenceDiagnostic.cmake)
+include(cmake/OriginalFrontendTitleDiagnostic.cmake)
 
 function(mscharged_add_original_frontend_diagnostic)
     get_target_property(_sources mscharged_original_main_credits_module SOURCES)
@@ -25,6 +26,7 @@ function(mscharged_add_original_frontend_diagnostic)
     set(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE ON)
     mscharged_select_original_frontend_sequence(mscharged_original_frontend_module)
     mscharged_select_original_frontend_task_cadence(mscharged_original_frontend_module)
+    mscharged_select_original_frontend_title(mscharged_original_frontend_module)
     add_dependencies(charged_original_main_credits_host mscharged_original_frontend_module)
     target_compile_definitions(charged_original_main_credits_host PRIVATE
         MSCHARGED_ORIGINAL_FRONTEND_MODULE_FILENAME="$<TARGET_FILE_NAME:mscharged_original_frontend_module>")
