@@ -321,3 +321,4 @@
 0438-native-rfl-character-model-backing.patch
 0437-native-rfl-hidden-load-context.patch
 0434-native-world-stream-word-widths.patch
+0436-native-arc-serialized-data.patch
