@@ -21,6 +21,7 @@
 #include "webgpu/gpu.hpp"
 #include "platform/stm_device.h"
 #include "platform/hardware_owner.h"
+#include "platform/desktop_presented_dpd.h"
 #include "platform/ai.h"
 #include "platform/system.h"
 #include "platform/video_device.h"
@@ -165,8 +166,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 std::puts("Usage: mscharged-original-main-credits-check [launch settings] [--resize-check] [--diagnostic-frame]\n"
                           "Enter original main, then load and update the original Credits scene.\n"
                           "Original THP movie/video and mode0 audio diagnostic; USA/English.\n"
-                          "Desktop keyboard feeds original Wii/frontend input methods.\n"
+                          "Desktop keyboard and mouse feed original Wii/frontend input methods.\n"
                           "Enter/Space=A, Escape/Backspace=B; arrows=DPad; Z/X=1/2.\n"
+                          "Mouse: pointer; left/right click=A/B.\n"
                           "A selects original COPYRIGHTS; the following menu transition remains held.\n"
                           "Full tasks, AX predecessor, motion and game shutdown are omitted.\n"
                           "--window keeps the source scene running until you close the window.\n"
@@ -259,7 +261,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
         // and FE methods retain their original mappings and decisions.
         mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,false},
-            mscharged::platform::GetNativeSTMInput(),{true,false});
+            mscharged::platform::GetNativeSTMInput(),{true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr});
         mscharged::diagnostic::InitializeCreditsMovieHardware(
             mscharged::platform::ServiceNativeHardwareInput);
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");

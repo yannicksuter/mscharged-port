@@ -96,7 +96,7 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
         state.stm = borrowed_stm;
         state.pending_power = 0;
         state.active = state.overflow = state.registered = false;
-        state.desktop_cadence = desktop.keyboard || desktop.gamepads;
+        state.desktop_cadence = desktop.keyboard || desktop.gamepads || desktop.mouse;
         state.next_input = {};
         state.ready = true;
     }
