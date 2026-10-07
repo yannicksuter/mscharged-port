@@ -333,3 +333,4 @@
 0448-adapt-original-character-skin-array-byte-domains.patch
 0449-native-original-drawable-ball-owner-addresses.patch
 0451-native-rfl-temporary-lifetimes.patch
+0455-declare-original-mutex-scheduler-imports.patch
