@@ -255,3 +255,4 @@
 0320-native-network-event-owner-pointer-width.patch
 0315-admit-original-title-sequence-diagnostic.patch
 0313-native-original-audio-rpc-metadata.patch
+0322-preserve-original-audio-silence-addresses.patch
