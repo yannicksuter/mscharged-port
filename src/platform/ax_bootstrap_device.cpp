@@ -14,6 +14,10 @@ namespace mscharged::platform {
 namespace {
 constexpr std::uint16_t Halt=4,Init=0x0800;
 constexpr std::size_t FirmwareBytes=8192;
+std::uint32_t PrepareRetainedChip(DSPInstructionCore& chip,NativeDSPMailboxEndpoint mailboxes,
+                                 NativeDSPControlEndpoint control,std::uint32_t firmware) {
+    chip.RequireHardwareEndpoints(mailboxes,control);chip.PauseHaltedExecution();return firmware;
+}
 // Exact SHA256 of the original reconstructed AX DSPCode.c byte image. This
 // identifies task hardware code, not an external ROM or guessed replacement.
 constexpr std::array<std::uint32_t,8> FirmwareDigest{
@@ -69,7 +73,9 @@ struct NativeAXBootstrapDevice::State {
     std::array<std::uint32_t,10> loader{};
     std::uint16_t words{};
     std::uint64_t resets{};
-    std::unique_ptr<DSPInstructionCore> core;
+    std::unique_ptr<DSPInstructionCore> owned_core;
+    DSPInstructionCore* core{};
+    DSPInstructionCore* retained_chip{};
     bool stopped_voice_commands{};
     NativeAXStoppedVoiceStatus frames{};
     bool servicing{},attached{};
@@ -111,7 +117,9 @@ struct NativeAXBootstrapDevice::State {
     static void ApplyControl(void* context,std::uint16_t previous,std::uint16_t request) {
         auto& s=*static_cast<State*>(context);s.RequireOwner();
         if(request&1) {
-            s.core.reset();s.loader={};s.words=0;++s.resets;
+            if(s.retained_chip)s.retained_chip->PauseHaltedExecution();
+            else {s.owned_core.reset();s.core=nullptr;}
+            s.loader={};s.words=0;++s.resets;
             s.frames={};
             DSPBackendResetMailboxes(s.mailboxes);s.phase=NativeAXBootstrapPhase::Cold;
         }
@@ -138,7 +146,8 @@ struct NativeAXBootstrapDevice::State {
             if(GetNativeDSPMailboxStatus().dsp_mail_full)
                 throw std::logic_error("AX INIT cannot overwrite unread actual loader-ready mail");
             ValidateImage();
-            core=std::make_unique<DSPInstructionCore>(mailboxes,control);
+            if(retained_chip)core=retained_chip;
+            else {owned_core=std::make_unique<DSPInstructionCore>(mailboxes,control);core=owned_core.get();}
             core->LoadInstructionMemory(memory,firmware,FirmwareBytes,0);
             DSPInstructionRegisters initial{};initial.pc=0x10;core->BeginExecution(initial);
             // Every step is the literal current qualified core executing the
@@ -270,6 +279,12 @@ NativeAXBootstrapDevice::NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,
     catch(...) {DetachNativeDSPProcessorControl(control,&s);throw;}
     s.attached=true;
 }
+NativeAXBootstrapDevice::NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,NativeDSPMailboxEndpoint mailboxes,
+                                               NativeDSPControlEndpoint control,std::uint32_t firmware,
+                                               NativeAXFrameMode mode,DSPInstructionCore& chip)
+    :NativeAXBootstrapDevice(memory,mailboxes,control,PrepareRetainedChip(chip,mailboxes,control,firmware),mode) {
+    state_->retained_chip=&chip;state_->core=&chip;
+}
 NativeAXBootstrapDevice::~NativeAXBootstrapDevice() {
     if(state_&&state_->attached) {
         // An omitted explicit halt/drain is an owner lifetime bug; do not leave
@@ -279,7 +294,7 @@ NativeAXBootstrapDevice::~NativeAXBootstrapDevice() {
 }
 void NativeAXBootstrapDevice::ServiceOwner() {state_->Poll();}
 NativeAXBootstrapStatus NativeAXBootstrapDevice::Status() const {
-    const auto& s=*state_;s.RequireOwner();return {s.phase,s.words,s.core?s.core->Registers().instructions:0,s.resets,
+    const auto& s=*state_;s.RequireOwner();return {s.phase,s.words,(s.core&&s.words==10)?s.core->Registers().instructions:0,s.resets,
         (GetNativeDSPControlStatus().csr&Halt)!=0};
 }
 NativeAXStoppedVoiceStatus NativeAXBootstrapDevice::FrameStatus() const {
@@ -289,7 +304,8 @@ void NativeAXBootstrapDevice::Close() {
     auto& s=*state_;s.RequireOwner();if(!(GetNativeDSPControlStatus().csr&Halt)||s.servicing)
         throw std::logic_error("AX bootstrap processor must halt/drain before owner retirement");
     DetachNativeDSPMailboxService(s.mailboxes,&s);DetachNativeDSPProcessorControl(s.control,&s);
-    s.core.reset();s.attached=false;s.phase=NativeAXBootstrapPhase::Retired;
+    if(s.retained_chip)s.retained_chip->PauseHaltedExecution();
+    s.owned_core.reset();s.core=nullptr;s.attached=false;s.phase=NativeAXBootstrapPhase::Retired;
 }
 } // namespace mscharged::platform
 

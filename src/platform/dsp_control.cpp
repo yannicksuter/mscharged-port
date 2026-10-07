@@ -9,7 +9,8 @@
 namespace {
 using namespace mscharged::platform;
 constexpr std::uint16_t DspInterrupt=0x0080,DspMask=0x0100,Halt=0x0004,PiInterrupt=0x0002;
-constexpr std::uint16_t HardwareMasks=0x0150;
+constexpr std::uint16_t HardwareMasks=0x0150,AramInterrupt=0x0020,AramMask=0x0040;
+constexpr std::uint16_t AramBusy=0x0200,BootstrapBusy=0x0400;
 struct Control {
     std::mutex mutex;
     bool connected{};
@@ -17,7 +18,7 @@ struct Control {
     std::uint64_t generation{};
     std::uint16_t csr{};
     NativeDSPMailboxEndpoint mailboxes{};
-    NativeInterruptSource interrupt{};
+    NativeInterruptSource interrupt{},aram_interrupt{};
     NativeDSPProcessorControl processor{};
 };
 Control& State() {static Control state;return state;}
@@ -34,6 +35,8 @@ void Publish(Control& state,std::uint16_t next) {
     // level reaches the actual native OS owner controller; no callback here.
     if (!SetNativeInterruptPending(state.interrupt,(next&DspInterrupt) && (next&DspMask)))
         throw std::logic_error("native DSP CSR lost its actual interrupt controller");
+    if (!SetNativeInterruptPending(state.aram_interrupt,(next&AramInterrupt) && (next&AramMask)))
+        throw std::logic_error("native ARAM CSR lost its actual interrupt controller");
     state.csr=next;
 }
 void ApplyOSMask(u32 mask,void* context) {
@@ -69,8 +72,9 @@ extern "C" void ChargedDSPControlWrite(std::uint16_t value) {
         // and completes its reset operation below. Hardware RESET self-clears;
         // INIT remains a mode bit. Ordinary causes retain existing W1C semantics.
         auto next=static_cast<std::uint16_t>((value&(HardwareMasks|Halt|PiInterrupt|
-            (processor.context?0x0800:0)))|(state.csr&DspInterrupt));
+            (processor.context?0x0800:0)))|(state.csr&(DspInterrupt|AramInterrupt|AramBusy|BootstrapBusy)));
         if ((value&DspInterrupt)||(value&1))next=static_cast<std::uint16_t>(next&~DspInterrupt);
+        if ((value&AramInterrupt)||(value&1))next=static_cast<std::uint16_t>(next&~AramInterrupt);
         Publish(state,next);
     }
     if (processor.context)processor.apply(processor.context,previous,value);
@@ -90,6 +94,7 @@ NativeDSPControlEndpoint AttachNativeDSPControl(NativeDSPMailboxEndpoint mailbox
             return {state.generation};
         }
         state.interrupt=GetNativeInterruptSource(__OS_INTERRUPT_DSP_DSP);
+        state.aram_interrupt=GetNativeInterruptSource(__OS_INTERRUPT_DSP_ARAM);
         state.csr=Halt;state.mailboxes=mailboxes;state.owner=std::this_thread::get_id();
         ++state.generation;state.connected=true;
     }
@@ -105,6 +110,8 @@ void DetachNativeDSPControl() {
     DetachNativeDSPMaskObserver(ApplyOSMask,&state);
     if (!SetNativeInterruptPending(state.interrupt,false))
         throw std::logic_error("native DSP controller disappeared before hardware drain");
+    if (!SetNativeInterruptPending(state.aram_interrupt,false))
+        throw std::logic_error("native ARAM controller disappeared before hardware drain");
     state.connected=false;state.owner={};state.csr=0;
 }
 void AttachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,NativeDSPProcessorControl processor) {
@@ -124,6 +131,21 @@ void DetachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,void* con
 NativeDSPControlStatus GetNativeDSPControlStatus() {
     NativeInterruptGuard exclusion;auto& state=State();std::lock_guard lock(state.mutex);
     return {state.connected,state.csr,state.generation};
+}
+void DSPBackendBeginBootTransfer(NativeDSPControlEndpoint endpoint,bool instruction) {
+    auto& state=State();std::lock_guard lock(state.mutex);RequireDevice(state,endpoint);
+    const auto busy=instruction?BootstrapBusy:AramBusy;
+    if(!(state.csr&Halt)||(state.csr&(AramBusy|BootstrapBusy)))
+        throw std::logic_error("native boot DMA needs actual halted idle hardware");
+    Publish(state,static_cast<std::uint16_t>(state.csr|busy));
+}
+void DSPBackendEndBootTransfer(NativeDSPControlEndpoint endpoint,bool instruction,bool completed) {
+    auto& state=State();std::lock_guard lock(state.mutex);RequireDevice(state,endpoint);
+    const auto busy=instruction?BootstrapBusy:AramBusy;
+    if(!(state.csr&busy))throw std::logic_error("native boot DMA has no matching active transfer");
+    auto next=static_cast<std::uint16_t>(state.csr&~busy);
+    if(completed&&!instruction)next=static_cast<std::uint16_t>(next|AramInterrupt);
+    Publish(state,next);
 }
 void DSPBackendWriteInterruptRequest(NativeDSPControlEndpoint endpoint,std::uint16_t value) {
     auto& state=State();std::lock_guard lock(state.mutex);RequireDevice(state,endpoint);

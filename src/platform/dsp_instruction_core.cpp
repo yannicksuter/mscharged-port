@@ -76,6 +76,18 @@ std::uint16_t DSPInstructionCore::DataWord(std::uint16_t address) const {
         throw std::out_of_range("DSP data/ROM word is not supplied or written");
     return data_[address];
 }
+void DSPInstructionCore::RequireHardwareEndpoints(NativeDSPMailboxEndpoint mailboxes,NativeDSPControlEndpoint control) const {
+    const auto c=GetNativeDSPControlStatus();const auto m=GetNativeDSPMailboxStatus();
+    if(!control_ || control_->generation!=control.generation || mailboxes_.generation!=mailboxes.generation ||
+       !c.connected || c.generation!=control.generation || !m.connected || m.generation!=mailboxes.generation)
+        throw std::logic_error("native DSP core belongs to another or retired hardware lifetime");
+}
+void DSPInstructionCore::PauseHaltedExecution() {
+    if(control_)RequireHardwareEndpoints(mailboxes_,*control_);
+    if(!control_ || !(GetNativeDSPControlStatus().csr&4))
+        throw std::logic_error("native DSP execution pause requires actual connected HALT");
+    running_=false;
+}
 void DSPInstructionCore::BeginExecution(const DSPInstructionRegisters& context) {
     InstructionWord(context.pc);
     if(context.accumulator[0]>0xffffffffffULL || context.accumulator[1]>0xffffffffffULL)

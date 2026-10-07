@@ -6,6 +6,7 @@
 #include <memory>
 
 namespace mscharged::platform {
+class DSPInstructionCore;
 enum class NativeAXBootstrapPhase { Cold, LoaderReady, Loading, InitPrefixCompleted, Faulted, Retired };
 struct NativeAXBootstrapStatus {
     NativeAXBootstrapPhase phase;
@@ -44,6 +45,13 @@ public:
                             NativeDSPControlEndpoint control,
                             std::uint32_t firmware_address,
                             NativeAXFrameMode frame_mode);
+    // Adopt the same halted chip after original OS boot. Reset/loader overwrite
+    // instruction execution only; actual cold DRAM and supplied ROMs survive.
+    NativeAXBootstrapDevice(NativeDSPMemoryEndpoint memory,
+                            NativeDSPMailboxEndpoint mailboxes,
+                            NativeDSPControlEndpoint control,
+                            std::uint32_t firmware_address,
+                            NativeAXFrameMode frame_mode,DSPInstructionCore& retained_chip);
     ~NativeAXBootstrapDevice();
     NativeAXBootstrapDevice(const NativeAXBootstrapDevice&)=delete;
     NativeAXBootstrapDevice& operator=(const NativeAXBootstrapDevice&)=delete;

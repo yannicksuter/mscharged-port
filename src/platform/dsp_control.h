@@ -29,6 +29,12 @@ void AttachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint,
                                      NativeDSPProcessorControl processor);
 void DetachNativeDSPProcessorControl(NativeDSPControlEndpoint endpoint, void* context);
 
+// Source-selected OS boot DMA. Begin exposes the actual transfer's busy bit;
+// End retires it after the checked copy. Only completed ARAM copies latch its
+// hardware cause. The caller retains real pins and the whole-job HALT fence.
+void DSPBackendBeginBootTransfer(NativeDSPControlEndpoint endpoint,bool instruction);
+void DSPBackendEndBootTransfer(NativeDSPControlEndpoint endpoint,bool instruction,bool completed);
+
 // Exact observed IFX DIRQ values 0/1. Nonzero unknown bits remain unsupported.
 // Requests latch DSPINT; source CPU acknowledgment is separate W1C hardware.
 void DSPBackendWriteInterruptRequest(NativeDSPControlEndpoint endpoint,std::uint16_t value);
