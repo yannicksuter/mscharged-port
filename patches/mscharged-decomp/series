@@ -272,3 +272,4 @@
 0347-native-original-hierarchy-data-transport.patch
 0348-native-world-effect-size-assertion-scope.patch
 0350-restore-original-world-effect-scheduling.patch
+0352-native-os-reset-source-thread-registry.patch

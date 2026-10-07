@@ -18,6 +18,7 @@ target_link_libraries(charged_original_nand_sources PRIVATE aurora::os)
 target_compile_features(charged_original_nand_sources PRIVATE c_std_17)
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(charged_original_nand_sources PRIVATE
+        -ffunction-sections -fdata-sections
         -fexceptions -fno-strict-aliasing -Wno-unknown-pragmas
         -Werror=pointer-to-int-cast -Werror=implicit-function-declaration)
 endif()

@@ -1,4 +1,5 @@
 #include "platform/thread_queues.h"
+#include "platform/thread_registry_abi.h"
 #include "platform/interrupts.h"
 #include "platform/thread.h"
 
@@ -27,10 +28,11 @@ struct Threads {
     std::mutex latch;
     std::unordered_map<OSThread*, NativeThread*> live;
     std::unordered_map<OSThread*, std::shared_ptr<NativeThread>> managed;
-    OSThread* active_head{};
-    OSThread* active_tail{};
+    OSThreadQueue active{};
 };
 Threads& State() { static Threads state; return state; }
+void AppendActive(Threads& state, NativeThread& native);
+void RemoveActive(Threads& state, NativeThread& native);
 
 class Mask {
 public:
@@ -78,6 +80,8 @@ struct NativeThread {
         auto& state = State();
         std::lock_guard lock(state.latch);
         state.live.emplace(&sdk, this);
+        // Original __OSThreadInit includes its default thread in this same list.
+        AppendActive(state, *this);
     }
 
     ~NativeThread() {
@@ -95,6 +99,7 @@ struct NativeThread {
         std::lock_guard lock(state.latch);
         if (waiting || sdk.queue) std::terminate();
         sdk.state = OS_THREAD_STATE_MORIBUND;
+        RemoveActive(state, *this);
         state.live.erase(&sdk);
     }
 };
@@ -180,19 +185,19 @@ constexpr u16 kExited = 0; // Original OSThread.c OS_THREAD_STATE_EXITED.
 
 void AppendActive(Threads& state, NativeThread& native) {
     auto* thread = &native.sdk;
-    thread->linkActive = {nullptr, state.active_tail};
-    if (state.active_tail) state.active_tail->linkActive.next = thread;
-    else state.active_head = thread;
-    state.active_tail = thread;
+    thread->linkActive = {nullptr, state.active.tail};
+    if (state.active.tail) state.active.tail->linkActive.next = thread;
+    else state.active.head = thread;
+    state.active.tail = thread;
     native.active = true;
 }
 void RemoveActive(Threads& state, NativeThread& native) {
     if (!native.active) return;
     auto* thread = &native.sdk;
     if (thread->linkActive.prev) thread->linkActive.prev->linkActive.next = thread->linkActive.next;
-    else state.active_head = thread->linkActive.next;
+    else state.active.head = thread->linkActive.next;
     if (thread->linkActive.next) thread->linkActive.next->linkActive.prev = thread->linkActive.prev;
-    else state.active_tail = thread->linkActive.prev;
+    else state.active.tail = thread->linkActive.prev;
     native.active = false;
 }
 void Wake(Threads& state, OSThreadQueue* queue) {
@@ -655,3 +660,13 @@ void DrainNativeThreadLifetimes() {
     }
 }
 } // namespace mscharged::platform
+
+extern "C" OSThreadQueue* ChargedNativeActiveThreadQueue() {
+    // A borrowed source traversal must retain actual SDK exclusion throughout.
+    if (NativeInterruptsEnabled())
+        throw std::logic_error("Native active thread list requires the source interrupt mask");
+    (void)Current();
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    return &state.active;
+}
