@@ -35,6 +35,9 @@
 #include <revolution/os/OSIpc.h>
 #include <revolution/ipc.h>
 #include "credits_movie_hardware.h"
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+#include "original_game_audio_hardware.h"
+#endif
 #include <SDL3/SDL_video.h>
 #include <dlfcn.h>
 #include <cstdio>
@@ -160,6 +163,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
     try {
         const bool frontend = scene != OriginalMainScene::Credits;
         const bool optionsScene = scene == OriginalMainScene::FrontendOptions;
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        const bool sourceAudio = frontend;
+#else
+        const bool sourceAudio = false;
+#endif
         bool nativeSend=true, resizeCheck=false;
         mscharged::LaunchOptions launchOptions;
         unsigned windowWidth=800, windowHeight=600;
@@ -285,21 +293,53 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // and FE methods retain their original mappings and decisions.
         mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,false,false},
             mscharged::platform::GetNativeSTMInput(),{true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr});
-        mscharged::diagnostic::InitializeCreditsMovieHardware(
-            mscharged::platform::ServiceNativeHardwareInput);
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        if(sourceAudio)
+            mscharged::diagnostic::InitializeOriginalGameAudioHardware(
+                mscharged::platform::ServiceNativeHardwareInput);
+        else
+#endif
+            mscharged::diagnostic::InitializeCreditsMovieHardware(
+                mscharged::platform::ServiceNativeHardwareInput);
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
         std::unique_ptr<mscharged::platform::NativeAXModuleMemory> axModuleMemory;
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        std::unique_ptr<mscharged::diagnostic::OriginalGameAudioHardware> gameAudioHardware;
+#endif
+        // Terminal diagnostics retain live source images and hardware owners on
+        // failure. Unwinding a device with active source pins is not retirement.
+        try {
         if(frontend)
             axModuleMemory=std::make_unique<mscharged::platform::NativeAXModuleMemory>(modulePath.c_str());
         auto* module=dlopen(modulePath.c_str(),RTLD_LAZY|RTLD_LOCAL);
         if(!module)throw std::runtime_error(dlerror());
         if(axModuleMemory)axModuleMemory->ConfirmLoaded(module);
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        if(sourceAudio)
+            gameAudioHardware=std::make_unique<mscharged::diagnostic::OriginalGameAudioHardware>(*axModuleMemory);
+#endif
         auto entry=reinterpret_cast<int(*)()>(dlsym(module,"charged_original_entry"));
         if(!entry)throw std::runtime_error("Original source main export unavailable");
         std::fprintf(stderr,"Entering actual source main with real Aurora Vulkan/FIFO owner and native PI_VI under temporary MAIN_BOOTSTRAP; flow remains incomplete.\n");
         std::fflush(nullptr);
         const int result=entry();
         Check(result==85, "Original main selected scene did not complete checkpoint 85");
+        using ObserveAudio = unsigned(*)();
+        using AudioAction = void(*)();
+        auto observeAudio=sourceAudio ? reinterpret_cast<ObserveAudio>(
+            dlsym(module,"charged_original_audio_observe")) : nullptr;
+        auto shutdownAudio=sourceAudio ? reinterpret_cast<AudioAction>(
+            dlsym(module,"charged_original_audio_shutdown")) : nullptr;
+        auto retireAudioPin=sourceAudio ? reinterpret_cast<AudioAction>(
+            dlsym(module,"charged_original_audio_retire_silence_pin")) : nullptr;
+        if(sourceAudio) {
+            Check(observeAudio && shutdownAudio && retireAudioPin,
+                  "Original audio source observations and retirement exports unavailable");
+            // True source predicates, before the first original task/frame.
+            Check(observeAudio()==7u,
+                  "Original audio owner/initialization/configuration callback incomplete");
+            std::puts("Original main audio: source owner initialized, nlxgs configuration genuinely loaded.");
+        }
         auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
         Check(frame,"Same original-main module scene-frame export unavailable");
         auto stopMovie=reinterpret_cast<void(*)()>(dlsym(module,"charged_original_scene_stop_movie"));
@@ -458,15 +498,47 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::printf("Playback observation: %.3fs, %.2f rendered frames/s; VI retraces%u, elapsed fields%llu.\n",
                     elapsed,frames/elapsed,videoClock.retrace_count,
                     static_cast<unsigned long long>(videoClock.elapsed_fields));
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        if(sourceAudio) {
+            const auto status=gameAudioHardware->Status();
+            std::printf("Actual native AX state: initialized%u phase%u processed%llu completed%llu SYNC%llu YIELD%llu.\n",
+                status.native_initialized, static_cast<unsigned>(status.protocol.phase),
+                static_cast<unsigned long long>(status.frames.processed_frames),
+                static_cast<unsigned long long>(status.frames.completed_frames),
+                static_cast<unsigned long long>(status.frames.sync_interrupts),
+                static_cast<unsigned long long>(status.frames.yield_interrupts));
+            Check(status.native_initialized && status.frames.processed_frames &&
+                  status.frames.completed_frames && status.frames.sync_interrupts &&
+                  status.frames.yield_interrupts,
+                  "Original audio requests have no actual native AX frame completion");
+            std::printf("Original main AX: processed%llu completed%llu SYNC%llu YIELD%llu; native ROM-free coefficient policy.\n",
+                static_cast<unsigned long long>(status.frames.processed_frames),
+                static_cast<unsigned long long>(status.frames.completed_frames),
+                static_cast<unsigned long long>(status.frames.sync_interrupts),
+                static_cast<unsigned long long>(status.frames.yield_interrupts));
+        }
+#endif
         stopMovie();
+        if(sourceAudio)shutdownAudio();
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        if(sourceAudio)gameAudioHardware->UnbindOwnerService();
+#endif
         mscharged::diagnostic::ShutdownCreditsMovieHardware();
+#if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
+        if(sourceAudio) {
+            gameAudioHardware->CloseAfterAIStop(retireAudioPin);
+            gameAudioHardware.reset();
+            Check(observeAudio()==7u,"Original source shutdown flags unexpectedly changed");
+            std::puts("Original audio stopped: AI drained, native AX halted/closed, source device pins retired; original shutdown flags preserved.");
+        }
+#endif
         mscharged::platform::ShutdownNativeHardwareInput();
         if (frontend)
             mscharged::platform::ShutdownNativeFilesystem();
         if(axModuleMemory) {
-            // Actual DSP jobs must halt/drain before this point when admitted.
-            // Current selected frontend still omits original AX initialization.
-            axModuleMemory->ReleaseAfterDeviceDrain();
+            // Actual source audio retirement already released its module pins.
+            // The constructor-only mode retains the earlier stopped device gate.
+            if(!sourceAudio)axModuleMemory->ReleaseAfterDeviceDrain();
             axModuleMemory.reset();
         }
         Check(!mscharged::platform::GetNativeAIStatus().initialized,
@@ -481,5 +553,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             std::puts("Native resize qualification retired real VI/GX/window hardware.");
         }
         std::fflush(nullptr);std::_Exit(0);
+        } catch(const std::exception& e) {
+            std::fprintf(stderr,"Actual source diagnostic stopped with live owners: %s\n",e.what());
+            std::fflush(nullptr);std::_Exit(1);
+        }
     }catch(const std::exception& e){std::fprintf(stderr,"Actual source diagnostic stopped: %s\n",e.what());std::fflush(nullptr);std::_Exit(1);}
 }
