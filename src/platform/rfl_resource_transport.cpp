@@ -65,10 +65,15 @@ extern "C" void ChargedCopyRFLCachedBytes(void* destination,const void* cache,
     std::uint32_t size,std::uint32_t offset,std::uint32_t bytes) {
     const auto* source=Address(cache,size,offset,bytes);
     if (bytes) Serialized(source,bytes);
-    // Original caller owns its destination capacity/lifetime. Do not attach a
-    // parent-only publication to an unqualified MEM suballocation or change
-    // memcpy's overlap/zero-length behavior.
+    // Publish only the original successful copy into a known live source MEM
+    // child. Unknown buffers retain441's raw copy semantics and gain no data
+    // completion; no parent work/capacity or generated array is published.
+    GameMemoryStorageSpan storage;
+    GameByteWriteReservation publication;
+    if (bytes && FindGameMemoryStorage(destination,bytes,storage))
+        publication=GameByteWriteReservation(destination,bytes);
     std::memcpy(destination,source,bytes);
+    if (publication.Tracked()) publication.Complete(GameByteDomain::WiiSerialized);
 }
 extern "C" std::uint16_t ChargedReadRFLNANDHalf(const void* word) { return Half(word); }
 extern "C" std::uint32_t ChargedReadRFLNANDWord(const void* word) { return Word(word); }

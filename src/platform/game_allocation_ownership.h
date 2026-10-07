@@ -55,6 +55,30 @@ struct GameAllocationSpan
 };
 bool FindGameAllocationSpan(const void* pointer, std::size_t bytes, GameAllocationSpan& result);
 
+// Actual nonoverlapping MEM child storage inside an original NL allocation.
+// The opaque source heap is a storage/lifetime owner, not a replacement
+// MemoryAllocator. Requested bytes never imply completed data or graphics.
+struct GameMemoryStorageSpan {
+    const void* base;
+    std::size_t bytes;
+    const void* owner;
+    GameAllocationSpan allocation;
+    std::uint64_t incarnation;
+};
+class GameMemoryStorageReservation {
+public:
+    GameMemoryStorageReservation(const void* owner, std::size_t requestedBytes);
+    ~GameMemoryStorageReservation();
+    GameMemoryStorageReservation(const GameMemoryStorageReservation&)=delete;
+    GameMemoryStorageReservation& operator=(const GameMemoryStorageReservation&)=delete;
+    void Commit(void* pointer);
+private:
+    void* pending_;
+};
+bool FindGameMemoryStorage(const void* pointer, std::size_t bytes, GameMemoryStorageSpan& result);
+void RetireGameMemoryStorage(const void* owner, const void* pointer);
+void RetireGameMemoryStorageOwner(const void* owner);
+
 enum class GameByteDomain { WiiSerialized, NativeHeader, NativePayload };
 struct GameCompletedSpan
 {

@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-# Whole original RFL cached/NAND resource loader, with numeric serialized-byte
+# Whole original RFL system/resource code, with serialized-byte and MEM lifetime
 # transport. This compiler inventory does not admit Mii initialization, raw DB
 # records, uncached NAND buffers or native rendering. Consumers share the actual
 # source module's completion/allocator registry; never a separately owned bridge.
@@ -10,8 +10,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8
     return()
 endif()
 add_library(charged_original_rfl_resource_sources OBJECT EXCLUDE_FROM_ALL
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_System.c"
     "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_NANDLoader.c"
-    src/platform/rfl_resource_transport.cpp)
+    src/platform/rfl_resource_transport.cpp
+    src/platform/rfl_temp_memory.cpp)
 add_dependencies(charged_original_rfl_resource_sources verify_prepared)
 set_target_properties(charged_original_rfl_resource_sources PROPERTIES
     POSITION_INDEPENDENT_CODE ON C_VISIBILITY_PRESET hidden
@@ -36,15 +38,19 @@ function(mscharged_add_original_rfl_resource target)
     endif()
     get_target_property(_sources "${target}" SOURCES)
     foreach(_path IN ITEMS
+            "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_System.c"
             "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_NANDLoader.c"
-            "${PROJECT_SOURCE_DIR}/src/platform/rfl_resource_transport.cpp")
+            "${PROJECT_SOURCE_DIR}/src/platform/rfl_resource_transport.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/rfl_temp_memory.cpp")
         file(RELATIVE_PATH _relative "${PROJECT_SOURCE_DIR}" "${_path}")
         if(NOT _path IN_LIST _sources AND NOT _relative IN_LIST _sources)
             target_sources("${target}" PRIVATE "${_path}")
             list(APPEND _sources "${_path}")
         endif()
     endforeach()
-    set_property(SOURCE "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_NANDLoader.c"
+    set_property(SOURCE
+        "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_System.c"
+        "${MSCHARGED_PREPARED}/src/RVL_SDK/rfl/RFL_NANDLoader.c"
         TARGET_DIRECTORY "${target}" APPEND PROPERTY COMPILE_OPTIONS
         -fexceptions -Werror=pointer-to-int-cast
         -Werror=implicit-function-declaration)
