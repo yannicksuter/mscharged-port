@@ -155,8 +155,11 @@ void ResetBlockedRead() {
     const auto queued_drive=DVDGetDriveStatus();
     Check(DVDOpen(files[1].fileName,&canceled),"Ordinary cancel handle did not open");
     Check(DVDReadAsyncPrio(&canceled,rejected_bytes.data(),128,0,Completion,2),"Ordinary cancel read failed admission");
-    Check(DVDCancel(&canceled.cb)==DVD_RESULT_GOOD&&callbacks==1&&
-          callback_result==DVD_RESULT_CANCELED,"Normal queued cancellation lost its actual callback");
+    const auto canceled_return=DVDCancel(&canceled.cb);
+    const auto canceled_result=callback_result.load();
+    const auto canceled_state=DVDGetFileInfoStatus(&canceled);
+    Check(canceled_return==DVD_RESULT_GOOD&&callbacks==1&&
+          canceled_result==DVD_RESULT_CANCELED,"Normal queued cancellation lost its actual callback");
     Check(DVDClose(&canceled),"Ordinary canceled handle did not retire");
     callbacks=0;
     const auto first_callback=first.cb.callback;
@@ -229,6 +232,20 @@ void ResetBlockedRead() {
     Check(reset_drive==DVD_STATE_BUSY,"Reset wait reported idle before the real transfer returned");
     Check(DVDGetDriveStatus()==DVD_STATE_END,"Drained cancellation invented a busy drive");
     aurora_dvd_overlay_files(nullptr,0,nullptr);
+    // Independent literal Wii ABI oracle, after real worker/handle retirement.
+    // Keep result -3 distinct from the original command-state value 10.
+    std::printf("Native DVD cancel ABI: return=%d callback=%d state=%d\n",
+                canceled_return,canceled_result,canceled_state);
+    Check(canceled_return==0&&canceled_result==-3&&canceled_state==10,
+          "Literal Wii ABI: cancel returns 0, canceled callback -3, command state 10");
+    Check(DVD_RESULT_GOOD==0&&DVD_RESULT_FATAL_ERROR==-1&&DVD_RESULT_IGNORED==-2&&
+          DVD_RESULT_CANCELED==-3&&DVD_STATE_CANCELED==10,
+          "Canonical DVD result/state numbers differ from the Wii SDK enum");
+#ifdef DVD_RESULT_COVER_CLOSED
+    Check(DVD_RESULT_COVER_CLOSED==-4,"Wii cover-closed result must be -4");
+#else
+    Check(false,"Canonical DVD header omits Wii cover-closed result -4");
+#endif
 }
 void ResetStartedCallback() {
     DVDFileInfo info{};
@@ -294,6 +311,9 @@ void CloseBlockedRead() {
     });
     aurora_dvd_close();release.join();
     if (helper_error) std::rethrow_exception(helper_error);
+    const auto closed_result=callback_result.load();
+    const auto closed_active_state=DVDGetFileInfoStatus(&first);
+    const auto closed_queued_state=DVDGetFileInfoStatus(&queued);
     Check(active.finished&&callbacks==2&&callback_result==DVD_RESULT_CANCELED,
           "Close skipped real read retirement or changed the genuine cancellation callback");
     Check(close_callback_close_rejected&&close_callback_reset_rejected&&
@@ -313,6 +333,8 @@ void CloseBlockedRead() {
     Check(__DVDGetCoverStatus()==DVD_COVER_OPENED,"Sequential closed-media retirement was not idempotent");
     Check(DVDGetDriveStatus()==DVD_STATE_NO_DISK,"Closed media retained a drive-ready status");
     aurora_dvd_overlay_files(nullptr,0,nullptr);
+    Check(closed_result==-3&&closed_active_state==10&&closed_queued_state==10,
+          "Literal Wii ABI: active/queued close cancellation changed -3/10");
 }
 
 void CheckDriveFault(const char* disc, bool reset_during_error) {

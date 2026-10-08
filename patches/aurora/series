@@ -54,3 +54,4 @@
 0058-native-vi-display-disable.patch
 0059-report-native-dvd-transfer-and-fault-status.patch
 0060-complete-native-dvd-requests-after-fatal-error.patch
+0061-match-native-dvd-result-numbers.patch
