@@ -433,3 +433,6 @@
 0657-retain-native-sdk-declarations.patch
 0658-declare-native-template-static-owners.patch
 0659-preserve-native-audio-debug-labels.patch
+0660-retain-native-platform-macro-bindings.patch
+0661-expose-original-audio-inline-definitions.patch
+0662-use-native-original-inflater-prototypes.patch
