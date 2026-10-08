@@ -49,4 +49,42 @@ if(BUILD_TESTING)
         endforeach()
     endif()
     set_tests_properties(native_module_loader PROPERTIES TIMEOUT 20)
+
+    if(MINGW AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        # Separate shared-CRT boundary. Existing static fixtures retain their
+        # profile; this check must use one actual LLVM-MinGW libc++/unwind pair.
+        find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+        get_filename_component(_mingw_compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+        find_program(_mingw_readobj NAMES llvm-readobj HINTS "${_mingw_compiler_dir}"
+            NO_DEFAULT_PATH REQUIRED)
+        find_path(_mingw_shared_runtime_dir NAMES libc++.dll HINTS
+            "${_mingw_compiler_dir}/../x86_64-w64-mingw32/bin" "${_mingw_compiler_dir}"
+            NO_DEFAULT_PATH REQUIRED)
+        add_executable(native_module_shared_runtime_tests
+            "${_module_loader_root}/tests/native_module_shared_runtime.cpp")
+        target_link_libraries(native_module_shared_runtime_tests PRIVATE charged_native_module_loader)
+        set_target_properties(native_module_shared_runtime_tests PROPERTIES ENABLE_EXPORTS ON
+            WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+        add_library(native_module_shared_runtime_fixture SHARED
+            "${_module_loader_root}/tests/fixtures/native_module_shared_runtime.cpp")
+        target_compile_definitions(native_module_shared_runtime_fixture PRIVATE FIXTURE_MODULE=1)
+        target_link_libraries(native_module_shared_runtime_fixture PRIVATE native_module_shared_runtime_tests)
+        set_target_properties(native_module_shared_runtime_fixture PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+        foreach(_target native_module_shared_runtime_tests native_module_shared_runtime_fixture)
+            target_compile_features("${_target}" PRIVATE cxx_std_20)
+            target_compile_options("${_target}" PRIVATE -fno-assume-sane-operator-new -fno-strict-aliasing)
+        endforeach()
+        add_custom_target(native_module_shared_runtime_dependencies ALL
+            COMMAND "${Python3_EXECUTABLE}" -B "${_module_loader_root}/tools/stage_mingw_shared_runtime.py"
+                --readobj "${_mingw_readobj}" --runtime-dir "${_mingw_shared_runtime_dir}"
+                --output-dir "$<TARGET_FILE_DIR:native_module_shared_runtime_tests>"
+                --image "$<TARGET_FILE:native_module_shared_runtime_tests>"
+                --image "$<TARGET_FILE:native_module_shared_runtime_fixture>"
+                --manifest "${CMAKE_CURRENT_BINARY_DIR}/native-module-shared-runtime-imports.json"
+            DEPENDS native_module_shared_runtime_tests native_module_shared_runtime_fixture
+            VERBATIM)
+        add_test(NAME native_module_shared_runtime COMMAND native_module_shared_runtime_tests
+            "$<TARGET_FILE:native_module_shared_runtime_fixture>")
+        set_tests_properties(native_module_shared_runtime PROPERTIES TIMEOUT 30)
+    endif()
 endif()
