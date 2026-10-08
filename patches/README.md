@@ -67,10 +67,13 @@ load each challenge's authored configuration; the following loading request
 
 Patches 0610–0613 and 0615–0619 admit the original offline match load under
 the explicit match-loading diagnostic. 0610 opens Stadium Select's loading
-scene, the in-game overlays the loading script pushes and the loading-to-game
-transition. 0611 and 0612 qualify the async loading services and the native
-widths of the gameplay sources they reach. 0613 transports the fuzzy AI script
-VM's address words. 0615 admits the original in-game frame updates
+scene, the in-game overlays the loading script pushes, the loading-to-game
+transition, the original pause menu and its pages, the quit path back to the
+frontend, and original main's render and presentation owners (Wiper, replay,
+excitement, views). 0611 and 0612 qualify the async loading services, the
+frontend re-entry after a game, and the native widths of the gameplay sources
+they reach. 0613 transports the fuzzy AI script VM's address words. 0615
+admits the original in-game frame updates
 (Presentation/NIS, characters, shadow views). 0616 lowers the original
 nonzero-morph software skin positions. 0617 decodes Wii data that match loading
 reads directly. 0618 keeps GL resource-pool storage valid after an original

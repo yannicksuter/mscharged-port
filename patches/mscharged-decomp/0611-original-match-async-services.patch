@@ -10,6 +10,12 @@ splitting gated blocks only at case boundaries (fall-through partners stay
 together). Case bodies are unchanged; every service not reached by those two
 scripts keeps its existing gate.
 
+InitializeFEState2's re-entry branch (any frontend entry after the first) is
+admitted under the same name instead of the sequence diagnostic's stop. The
+original then selects the landing scene by mode: Main Menu or Choose Captains
+for exhibition, the Striker Cup hub (round news, goal trophies, save), the
+challenge listing, or the online/tournament scenes.
+
 diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
 --- a/src/Game/AsyncLoading.cpp
 +++ b/src/Game/AsyncLoading.cpp
@@ -253,3 +259,13 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 139:
          SetLoadingComment("StartLoadingSharedTextures");
          CharacterLoader::sInstance.StartLoadingSharedTextures();
+@@ -1592,7 +1626,8 @@
+     }
+     else
+     {
+-#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE) \
++    && !(defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+         throw std::logic_error("Frontend sequence diagnostic does not qualify later world/network frontend initialization");
+ #else
+         SetPointerEnabled(true);
