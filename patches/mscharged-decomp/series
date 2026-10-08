@@ -428,4 +428,6 @@
 0652-native-original-unspecified-return-diagnostics.patch
 0653-decode-native-material-hash-carrier.patch
 0654-preserve-native-audio-contexts.patch
+0655-preserve-native-emission-owner-keys.patch
+0656-recognize-native-win64-replay-words.patch
 0659-preserve-native-audio-debug-labels.patch
