@@ -9,6 +9,7 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$" OR NOT CMAKE_SIZEOF_VOID_P E
     message(FATAL_ERROR "The original-main source diagnostic requires Linux or macOS LP64 with GCC or Clang")
 endif()
 include(cmake/OriginalModuleLinkage.cmake)
+include(cmake/OriginalFrontendResetDiagnostic.cmake)
 include(cmake/OriginalFunctionPools.cmake)
 include(cmake/WiiStringFormat.cmake)
 include(cmake/NativeSystemSettings.cmake)
@@ -315,15 +316,23 @@ function(mscharged_link_original_main_credits target)
         mscharged_original_main_credits_vi aurora::core)
     if(APPLE)
         target_link_options(${target} PRIVATE LINKER:-dead_strip LINKER:-export_dynamic
-            LINKER:-unexported_symbol,___OSHotReset
-            LINKER:-unexported_symbol,___OSShutdownToSBY
             LINKER:-unexported_symbol,___OSSetVIForceDimming)
+        if(NOT MSCHARGED_DIAGNOSTIC_FRONTEND_RESET)
+            target_link_options(${target} PRIVATE
+                LINKER:-unexported_symbol,___OSHotReset
+                LINKER:-unexported_symbol,___OSShutdownToSBY)
+        endif()
     else()
+        if(MSCHARGED_DIAGNOSTIC_FRONTEND_RESET)
+            set(_host_exports original_main_reset_host_exports.map)
+        else()
+            set(_host_exports original_main_credits_host_exports.map)
+        endif()
         target_link_options(${target} PRIVATE
             -Wl,--gc-sections -Wl,--export-dynamic
-            "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
+            "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/${_host_exports}")
         set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/${_host_exports}")
     endif()
     mscharged_require_original_host_symbol(${target} PRIVATE SCGetSimpleAddressID)
     mscharged_require_original_host_symbol(${target} PRIVATE __OSGetIOSRev)

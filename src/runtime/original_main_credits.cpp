@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <vector>
 #include <memory>
+#include <optional>
 #include <chrono>
 #include <thread>
 #include <aurora/video.h>
@@ -43,6 +44,10 @@
 #include "runtime/frame_rate_title.h"
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
 #include "original_game_audio_hardware.h"
+#endif
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
+#include "original_terminal_verifier.h"
+#include "platform/os_shutdown_requests.h"
 #endif
 #include <SDL3/SDL_video.h>
 #include <dlfcn.h>
@@ -329,6 +334,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             // This mode never uses diagnostic aurora_begin/end_frame.
             aurora_configure_native_gx_hardware();
         }
+        std::optional<mscharged::platform::NativeFilesystemSettings> discBootIdentity;
         if (frontend) {
             // Physical IPC boot metadata is part of the native OS foundation.
             // The whole original SDK keeps its advancing IPC buffer cursor;
@@ -340,7 +346,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             IPCInit();
             // One isolated native title profile. UID is an explicit native IOS
             // process identity, independent of the host account/retail console.
-            mscharged::platform::InitializeNativeFilesystemForDisc(
+            discBootIdentity=mscharged::platform::InitializeNativeFilesystemForDisc(
                 {launch.disc_path, dataDirectory / "nand", 0x1001});
         }
         mscharged::platform::InitializeNativeSTMDevice();
@@ -360,6 +366,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             mscharged::diagnostic::InitializeCreditsMovieHardware(
                 mscharged::platform::ServiceNativeHardwareInput);
         if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
+        if(frontend)mscharged::platform::ConfigureNativeOSDiscBootIdentity(*discBootIdentity);
+        std::optional<mscharged::diagnostic::OriginalTerminalVerifier> terminalVerifier;
+#endif
         std::unique_ptr<mscharged::platform::NativeAXModuleMemory> axModuleMemory;
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         std::unique_ptr<mscharged::diagnostic::OriginalGameAudioHardware> gameAudioHardware;
@@ -408,6 +418,12 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                   "Original audio owner/initialization/configuration callback incomplete");
             std::puts("Original main audio: source owner initialized, nlxgs configuration genuinely loaded.");
         }
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
+        if(frontend && sourceAudio && nativeSend) {
+            terminalVerifier.emplace(*gameAudioHardware,*axModuleMemory,host.window);
+            mscharged::platform::ConfigureNativeSTMPowerRemoval(terminalVerifier->Policy());
+        }
+#endif
         auto observeBootScript=sourceBoot ? reinterpret_cast<ObserveAudio>(
             dlsym(module,"charged_original_boot_script_observe")) : nullptr;
         auto bootInstruction=sourceBoot ? reinterpret_cast<int(*)()>(
@@ -493,8 +509,17 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         wgpu::Texture retainedEFB;
         Check(!resizeCheck || nativeSend, "Resize qualification requires source-native send");
         while(!exit && (interactive || !snapshot)) {
-            for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
-                if(event->type==AURORA_EXIT)exit=true;
+            for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event) {
+                if(event->type!=AURORA_EXIT)continue;
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
+                if(terminalVerifier) {
+                    // The native input watch has retained the genuine power
+                    // event. Keep source tasks/owners alive for ResetTask.
+                    continue;
+                }
+#endif
+                exit=true;
+            }
             if(exit)break;
             mscharged::diagnostic::ServiceCreditsMovieHardware();
             if(requestSH) {

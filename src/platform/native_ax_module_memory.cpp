@@ -13,7 +13,12 @@
 #include <filesystem>
 #if !defined(__APPLE__)
 #include <link.h>
+#else
+#include <mach-o/dyld.h>
+#include <mach-o/loader.h>
+#include <mach/vm_prot.h>
 #endif
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -45,6 +50,76 @@ bool SameFile(const struct stat& a, const struct stat& b) {
     return a.st_dev==b.st_dev && a.st_ino==b.st_ino && a.st_size==b.st_size &&
         ModifiedTime(a).tv_sec==ModifiedTime(b).tv_sec &&
         ModifiedTime(a).tv_nsec==ModifiedTime(b).tv_nsec;
+}
+bool ContainsExtent(std::uintptr_t begin, std::uint64_t size,
+                    std::uintptr_t address, std::size_t bytes) {
+    if (!bytes || size > std::numeric_limits<std::uintptr_t>::max() - begin || address < begin)
+        return false;
+    const auto offset = address - begin;
+    return offset < size && bytes <= size - offset;
+}
+bool ReadableImageContains(std::uintptr_t image, const void* pointer, std::size_t bytes) {
+    if (!image || !pointer || !bytes) return false;
+    const auto address = reinterpret_cast<std::uintptr_t>(pointer);
+    if (bytes > std::numeric_limits<std::uintptr_t>::max() - address) return false;
+#if defined(__APPLE__)
+    for (std::uint32_t i = 0; i != _dyld_image_count(); ++i) {
+        const auto* header = _dyld_get_image_header(i);
+        if (reinterpret_cast<std::uintptr_t>(header) != image) continue;
+        if (header->magic != MH_MAGIC_64) return false;
+        const auto* header64 = reinterpret_cast<const mach_header_64*>(header);
+        const auto* commands = reinterpret_cast<const unsigned char*>(header64 + 1);
+        std::size_t offset = 0;
+        const auto slide = _dyld_get_image_vmaddr_slide(i);
+        for (std::uint32_t n = 0; n != header64->ncmds; ++n) {
+            if (offset > header64->sizeofcmds || header64->sizeofcmds - offset < sizeof(load_command))
+                return false;
+            const auto* command = reinterpret_cast<const load_command*>(commands + offset);
+            if (command->cmdsize < sizeof(load_command) || command->cmdsize > header64->sizeofcmds - offset)
+                return false;
+            if (command->cmd == LC_SEGMENT_64) {
+                if (command->cmdsize < sizeof(segment_command_64)) return false;
+                const auto& segment = *reinterpret_cast<const segment_command_64*>(command);
+                // PAGEZERO has no usable mapping. AI reads native storage;
+                // source extent/lifetime does not authorize a native write.
+                // Use mapped size, not file size (which would exclude BSS).
+                if (std::strncmp(segment.segname, SEG_PAGEZERO, sizeof(segment.segname)) != 0 &&
+                    (segment.initprot & VM_PROT_READ) != 0) {
+                    std::uintptr_t begin;
+                    if (slide >= 0) {
+                        if (segment.vmaddr > std::numeric_limits<std::uintptr_t>::max() - std::uintptr_t(slide))
+                            return false;
+                        begin = std::uintptr_t(segment.vmaddr) + std::uintptr_t(slide);
+                    } else {
+                        const auto magnitude = std::uintptr_t(-(slide + 1)) + 1;
+                        if (segment.vmaddr < magnitude) return false;
+                        begin = std::uintptr_t(segment.vmaddr) - magnitude;
+                    }
+                    if (ContainsExtent(begin, segment.vmsize, address, bytes)) return true;
+                }
+            }
+            offset += command->cmdsize;
+        }
+        return false;
+    }
+    return false;
+#else
+    struct Probe { std::uintptr_t image, address; std::size_t bytes; bool contained{}; } probe{image,address,bytes};
+    dl_iterate_phdr([](dl_phdr_info* info, std::size_t, void* context) {
+        auto& p = *static_cast<Probe*>(context);
+        if (info->dlpi_addr != p.image) return 0;
+        for (unsigned i = 0; i != info->dlpi_phnum; ++i) {
+            const auto& segment = info->dlpi_phdr[i];
+            if (segment.p_type != PT_LOAD || (segment.p_flags & PF_R) == 0) continue;
+            if (segment.p_vaddr > std::numeric_limits<std::uintptr_t>::max() - p.image) continue;
+            if (ContainsExtent(p.image + segment.p_vaddr, segment.p_memsz, p.address, p.bytes)) {
+                p.contained = true; break;
+            }
+        }
+        return 1;
+    }, &probe);
+    return probe.contained;
+#endif
 }
 }
 struct NativeAXModuleMemory::State {
@@ -159,6 +234,13 @@ std::uint32_t NativeAXModuleMemory::PhysicalAddress(unsigned source_span) const 
     if(!s.loaded || s.retired || source_span>=s.mapping_count)
         throw std::out_of_range("AX source static word requires a live loaded span");
     return s.mappings[source_span].physical_address;
+}
+bool NativeAXModuleMemory::OwnsReadableImageExtent(const void* address, std::size_t bytes) const {
+    std::lock_guard lock(LoaderExclusion());
+    auto& s=*state_;s.RequireOwner();
+    if (!s.loaded || s.retired) return false;
+    s.RequireFile();
+    return ReadableImageContains(s.image_base,address,bytes);
 }
 void NativeAXModuleMemory::ReleaseAfterDeviceDrain() {
     auto& s=*state_;s.RequireOwner();

@@ -27,7 +27,9 @@ retains buffers through real callbacks, including reentrant block reuse.
 Patch 0520 connects the original STM terminal wait to native power removal.
 Original interrupt masking and instruction-cache ordering remain in place;
 the native device requires an explicit policy and verified device quiescence.
-This does not enable the original reset task or implement host restart.
+Patch 0519 admits the original ResetTask at its existing construction and
+registration points. The frontend runtime routes window close through that
+source task and its SDK shutdown sequence. Host restart remains unsupported.
 
 Patch 0518 retains the complete original SRAM cache, checksum and retry owner.
 The native EXI device supplies explicit persistent SRAM/RTC register storage;
