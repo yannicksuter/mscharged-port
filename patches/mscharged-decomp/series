@@ -437,3 +437,4 @@
 0661-expose-original-audio-inline-definitions.patch
 0662-use-native-original-inflater-prototypes.patch
 0663-preserve-native-file-callback-contexts.patch
+0664-preserve-native-retarget-byte-cursor.patch
