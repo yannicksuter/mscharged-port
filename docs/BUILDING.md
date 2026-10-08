@@ -42,8 +42,9 @@ python3 tools/setup_dependencies.py
 cmake --workflow --preset release --fresh
 ```
 
-After code changes, use `cmake --build --preset release`. Run `mscharged --help`
-for available options.
+After code changes, use `cmake --build --preset release`. If presets or build
+options changed, run `cmake --preset release` first to refresh the configuration.
+Run `mscharged --help` for available options.
 
 ## Smaller builds and tests
 

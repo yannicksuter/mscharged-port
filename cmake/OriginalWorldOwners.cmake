@@ -46,7 +46,7 @@ function(mscharged_add_original_world_owners target)
             src/Game/BasicStadium.cpp
             src/Game/Render/StadiumLoading.cpp
             src/Game/Render/StadiumWorldObjects.cpp
-            src/Game/Render/tu_8027AE14.cpp
+            src/Game/Render/SolarFlareEffect.cpp
             src/Game/Render/StadiumPhysicsObject.cpp
             src/Game/World/worldanim.cpp
             src/Game/World/worldanimobjects.cpp

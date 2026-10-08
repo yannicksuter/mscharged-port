@@ -44,6 +44,7 @@ For an existing checkout, follow the explicit `origin main`
 workflow. See [disc settings](BUILDING.md#configure-your-disc).
 `--fresh` clears the CMake configuration without deleting sources or settings.
 For later code changes, use `cmake --build --preset release`.
+If presets or build options changed, run `cmake --preset release` first.
 
 ## If configuration fails
 
