@@ -152,7 +152,12 @@ void ReadSelectedXFB(const AuroraVIPresentedState& presented,
     aurora_service_hardware_interrupts();
     // Original fades and transitions can legitimately present an all-black frame.
     buffer.Unmap();
-    auto* file=std::fopen(output.c_str(),"wb"); Check(file,"Cannot create selected XFB snapshot");
+#if defined(_WIN32)
+    auto* file=_wfopen(output.c_str(),L"wb");
+#else
+    auto* file=std::fopen(output.c_str(),"wb");
+#endif
+    Check(file,"Cannot create selected XFB snapshot");
     std::fprintf(file,"P6\n%u %u\n255\n",copy->width,copy->height);
     std::size_t written=0;
     while(written<rgb.size()) {
@@ -166,7 +171,7 @@ void ReadSelectedXFB(const AuroraVIPresentedState& presented,
     aurora_service_hardware_interrupts();
     Check(written==rgb.size() && !closed,"Selected XFB snapshot write failed");
     std::printf("Actual source-selected XFB %ux%u revision%llu, nonblack pixels%u; saved %s.\n",
-        copy->width,copy->height,static_cast<unsigned long long>(copy->revision),lit,output.c_str());
+        copy->width,copy->height,static_cast<unsigned long long>(copy->revision),lit,mscharged::PathUtf8(output).c_str());
 }
 void EndWithSnapshot(const std::filesystem::path& output) {
     auto s=std::make_shared<Snapshot>();
@@ -182,13 +187,18 @@ void EndWithSnapshot(const std::filesystem::path& output) {
     const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
     while(!s->done && std::chrono::steady_clock::now()<end){aurora::gfx::device().Tick();std::this_thread::sleep_for(std::chrono::milliseconds(1));}
     Check(s->done==1,"Original Credits GPU readback did not complete");
-    auto* f=std::fopen(output.c_str(),"wb");Check(f,"Cannot create Credits snapshot");
+#if defined(_WIN32)
+    auto* f=_wfopen(output.c_str(),L"wb");
+#else
+    auto* f=std::fopen(output.c_str(),"wb");
+#endif
+    Check(f,"Cannot create Credits snapshot");
     std::fprintf(f,"P6\n%u %u\n255\n",s->target.width,s->target.height);
     const auto written=std::fwrite(s->rgb.data(),1,s->rgb.size(),f);const auto closed=std::fclose(f);
     Check(written==s->rgb.size() && !closed,"Credits snapshot write failed");
     unsigned lit=0;for(std::size_t i=0;i<s->rgb.size();i+=3)if(s->rgb[i]||s->rgb[i+1]||s->rgb[i+2])++lit;
     Check(lit != 0, "Original Credits actual EFB is entirely black; visibility remains unqualified");
-    std::printf("Actual Credits EFB %ux%u, nonblack pixels%u; saved %s.\n",s->target.width,s->target.height,lit,output.c_str());
+    std::printf("Actual Credits EFB %ux%u, nonblack pixels%u; saved %s.\n",s->target.width,s->target.height,lit,mscharged::PathUtf8(output).c_str());
 }
 }
 int mscharged::RunOriginalMainCredits(int argc, char** argv,
@@ -401,7 +411,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
 #endif
             mscharged::diagnostic::InitializeCreditsMovieHardware(
                 mscharged::platform::ServiceNativeHardwareInput);
-        if(!aurora_dvd_open(disc.c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
+        if(!aurora_dvd_open(mscharged::PathUtf8(disc).c_str())) throw std::runtime_error("Actual owned Wii data partition failed");
 #if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
         if(frontend)mscharged::platform::ConfigureNativeOSDiscBootIdentity(*discBootIdentity);
         std::optional<mscharged::diagnostic::OriginalTerminalVerifier> terminalVerifier;
