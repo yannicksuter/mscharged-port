@@ -27,6 +27,7 @@ if(BUILD_TESTING)
     mscharged_add_original_hbm_task_lifecycle_tests()
     include(cmake/OriginalHBMTaskCapacity.cmake)
     mscharged_add_original_hbm_task_capacity_tests()
+    include(cmake/NativeHBMArithmetic.cmake)
 endif()
 
 add_library(mscharged_original_main_credits_module MODULE

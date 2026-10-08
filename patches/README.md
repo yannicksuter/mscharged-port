@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0530 adapts original HBM UI declarations and native pointer transport,
+including the original PowerPC float selection/sign operations. The original
+UI control flow and resource requests are retained.
+
 Patch 0529 supplies precise original HBM sound declarations, legal pure virtual
 destructor syntax, and native-width pointer alignment. Original sound methods
 and console code remain in their owning translation units.
