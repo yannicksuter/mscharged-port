@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 project(mscharged_port VERSION 0.0.1 LANGUAGES C CXX)
+if(APPLE AND POLICY CMP0156)
+    # Apple linkers resolve archive cycles without repeating the libraries.
+    cmake_policy(SET CMP0156 NEW)
+    if(POLICY CMP0179)
+        cmake_policy(SET CMP0179 NEW)
+    endif()
+endif()
 include(cmake/MacOSDeploymentTarget.cmake)
 mscharged_set_macos_deployment_target()
 set(MSCHARGED_PORT_VERSION "${PROJECT_VERSION}-dev")
