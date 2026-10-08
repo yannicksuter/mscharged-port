@@ -30,6 +30,11 @@ struct Threads {
     std::unordered_map<OSThread*, std::shared_ptr<NativeThread>> managed;
     OSThreadQueue active{};
     std::uint64_t next_alarm_tag{0x80000000u};
+    // Original OSThread.c Reschedule is a signed disable count. Physical
+    // workers use this same registry's entry/wait boundaries, not a second
+    // source scheduler or replacement runnable list.
+    s32 reschedule{};
+    NativeThread* scheduler_owner{};
 };
 Threads& State() { static Threads state; return state; }
 void AppendActive(Threads& state, NativeThread& native);
@@ -84,6 +89,8 @@ struct NativeThread {
         NativeInterruptGuard exclusion;
         auto& state = State();
         std::lock_guard lock(state.latch);
+        if (state.reschedule > 0)
+            throw std::logic_error("New native SDK caller has no disabled-scheduler entry boundary");
         state.live.emplace(&sdk, this);
         // Original __OSThreadInit includes its default thread in this same list.
         AppendActive(state, *this);
@@ -102,6 +109,7 @@ struct NativeThread {
         NativeInterruptGuard exclusion;
         auto& state = State();
         std::lock_guard lock(state.latch);
+        if (state.reschedule > 0 && state.scheduler_owner == this) std::terminate();
         if (waiting || sdk.queue) std::terminate();
         sdk.state = OS_THREAD_STATE_MORIBUND;
         RemoveActive(state, *this);
@@ -121,6 +129,14 @@ NativeThread& Find(Threads& state, OSThread* thread) {
     if (found == state.live.end())
         throw std::logic_error("SDK thread is not a live native caller");
     return *found->second;
+}
+
+bool SchedulerAllows(const Threads& state, const NativeThread& native) {
+    return state.reschedule <= 0 || state.scheduler_owner == &native;
+}
+
+bool Runnable(const Threads& state, const NativeThread& native) {
+    return !native.waiting && native.suspend_count == 0 && SchedulerAllows(state, native);
 }
 
 void ValidateQueue(Threads& state, OSThreadQueue* queue) {
@@ -165,13 +181,21 @@ void Insert(OSThreadQueue* queue, OSThread* thread) {
 }
 
 void Wait(NativeThread& native, std::unique_lock<std::mutex>& lock) {
-    while (native.waiting || native.suspend_count != 0) {
+    auto& state = State();
+    while (!Runnable(state, native)) {
+        if (!SchedulerAllows(state, native)) {
+            // An IRQ on the current owner may wake this source queue, but the
+            // other SDK thread cannot resume source frames or service hardware
+            // until the original scheduler count permits a selection.
+            native.changed.wait(lock, [&] { return SchedulerAllows(state, native); });
+            continue;
+        }
         if (!native.service) {
-            native.changed.wait(lock, [&] { return !native.waiting && native.suspend_count == 0; });
-            break;
+            native.changed.wait(lock, [&] { return Runnable(state, native) || !SchedulerAllows(state, native); });
+            continue;
         }
         if (native.changed.wait_for(lock, std::chrono::milliseconds(1),
-                [&] { return !native.waiting && native.suspend_count == 0; })) break;
+                [&] { return Runnable(state, native) || !SchedulerAllows(state, native); })) continue;
         native.servicing = true;
         const auto service = native.service;
         lock.unlock();
@@ -183,6 +207,25 @@ void Wait(NativeThread& native, std::unique_lock<std::mutex>& lock) {
         }
         lock.lock();
         native.servicing = false;
+    }
+}
+
+void WaitToRun(NativeThread& native) {
+    auto& state = State();
+    for (;;) {
+        std::unique_lock lock(state.latch);
+        Wait(native, lock);
+        lock.unlock();
+        OSDisableInterrupts();
+        lock.lock();
+        // Disable/Suspend may win the race between condition wake and actual
+        // IRQ exclusion. Recheck before any original source frame resumes.
+        if (Runnable(state, native)) {
+            native.sdk.state = OS_THREAD_STATE_RUNNING;
+            return;
+        }
+        lock.unlock();
+        OSEnableInterrupts();
     }
 }
 
@@ -217,6 +260,8 @@ void Wake(Threads& state, OSThreadQueue* queue) {
 }
 void Complete(Threads& state, NativeThread& native, void* result) {
     if (native.completed) return;
+    if (state.reschedule > 0 && state.scheduler_owner == &native)
+        throw std::logic_error("Native SDK owner returned with original scheduling disabled");
     if (native.waiting || native.sdk.queue || native.sdk.mutex ||
             native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
         throw std::logic_error("Native SDK exit still borrows an unqualified wait/mutex owner");
@@ -239,7 +284,7 @@ void Run(const std::shared_ptr<NativeThread>& native) noexcept {
         auto& state = State();
         {
             std::unique_lock lock(state.latch);
-            native->changed.wait(lock, [&] { return native->cancelled || native->suspend_count == 0; });
+            native->changed.wait(lock, [&] { return native->cancelled || Runnable(state, *native); });
             if (native->cancelled) return; // Cancel joined this parked host task; no source entry ran.
         }
         const auto stack = mscharged::CurrentThreadStackLimits();
@@ -248,7 +293,7 @@ void Run(const std::shared_ptr<NativeThread>& native) noexcept {
             std::lock_guard lock(state.latch);
             if (native->cancelled) return;
             // A concurrent source Suspend may precede the first native entry.
-            if (native->suspend_count != 0) {
+            if (!Runnable(state, *native)) {
                 // Re-enter the genuine park, rather than execute a suspended source worker.
                 // This is handled below without retaining hardware exclusion.
             } else {
@@ -260,13 +305,13 @@ void Run(const std::shared_ptr<NativeThread>& native) noexcept {
         }
         while (!native->started) {
             std::unique_lock lock(state.latch);
-            native->changed.wait(lock, [&] { return native->cancelled || native->suspend_count == 0; });
+            native->changed.wait(lock, [&] { return native->cancelled || Runnable(state, *native); });
             if (native->cancelled) return;
             lock.unlock();
             Mask mask;
             lock.lock();
             if (native->cancelled) return;
-            if (native->suspend_count != 0) continue;
+            if (!Runnable(state, *native)) continue;
             native->started = true;
             native->sdk.state = OS_THREAD_STATE_RUNNING;
             native->sdk.stackBase = reinterpret_cast<u8*>(stack.high);
@@ -311,6 +356,47 @@ void JoinHost(const std::shared_ptr<NativeThread>& native) {
 
 extern "C" OSThread* OSGetCurrentThread() { return &Current().sdk; }
 
+extern "C" s32 OSDisableScheduler() {
+    Mask mask;
+    auto& current = Current();
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    if (state.reschedule == std::numeric_limits<s32>::max())
+        throw std::overflow_error("Native SDK scheduler disable counter overflow");
+    if (state.reschedule > 0 && state.scheduler_owner != &current)
+        throw std::logic_error("Native SDK scheduling is disabled by another caller");
+    if (state.reschedule == 0) {
+        // No native signal, forced suspension or C++ frame destruction is a
+        // Wii context-switch equivalent. Only genuinely parked peers qualify.
+        for (const auto& entry : state.live) {
+            const auto& peer = *entry.second;
+            if (&peer != &current && (peer.servicing ||
+                    peer.sdk.state == OS_THREAD_STATE_RUNNING))
+                throw std::logic_error("Native SDK running peer has no cooperative scheduler boundary");
+        }
+        state.scheduler_owner = &current;
+    }
+    return state.reschedule++;
+}
+
+extern "C" s32 OSEnableScheduler() {
+    Mask mask;
+    auto& current = Current();
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    if (state.reschedule == std::numeric_limits<s32>::min())
+        throw std::overflow_error("Native SDK scheduler enable counter overflow");
+    if (state.reschedule > 0 && state.scheduler_owner != &current)
+        throw std::logic_error("Native SDK scheduler enable requires its disabling caller");
+    const auto prior = state.reschedule--;
+    if (prior == 1) {
+        state.scheduler_owner = nullptr;
+        for (const auto& entry : state.live) entry.second->changed.notify_all();
+    }
+    // Original OSEnableScheduler does not clamp unbalanced negative counts.
+    return prior;
+}
+
 extern "C" void OSInitThreadQueue(OSThreadQueue* queue) {
     if (!queue) throw std::invalid_argument("SDK thread queue is null");
     Mask mask;
@@ -342,6 +428,8 @@ extern "C" void OSSleepThread(OSThreadQueue* queue) {
     auto& state = State();
     {
         std::lock_guard lock(state.latch);
+        if (state.reschedule > 0 && state.scheduler_owner == &native)
+            throw std::logic_error("Native SDK disabled-scheduler caller cannot deschedule");
         if (native.waiting || native.servicing || native.sdk.queue ||
                 native.sdk.state != OS_THREAD_STATE_RUNNING || native.sdk.suspend != 0 ||
                 native.sdk.mutex || native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
@@ -357,12 +445,7 @@ extern "C" void OSSleepThread(OSThreadQueue* queue) {
     // wake in the gap before the actual condition-variable wait.
     OSEnableInterrupts();
     try {
-        std::unique_lock lock(state.latch);
-        Wait(native, lock);
-        lock.unlock();
-        OSDisableInterrupts();
-        lock.lock();
-        native.sdk.state = OS_THREAD_STATE_RUNNING;
+        WaitToRun(native);
     } catch (...) {
         // Unwind a failed host service without leaving borrowed source storage
         // linked or manufacturing successful source completion.
@@ -423,6 +506,8 @@ std::uint32_t NativeThreadAlarmTag() {
     auto& native = Current();
     auto& state = State();
     std::lock_guard lock(state.latch);
+    if (state.reschedule > 0 && state.scheduler_owner == &native)
+        throw std::logic_error("Native timed sleep cannot deschedule a disabled-scheduler caller");
     if (!native.service || native.waiting || native.servicing || native.self_suspended ||
             native.sdk.state != OS_THREAD_STATE_RUNNING || native.sdk.suspend != 0 ||
             native.suspend_count != 0 || native.sdk.queue || native.sdk.mutex ||
@@ -569,6 +654,8 @@ extern "C" s32 OSSuspendThread(OSThread* thread) {
     {
         std::lock_guard lock(state.latch);
         native = &Find(state, thread);
+        if (native == &caller && state.reschedule > 0 && state.scheduler_owner == &caller)
+            throw std::logic_error("Native SDK disabled-scheduler caller cannot self-suspend");
         if (native->sdk.suspend != native->suspend_count || native->sdk.mutex ||
                 native->sdk.queueMutex.head || native->sdk.queueMutex.tail || native->completed ||
                 native->suspend_count == std::numeric_limits<s32>::max())
@@ -595,8 +682,7 @@ extern "C" s32 OSSuspendThread(OSThread* thread) {
     if (self_wait) {
         OSEnableInterrupts();
         try {
-            std::unique_lock lock(state.latch);
-            Wait(*native, lock);
+            WaitToRun(*native);
         } catch (...) {
             OSDisableInterrupts();
             std::lock_guard lock(state.latch);
