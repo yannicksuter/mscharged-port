@@ -249,6 +249,8 @@ elseif(MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC)
 endif()
 
 if(BUILD_TESTING)
+    include(cmake/NativeListEntryHandles.cmake)
+    mscharged_add_list_entry_checks("${MSCHARGED_PREPARED}" verify_prepared)
     add_executable(static_resource_tests tests/static_resources.cpp)
     target_link_libraries(static_resource_tests PRIVATE charged_static_resources)
     add_test(NAME static_resources COMMAND static_resource_tests)

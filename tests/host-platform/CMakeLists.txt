@@ -32,6 +32,9 @@ add_custom_target(verify_host_sources
         --build-dir "${MSCHARGED_PREPARED_BUILD_DIR}" --dependency aurora --check
     VERBATIM)
 
+include("${PORT_ROOT}/cmake/NativeListEntryHandles.cmake")
+mscharged_add_list_entry_checks("${DECOMP}" verify_host_sources)
+
 add_library(host_headers INTERFACE)
 target_include_directories(host_headers INTERFACE "${PORT_ROOT}/src"
     "${AURORA}/include" "${DECOMP}/include" "${DECOMP}/libs/RVL_SDK/include")

@@ -419,3 +419,5 @@
 0593-original-home-task-admission.patch
 0594-native-terminal-thread-context-lifetime.patch
 0595-native-functor-allocation-size.patch
+0596-use-native-ode-size-type.patch
+0597-preserve-native-list-entry-handles.patch
