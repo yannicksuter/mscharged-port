@@ -438,3 +438,4 @@
 0662-use-native-original-inflater-prototypes.patch
 0663-preserve-native-file-callback-contexts.patch
 0664-preserve-native-retarget-byte-cursor.patch
+0665-use-windows-native-font-alloca.patch
