@@ -14,6 +14,11 @@
 #include "NL/glx/GXSpecularFresnelMaterialProgram.h"
 #include "NL/glx/GXMegaDiffuseMaterialProgram.h"
 #include "NL/glx/GXCharacterDamageMaterialProgram.h"
+#include "NL/glx/GXBlackTextureAlphaMaterialProgram.h"
+#include "NL/glx/GXColourFresnelMaterialProgram.h"
+#include "NL/glx/GXMegaSpecularFresnelMaterialProgram.h"
+#include "NL/glx/GXMegaSpecularMaterialProgram.h"
+#include "NL/glx/GXSkinnedUnlitTextureMaterialProgram.h"
 
 #include <array>
 #include <cstdint>
@@ -211,6 +216,42 @@ void DecodeRLGMaterialParameters(glModelPacket* packet)
         static_assert(offsetof(GXCharacterDamageParameters, damage2Enabled) == 104);
         DecodeSkinnedParameters<GXCharacterDamageParameters,
             offsetof(GXCharacterDamageParameters, skinMatricesSize)>(packet, 104, 6, 19);
+        return;
+    // The remaining skinned programs share the same verified shape: bindings,
+    // a null authored matrix pointer, its u32 byte count, then 32-bit words.
+    case 0xBACEA013:
+        static_assert(sizeof(GXBlackTextureAlphaParameters) == 24);
+        static_assert(sizeof(GXBlackTextureAlphaParameters::skinMatrixBytes) == 4);
+        DecodeSkinnedParameters<GXBlackTextureAlphaParameters,
+            offsetof(GXBlackTextureAlphaParameters, skinMatrixBytes)>(packet, 16, 1, 2);
+        return;
+    case 0x5D6C62BA:
+        static_assert(sizeof(GXSkinnedUnlitTextureParameters) == 24);
+        static_assert(sizeof(GXSkinnedUnlitTextureParameters::skinMatrixBytes) == 4);
+        DecodeSkinnedParameters<GXSkinnedUnlitTextureParameters,
+            offsetof(GXSkinnedUnlitTextureParameters, skinMatrixBytes)>(packet, 16, 1, 2);
+        return;
+    case 0x52A9BB54:
+        static_assert(sizeof(GXColourFresnelParameters) == 56);
+        static_assert(sizeof(GXColourFresnelParameters::skinMatrixBytes) == 4);
+        static_assert(offsetof(GXColourFresnelParameters, lightingEnabled) == 48);
+        DecodeSkinnedParameters<GXColourFresnelParameters,
+            offsetof(GXColourFresnelParameters, skinMatrixBytes)>(packet, 48, 3, 8);
+        return;
+    case 0x632E7422:
+        static_assert(sizeof(GXMegaSpecularFresnelParameters) == 96);
+        static_assert(sizeof(GXMegaSpecularFresnelParameters::skinMatrixBytes) == 4);
+        static_assert(offsetof(GXMegaSpecularFresnelParameters, blackOnly) == 88);
+        DecodeSkinnedParameters<GXMegaSpecularFresnelParameters,
+            offsetof(GXMegaSpecularFresnelParameters, skinMatrixBytes)>(packet, 88, 5, 16);
+        return;
+    case 0xF540EBBA:
+        static_assert(sizeof(GXMegaSpecularParameters) == 88);
+        static_assert(sizeof(GXMegaSpecularParameters::skinMatrixBytes) == 4);
+        static_assert(offsetof(GXMegaSpecularParameters, specularColour) == 60);
+        static_assert(offsetof(GXMegaSpecularParameters, lightingEnabled) == 84);
+        DecodeSkinnedParameters<GXMegaSpecularParameters,
+            offsetof(GXMegaSpecularParameters, skinMatrixBytes)>(packet, 84, 4, 13);
         return;
     }
     std::size_t bytes;
