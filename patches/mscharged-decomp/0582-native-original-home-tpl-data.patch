@@ -1,3 +1,6 @@
+Subject: Preserve original HOME TPL serialized-data transport
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+
 --- a/src/RVL_SDK/tpl/TPL.c
 +++ b/src/RVL_SDK/tpl/TPL.c
 @@ -3,6 +3,10 @@

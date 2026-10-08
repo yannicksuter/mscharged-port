@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Back original network SDK descriptors with native size and alignment
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Use canonical native OSThread extent/alignment for live embedded descriptors.
 Preserve original network methods, constructors, stack requests, packed wire

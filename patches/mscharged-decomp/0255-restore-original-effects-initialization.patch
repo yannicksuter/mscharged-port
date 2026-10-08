@@ -1,6 +1,6 @@
 From: mscharged-port contributors
 Subject: [PATCH] Restore original effects loaders and particle flow outside legacy diagnostics
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Keep matching retail methods, requests and fixed colour sampling. Confine copied
 registration/simulation representations to an explicitly named diagnostic. Native

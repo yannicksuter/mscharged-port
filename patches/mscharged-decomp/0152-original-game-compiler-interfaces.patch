@@ -1,5 +1,5 @@
 Subject: Preserve native compiler interfaces for the original Game source
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Use authoritative audio header linkage, an explicit full-width encoded Terrain
 index cast, and emit available original nlStrNCat<char> for native linking.
@@ -27,7 +27,7 @@ diff --git a/src/Game/Game.cpp b/src/Game/Game.cpp
 +#if defined(MSCHARGED_NATIVE)
 +    cGame* game = new (nlMalloc(sizeof(cGame), alignof(cGame), false)) cGame(terrainIndex, weatherType, startCrowdRiot);
 +#else
-     cGame* game = new (nlMalloc(0x10F4, 8, false)) cGame(terrainIndex, weatherType, startCrowdRiot);
+     cGame* game = new (nlMalloc(sizeof(cGame), 8, false)) cGame(terrainIndex, weatherType, startCrowdRiot);
 +#endif
      g_pGame = game;
  
@@ -39,7 +39,7 @@ diff --git a/src/Game/Game.cpp b/src/Game/Game.cpp
 +#if defined(MSCHARGED_NATIVE)
 +                nlMalloc(sizeof(NumberDisplay), alignof(NumberDisplay), false));
 +#else
-                 nlMalloc(0x28, 8, false));
+                 nlMalloc(sizeof(NumberDisplay), 8, false));
 +#endif
          numberDisplay
              = new (numberDisplay) NumberDisplay();

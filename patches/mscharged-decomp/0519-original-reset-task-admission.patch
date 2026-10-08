@@ -1,6 +1,6 @@
 Subject: [PATCH] admit original reset task at its existing main positions
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Restore original static construction, file-service reset callback registration
 and priority-zero/all-state task registration behind one explicit diagnostic

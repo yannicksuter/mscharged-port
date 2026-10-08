@@ -1,6 +1,6 @@
 Subject: Preserve original HBM SoundThread messages on native pointer widths
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Use the live OSMessage carrier width only for the original numeric message
 comparisons. Include existing lock/list declarations directly under the native

@@ -1,6 +1,6 @@
 From: mscharged-port source integration
 Subject: [PATCH] Admit original Credits COPYRIGHTS in the named scene diagnostic
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 Classification: temporary named diagnostic selection; normal native/console tokens unchanged.
 Preserve original source decisions, callback/parser/input/movie ordering and recorded quirks.
 

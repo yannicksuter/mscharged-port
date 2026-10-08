@@ -1,5 +1,5 @@
 # Patch: 0486-original-frontend-primary-world-diagnostic
-# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 # Scope: Restore original global texture request, full primary/secondary matrix
 # setup and frontend world calls in the named diagnostic. Genuine source NIS
 # initialization is required. Source predicates, fields and algorithms remain

@@ -1,5 +1,5 @@
 # Patch: 0511-fix-native-character-enum-storage
-# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 # Scope: Fixed signed32 native storage admits literal original unnamed character values; console unchanged.
 --- a/include/Game/Character.h
 +++ b/include/Game/Character.h

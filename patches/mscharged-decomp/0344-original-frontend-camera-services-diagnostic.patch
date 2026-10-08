@@ -1,6 +1,6 @@
 From: mscharged-port native integration
 Subject: [PATCH] Admit original camera services within the named frontend diagnostic
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Temporary diagnostic selection only. Original case bodies and source
 camera update location are unchanged. Default/console and the existing

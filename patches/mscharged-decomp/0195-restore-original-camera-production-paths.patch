@@ -1,6 +1,6 @@
 Subject: Restore whole original camera source for native production
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Restore CameraMan, DebugCam and animcam directly from the pinned reconstructed
 source, including ordinary camera allocations, source callbacks/factories,
@@ -245,7 +245,7 @@ diff --git a/src/Game/Camera/CameraMan.cpp b/src/Game/Camera/CameraMan.cpp
      if (frontEnd)
      {
 -        pBaseCamera = new (8, false) cDebugCamera(false);
-+        pBaseCamera = new ((cDebugCamera*)nlMalloc(0xA0, 8, false)) cDebugCamera(false);
++        pBaseCamera = new ((cDebugCamera*)nlMalloc(sizeof(cDebugCamera), 8, false)) cDebugCamera(false);
      }
      else
      {
@@ -304,7 +304,7 @@ diff --git a/src/Game/Camera/CameraMan.cpp b/src/Game/Camera/CameraMan.cpp
  void AsyncStartCameraLoadingForStadiumViewer()
  {
 -    cBaseCamera* pBaseCamera = new (8, false) cDebugCamera(false);
-+    cBaseCamera* pBaseCamera = new ((cDebugCamera*)nlMalloc(0xA0, 8, false)) cDebugCamera(false);
++    cBaseCamera* pBaseCamera = new ((cDebugCamera*)nlMalloc(sizeof(cDebugCamera), 8, false)) cDebugCamera(false);
  
      cRumbleFilter* pRumbleFilter = new (8, false) cRumbleFilter();
      g_pRumbleFilter = pRumbleFilter;
@@ -347,7 +347,7 @@ diff --git a/src/Game/Camera/CameraMan.cpp b/src/Game/Camera/CameraMan.cpp
          case eCameraType_Debug:
          {
 -            pBaseCamera = new (8, false) cDebugCamera(true);
-+            pBaseCamera = new ((cDebugCamera*)nlMalloc(0xA0, 8, false)) cDebugCamera(true);
++            pBaseCamera = new ((cDebugCamera*)nlMalloc(sizeof(cDebugCamera), 8, false)) cDebugCamera(true);
              break;
          }
          case eCameraType_Replay:

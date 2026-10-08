@@ -1,5 +1,5 @@
 Subject: [PATCH] Preserve original AX output words and retained storage
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Native-only Wii word classification and checked list address transport.
 Expose actual source array extents without initializing AX/DSP state.

@@ -1,6 +1,6 @@
 Subject: [PATCH] share canonical native OS types and heap address width
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Native compilation uses the actual SDK context/alarm/thread/mutex ABI. Preserve
 console declarations and missing Wii services as explicit imports. Heap pointer

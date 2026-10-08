@@ -1,6 +1,6 @@
 # Native RFNT1.4 typed representation beneath whole original ResFont.
 # Preserve the original already-attached Warning/false before ingress.
-# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 --- a/src/RVL_SDK/hbm/nw4hbm/ut/ut_ResFont.cpp
 +++ b/src/RVL_SDK/hbm/nw4hbm/ut/ut_ResFont.cpp
 @@ -4,6 +4,11 @@

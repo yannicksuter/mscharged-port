@@ -1,4 +1,4 @@
-# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 # Whole original Hall of Fame Cup owner; native numeric context casts and
 # temporary diagnostic admission of existing factories62..64/service11.
 --- a/src/Game/SH/SHHallOfFameRoom.cpp

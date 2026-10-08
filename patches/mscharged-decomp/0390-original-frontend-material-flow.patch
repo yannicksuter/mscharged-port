@@ -1,5 +1,5 @@
 Subject: [PATCH] Restore original frontend material view, lighting and scrolling decisions
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Game modules use the original GLView interface, stadium clock, integer texture
 wrapping, light-texture request and specular cache initialization. Original

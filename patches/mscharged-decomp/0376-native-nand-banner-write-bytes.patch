@@ -1,5 +1,5 @@
 Subject: [PATCH] Keep original NAND banner writes in Wii byte order
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 Scope: native serialized-data transport only. Retain original localization,
        buffer allocation, pixels, write length, reset pause, callbacks and flow.
 

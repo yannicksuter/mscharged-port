@@ -1,6 +1,6 @@
 Subject: Preserve original string algorithms with native temporary Data alignment
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Carry the native pointer field of Vector<T, TempStringPoolAllocator> as byte-safe
 four-byte-aligned storage beneath the original methods. Retain the original

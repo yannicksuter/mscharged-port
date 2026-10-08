@@ -1,5 +1,5 @@
 Subject: Admit the original Domination world animation and emission cleanup services
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 Classification: temporary explicit original-source diagnostic admission; depends on 0551 and 0552.
 
 The authored FromGrudgeMatchToStadiumSelect and FromStadiumSelectToGrudgeMatch

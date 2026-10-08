@@ -1,6 +1,6 @@
 Subject: Select original PreInitFS memory callback
 
-Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
 
 Select original PreInitFS memory callback
 Add a diagnostic copy of the original callback and global resource requirements
