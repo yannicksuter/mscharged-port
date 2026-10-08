@@ -1,6 +1,6 @@
 From: mscharged-port contributors
 Subject: [PATCH] Share original bounded native font measurement and quad steps
-Upstream-base: 11c0bc65ad2ec21431c5d74f1ac4cbc1e3e2e2c3
+Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
 
 Add separately selected font measurement/quad diagnostic helpers for retained
 native preview fixtures. Leave the complete original nlFont.cpp methods intact;

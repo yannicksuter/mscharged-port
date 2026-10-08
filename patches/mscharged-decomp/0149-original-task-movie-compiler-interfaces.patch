@@ -1,5 +1,5 @@
 Subject: Restore original task and movie compilation with native ABI interfaces
-Upstream-base: 11c0bc65ad2ec21431c5d74f1ac4cbc1e3e2e2c3
+Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
 
 Original tasks, frontend provider, movie/handler and THPSimple bodies compile
 as complete units. Legacy borrowed-task checks, absent-service stops and movie
@@ -157,15 +157,3 @@ diff --git a/src/NL/glx/GXMovieMaterialProgramRender.cpp b/src/NL/glx/GXMovieMat
  #else
  #include <revolution/gx.h>
  #endif
-diff --git a/include/NL/gl/glPlat.h b/include/NL/gl/glPlat.h
---- a/include/NL/gl/glPlat.h
-+++ b/include/NL/gl/glPlat.h
-@@ -4,7 +4,7 @@
- #include "NL/gl/glStruct.h"
- #include "NL/glx/glxModel.h"
- 
--#if defined(MSCHARGED_NATIVE) && defined(AURORA)
-+#if defined(MSCHARGED_NATIVE)
- #include <dolphin/gx/GXStruct.h>
- #endif
- 

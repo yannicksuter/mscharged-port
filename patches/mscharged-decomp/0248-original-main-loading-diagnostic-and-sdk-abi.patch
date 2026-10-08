@@ -1,6 +1,6 @@
 From: mscharged-port native source preparation
 Subject: [PATCH] Qualify the original loading call and its native SDK declarations
-Upstream-base: 11c0bc65ad2ec21431c5d74f1ac4cbc1e3e2e2c3
+Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
 Classification: explicit temporary original-main diagnostic gate; permanent SDK/compiler ABI.
 
 Part1 extends only the named MAIN_BOOTSTRAP diagnostic with the existing
@@ -57,8 +57,8 @@ diff --git a/src/Game/FE/LidOpenMessage.cpp b/src/Game/FE/LidOpenMessage.cpp
  {
      u8 SCGetLanguage();
 @@ -2037,6 +2043,7 @@
-     void VIFlush();
-     void VISetNextFrameBuffer(void*);
+     void GXPokeBlendMode(int, int, int, int);
+     void GXPokeARGB(unsigned short, unsigned short, unsigned long);
  }
 +#endif
  

@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Reuse native SDK colour/compare types and forward the hardware clock
-Upstream-base: 11c0bc65ad2ec21431c5d74f1ac4cbc1e3e2e2c3
+Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
 
 The canonical native GX header already supplies the original four-byte colour
 and compare value. Keep the console declarations, and use those SDK identities
@@ -49,3 +49,41 @@ diff --git a/src/NL/glx/glxSwap.cpp b/src/NL/glx/glxSwap.cpp
  #define OS_TIMER_CLOCK               (OS_BUS_CLOCK / 4)
  #define OSTicksToMicroseconds(ticks) (((ticks) * 8) / (OS_TIMER_CLOCK / 125000))
  
+@@ -96,8 +96,16 @@
+ static void glx_ScreenCapture(bool isMovie);
+ static void PutPixel(u8* dst, u32 argbColor);
+ static void loading_indicator();
++#if defined(MSCHARGED_NATIVE)
++static void vi_pre_cb(u32);
++#else
+ static void vi_pre_cb(unsigned long);
++#endif
++#if defined(MSCHARGED_NATIVE)
++static void vi_post_cb(u32);
++#else
+ static void vi_post_cb(unsigned long);
++#endif
+ static void draw_done_cb();
+ static void AdvanceFrame();
+ static void ReportGPStatus();
+@@ -274,12 +282,20 @@
+     }
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++static void vi_pre_cb(u32)
++#else
+ static void vi_pre_cb(unsigned long)
++#endif
+ {
+     bInRetrace = 1;
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++static void vi_post_cb(u32)
++#else
+ static void vi_post_cb(unsigned long)
++#endif
+ {
+     HandleSoftReset();
+     if (glx_bLoadingIndicator != 0)

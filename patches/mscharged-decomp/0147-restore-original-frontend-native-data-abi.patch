@@ -1,6 +1,6 @@
 Subject: [PATCH] restore original frontend flow and native serialized data ABI
 
-Upstream-base: 11c0bc65ad2ec21431c5d74f1ac4cbc1e3e2e2c3
+Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
 
 Restore reconstructed frontend methods and inline game decisions verbatim.
 Adapt only raw Wii FEN data to the native pointer/record ABI beneath the original
