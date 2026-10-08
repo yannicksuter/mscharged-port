@@ -15,6 +15,11 @@ namespace mscharged::platform
 void* DecodeNativeTPLAddress(std::uint32_t word, std::size_t bytes,
                              std::size_t alignment, bool header);
 
+// The original layout compares a raw relative descriptor cell to the Wii
+// cached-address boundary before TPLBind. Read that cell in its recorded byte
+// domain, without decoding/dereferencing its not-yet-relocated target.
+bool NativeTPLAddressLessThan(const void* cell, std::uintptr_t boundary);
+
 template<class T> struct NativeTPLAddress32
 {
     std::uint32_t word;
@@ -26,6 +31,10 @@ template<class T> struct NativeTPLAddress32
             return static_cast<T*>(DecodeNativeTPLAddress(
                 word, sizeof(T), alignof(T), !std::is_same_v<std::remove_cv_t<T>, char>));
     }
+    bool operator<(T* boundary) const
+    {
+        return NativeTPLAddressLessThan(this, reinterpret_cast<std::uintptr_t>(boundary));
+    }
     operator T*() const { return Get(); }
     T* operator->() const { return Get(); }
 };
@@ -34,8 +43,8 @@ static_assert(alignof(NativeTPLAddress32<char>) == 4);
 static_assert(std::is_trivially_copyable_v<NativeTPLAddress32<char>>);
 static_assert(std::is_standard_layout_v<NativeTPLAddress32<char>>);
 
-// Known original icon/banner TPL transport. No texture pixels are converted;
-// the original source copies those exact GX RGB5A3 bytes into its NAND banner.
+// Original nonmip I4/IA4/IA8/RGB5A3 TPL header/address transport. Pixel bytes
+// remain tiled Wii data for the original GX requests and NAND banner copies.
 void BindNativeTPLImage(void* palette);
 }
 

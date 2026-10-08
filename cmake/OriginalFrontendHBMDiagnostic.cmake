@@ -3,6 +3,7 @@ include(cmake/OriginalARC.cmake)
 include(cmake/OriginalHBMArcResources.cmake)
 include(cmake/NativeHBMDebug.cmake)
 include(cmake/OriginalHBMFontTransport.cmake)
+include(cmake/OriginalTPL.cmake)
 
 # Admit only the original AsyncLoading HBM resource services26/27. The real
 # source owns construction, language-selected requests, six NL completions and
@@ -32,6 +33,7 @@ function(mscharged_select_original_frontend_hbm target)
     mscharged_select_original_hbm_arc_resources("${target}")
     mscharged_select_original_hbm_debug("${target}")
     mscharged_select_original_hbm_font_transport("${target}")
-    # The sequence's original SaveLoad/Wii16/TPL transport already supplies the
-    # actual qualified palette binder. HBMManager source remains unmodified.
+    mscharged_add_original_tpl("${target}")
+    # SaveLoad and HOME share the same native binder/ARC byte registry.
+    # Original TPLGet is selected once; HBMManager source remains unmodified.
 endfunction()

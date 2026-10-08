@@ -1,7 +1,9 @@
 #include "platform/native_tpl.h"
 #include "platform/game_allocation_ownership.h"
+#include "platform/arc_data_transport.h"
 #include "platform/host_metadata.h"
 #include <dolphin/os.h>
+#include <dolphin/gx.h>
 
 #include <array>
 #include <cstring>
@@ -59,7 +61,15 @@ public:
         const auto address = reinterpret_cast<std::uintptr_t>(pointer);
         if (address < sourceAddress || address - sourceAddress > source.bytes)
             throw std::out_of_range("TPL palette leaves its original completed source span");
-        bytes_ = source.bytes - (address - sourceAddress);
+        if (pointer == source.base)
+            bytes_ = source.bytes;
+        else
+        {
+            NativeARCFileSpan file{};
+            if (!FindNativeARCFileSpan(pointer, file))
+                throw std::invalid_argument("Interior TPL has no exact original ARC file extent");
+            bytes_ = file.bytes;
+        }
         if (!FindGameCompletedSpan(pointer, bytes_, source)
             || FindGameByteDomain(pointer, bytes_) != GameByteDomain::WiiSerialized)
             throw std::invalid_argument("TPL raw image is not uniformly completed Wii serialized bytes");
@@ -105,6 +115,27 @@ bool Overlap(std::size_t a, std::size_t as, std::size_t b, std::size_t bs)
 }
 }
 
+bool NativeTPLAddressLessThan(const void* cell, std::uintptr_t boundary)
+{
+    GameCompletedSpan source{};
+    if (boundary > std::numeric_limits<std::uint32_t>::max()
+        || !FindGameCompletedSpan(cell, 4, source))
+        throw std::invalid_argument("TPL word comparison requires a live cell and Wii address boundary");
+    const auto domain = FindGameByteDomain(cell, 4);
+    std::uint32_t word;
+    if (domain == GameByteDomain::WiiSerialized)
+    {
+        const auto* raw = static_cast<const unsigned char*>(cell);
+        word = std::uint32_t(raw[0]) << 24 | std::uint32_t(raw[1]) << 16
+            | std::uint32_t(raw[2]) << 8 | raw[3];
+    }
+    else if (domain == GameByteDomain::NativeHeader)
+        std::memcpy(&word, cell, sizeof(word));
+    else
+        throw std::invalid_argument("TPL address cell has no serialized/native-header domain");
+    return word < boundary;
+}
+
 void* DecodeNativeTPLAddress(std::uint32_t word, std::size_t bytes,
                              std::size_t alignment, bool header)
 {
@@ -129,8 +160,8 @@ void BindNativeTPLImage(void* palette)
     const auto version = image.Word(0), count = image.Word(4), table = image.Word(8);
     if (version != 0x0020af30)
         throw std::invalid_argument("TPL palette has no original retail version");
-    // The retail binding loop has a16-bit index. Empty/rebind/overflow and other
-    // texture formats remain explicit unqualified inputs in this native seam.
+    // The retail binding loop has a16-bit index. Empty/rebind/overflow, CLUT
+    // and unmeasured texture formats remain explicit unqualified inputs.
     if (!count || count > 0xffffu || table % 4)
         throw std::invalid_argument("TPL descriptor count/alignment remains unqualified");
     image.Range(table, std::size_t(count) * 8);
@@ -157,11 +188,23 @@ void BindNativeTPLImage(void* palette)
         if (known) continue;
         const auto height = image.Half(texture), width = image.Half(texture + 2);
         const auto format = image.Word(texture + 4), data = image.Word(texture + 8);
-        if (format != 5 || !height || !width || image.Byte(texture + 33)
+        if (!height || !width || image.Byte(texture + 33)
             || image.Byte(texture + 34) || image.Byte(texture + 35))
-            throw std::invalid_argument("TPL native binding currently requires original RGB5A3 nonmip unpacked0 data");
-        const auto bytes = ((std::size_t(width) + 3) & ~std::size_t(3))
-            * ((std::size_t(height) + 3) & ~std::size_t(3)) * 2;
+            throw std::invalid_argument("TPL native binding requires original nonmip unpacked0 data");
+        std::size_t tileWidth, tileHeight;
+        switch (format)
+        {
+        case GX_TF_I4: tileWidth = 8; tileHeight = 8; break;
+        case GX_TF_IA4: tileWidth = 8; tileHeight = 4; break;
+        case GX_TF_IA8:
+        case GX_TF_RGB5A3: tileWidth = 4; tileHeight = 4; break;
+        default: throw std::invalid_argument("TPL native texture format remains unqualified");
+        }
+        // GXGetTexBufferSize and Aurora's texture_source_size use these exact
+        // 32-byte GX tiles. size_t keeps the original u16 dimensions from
+        // overflowing before the actual serialized file-bound check.
+        const auto bytes = ((std::size_t(width) + tileWidth - 1) / tileWidth)
+            * ((std::size_t(height) + tileHeight - 1) / tileHeight) * 32;
         image.Range(data, bytes);
         pixels.push_back({data, bytes});
         records.push_back({texture, 36, RecordKind::Texture,

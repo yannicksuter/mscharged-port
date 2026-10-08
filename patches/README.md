@@ -29,6 +29,11 @@ written against the exact upstream text, never against the formatted copy.
 
 ## Charged series
 
+Patch 0582 supplies native HOME TPL header/address transport for I4, IA4, IA8
+and RGB5A3 resources. Original TPLGet and layout texture requests use exact
+archive-file bounds and unchanged tiled pixels. CPU descriptor tests cover
+this data boundary; full HOME rendering remains separate work.
+
 Patch 0580 adapts original HOME font resources to native pointer widths and
 byte order. Original ResFont attachment, rebuilding, glyph lookup and detach
 remain in their whole source units. Embedded resources use exact archive-file
