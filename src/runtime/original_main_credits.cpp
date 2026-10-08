@@ -405,9 +405,12 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         mscharged::platform::ConfigureNativeIOSServiceRevision();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
-        // and FE methods retain their original mappings and decisions.
+        // and FE methods retain their original mappings and decisions. The
+        // keyboard remote carries a virtual Nunchuk, which original matches
+        // require of every playing controller.
         mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,false,false},
-            mscharged::platform::GetNativeSTMInput(),{true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr});
+            mscharged::platform::GetNativeSTMInput(),
+            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true});
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)
             mscharged::diagnostic::InitializeOriginalGameAudioHardware(
