@@ -33,11 +33,13 @@ include(cmake/OriginalFrontendHallOfFameDiagnostic.cmake)
 include(cmake/OriginalFrontendDominationDiagnostic.cmake)
 include(cmake/OriginalFrontendCreditsDiagnostic.cmake)
 include(cmake/NativeAXModuleMemory.cmake)
+include(cmake/OriginalOSShutdownRecords.cmake)
 
 function(mscharged_add_original_frontend_diagnostic)
     get_target_property(_sources mscharged_original_main_credits_module SOURCES)
     add_library(mscharged_original_frontend_module MODULE ${_sources})
     add_dependencies(mscharged_original_frontend_module verify_prepared)
+    mscharged_add_original_shutdown_records(mscharged_original_frontend_module)
     foreach(_property IN ITEMS
             COMPILE_FEATURES COMPILE_DEFINITIONS COMPILE_OPTIONS INCLUDE_DIRECTORIES
             LINK_LIBRARIES LINK_OPTIONS LINK_DEPENDS)

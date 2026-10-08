@@ -374,3 +374,5 @@
 0514-expose-native-world-inline-definitions.patch
 0515-original-credits-scene-admission.patch
 0518-native-rtc-sram-wire-fields.patch
+0516-native-os-state-flags-compiler-includes.patch
+0517-native-os-record-byte-transport.patch
