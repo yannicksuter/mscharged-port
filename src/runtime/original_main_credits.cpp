@@ -294,6 +294,13 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(!host.window||host.backend!=mscharged::platform::NativeGraphicsBackend)
             throw std::runtime_error(std::string("Actual ")+mscharged::platform::NativeGraphicsBackendName
                 +" foundation unavailable; no fallback acceptance");
+        bool retainedWindowClose=false;
+#if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
+        if(frontend && sourceAudio && nativeSend) {
+            mscharged::platform::RetainNativeHardwareWindowClose(host.window);
+            retainedWindowClose=true;
+        }
+#endif
         Check(SDL_SetWindowFullscreen(host.window,launch.settings.fullscreen), "Requested launch window mode rejected");
         if(nativeSend) {
             // Existing Aurora policy fixes the internal source EFB at 1x.
@@ -304,7 +311,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             VISetFrameBufferScale(1.0f);
             AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
             for(const auto* event=aurora_update();event->type!=AURORA_NONE;++event)
-                Check(event->type!=AURORA_EXIT, "Native window closed before source entry");
+                Check(event->type!=AURORA_EXIT || (retainedWindowClose &&
+                      mscharged::platform::GetNativeHardwareWindowCloseStatus().requested),
+                      "Native window closed before source entry");
             aurora::gfx::synchronize();
         }
         OSInit();
@@ -422,6 +431,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(frontend && sourceAudio && nativeSend) {
             terminalVerifier.emplace(*gameAudioHardware,*axModuleMemory,host.window);
             mscharged::platform::ConfigureNativeSTMPowerRemoval(terminalVerifier->Policy());
+            // The actual source entry/audio predicates and terminal policy now
+            // exist. Only this host-window intent was deferred; service/tasks
+            // deliver it through unchanged original OSStateTM/ResetTask.
+            mscharged::platform::ArmNativeHardwareWindowClose();
         }
 #endif
         auto observeBootScript=sourceBoot ? reinterpret_cast<ObserveAudio>(

@@ -191,6 +191,14 @@ void ConfigureNativeSTMPowerRemoval(NativeSTMPowerRemoval policy) {
     state.power_removal = policy;
 }
 
+bool IsNativeSTMPowerRemovalConfigured(StmInput input) {
+    auto& state = State();
+    std::lock_guard lock(state.mutex);
+    RequireOwner(state);
+    return input.generation == state.generation && state.power_removal.context &&
+        state.power_removal.verify_quiescent;
+}
+
 std::optional<NativeSTMPowerRequest> GetNativeSTMPowerRequest() {
     auto& state = State();
     std::lock_guard lock(state.mutex);

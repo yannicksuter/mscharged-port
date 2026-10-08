@@ -29,6 +29,9 @@ struct NativeSTMPowerRemoval {
     void (*verify_quiescent)(void*, const NativeSTMPowerRequest&);
 };
 void ConfigureNativeSTMPowerRemoval(NativeSTMPowerRemoval policy);
+// Owner-only observation of this exact live device's configured native policy;
+// no source readiness or proof of completed shutdown.
+bool IsNativeSTMPowerRemovalConfigured(StmInput input);
 // Read-only receipt of genuine /dev/stm/immediate command0x2003, not a source
 // initialized flag or proof of full shutdown. Restart0x2001 stays unsupported.
 std::optional<NativeSTMPowerRequest> GetNativeSTMPowerRequest();
