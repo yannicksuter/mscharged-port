@@ -29,6 +29,11 @@ written against the exact upstream text, never against the formatted copy.
 
 ## Charged series
 
+Patch 0581 adapts RLAN animation byte order and relative offsets beneath the
+original layout loader. Original header predicates and curve evaluation are
+tested against native views with allocation-owned lifetimes. Full HOME layout
+construction and animation playback remain separate integration steps.
+
 Patch 0582 supplies native HOME TPL header/address transport for I4, IA4, IA8
 and RGB5A3 resources. Original TPLGet and layout texture requests use exact
 archive-file bounds and unchanged tiled pixels. CPU descriptor tests cover
