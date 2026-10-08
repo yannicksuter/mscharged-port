@@ -379,3 +379,4 @@
 0520-native-stm-terminal-wait.patch
 0519-original-reset-task-admission.patch
 0521-original-dvd-message-registration-admission.patch
+0522-original-dvd-error-request-retention.patch
