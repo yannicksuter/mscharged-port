@@ -445,3 +445,4 @@
 0669-preserve-native-file-cache-contexts.patch
 0670-preserve-native-async-image-contexts.patch
 0671-preserve-native-audio-resource-contexts.patch
+0672-match-native-ode-allocation-handlers.patch
