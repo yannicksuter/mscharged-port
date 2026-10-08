@@ -5,6 +5,7 @@ endif()
 include(cmake/NativeWpad.cmake)
 include(cmake/NativeSTM.cmake)
 include(cmake/NativeAlarms.cmake)
+include(cmake/NativeRTC.cmake)
 include(cmake/NativeThreadQueues.cmake)
 add_library(charged_native_hardware_owner STATIC
     src/platform/hardware_owner.cpp src/platform/desktop_wpad.cpp

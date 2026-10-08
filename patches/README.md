@@ -19,6 +19,11 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0518 retains the complete original SRAM cache, checksum and retry owner.
+The native EXI device supplies explicit persistent SRAM/RTC register storage;
+16-bit SRAM fields retain their Wii byte order. Device construction does not
+provide a default image or initialize the original cache.
+
 Patches `0284` and `0291` select the temporary original Boot/Intro diagnostic.
 They retain original scene owners and task scheduling while explicitly omitting
 blocked services. These gates are enabled only in the separate frontend test

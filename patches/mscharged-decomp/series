@@ -373,3 +373,4 @@
 0513-isolate-native-msl-stdint-guard.patch
 0514-expose-native-world-inline-definitions.patch
 0515-original-credits-scene-admission.patch
+0518-native-rtc-sram-wire-fields.patch
