@@ -19,6 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0539 supplies compiler declarations, native pointer arithmetic and the
+MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
+A GCC option scoped to the disposal manager preserves its cross-TU virtual
+callbacks. Original heap creation, allocation and disposal are tested; missing
+heap-state/player methods and full HOME-menu startup remain separate work.
+
 Patch 0540 retains the retail HOME library assertion profile and its original
 debug providers. Native services supply address checks, stack unwinding and
 terminal halt behavior; original assertion expressions and initialization side

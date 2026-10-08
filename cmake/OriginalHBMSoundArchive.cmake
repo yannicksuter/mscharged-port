@@ -48,3 +48,5 @@ if(BUILD_TESTING)
     add_test(NAME native_hbm_archive COMMAND native_hbm_archive_tests)
     set_tests_properties(native_hbm_archive PROPERTIES TIMEOUT 15 LABELS "Platform")
 endif()
+
+include(cmake/OriginalHBMHeap.cmake)

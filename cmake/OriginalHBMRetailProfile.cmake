@@ -8,3 +8,13 @@ file(GLOB_RECURSE _charged_hbm_retail_sources CONFIGURE_DEPENDS
 foreach(_source IN LISTS _charged_hbm_retail_sources)
     set_property(SOURCE "${_source}" APPEND PROPERTY COMPILE_DEFINITIONS HBM_ASSERT=1)
 endforeach()
+
+# The original callback header defines an anonymous abstract class and erases/
+# recasts registrations across TUs. GCC O3 replaces the manager's cross-TU
+# dispatch with a direct pure-virtual call. Preserve the source-owned virtual
+# calls in this one TU for both production consumers and the heap fixture.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_property(SOURCE
+        "${MSCHARGED_PREPARED}/src/RVL_SDK/hbm/nw4hbm/snd/snd_DisposeCallbackManager.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS -fno-devirtualize)
+endif()
