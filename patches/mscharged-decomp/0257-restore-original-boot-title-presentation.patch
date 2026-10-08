@@ -1,5 +1,5 @@
 Subject: Restore whole original boot, title and presentation source
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retire production0087/0101/0113/0127 method substitutions. Original
 source decisions remain; only address-bearing32-bit VM words use the
@@ -716,7 +716,7 @@ diff --git a/src/Game/Render/FrontEndPresentation_interp.cpp b/src/Game/Render/F
 +        const char* baseName = MSCHARGED_FE_VM_STRING(m_SP[-3]);
          m_SP -= 3;
          char name[64];
-         int mode = g_pCupManager->GetCurrentMode();
+         int mode = CupManager::s_pInstance->GetCurrentMode();
 @@ -243,7 +252,7 @@
          break;
      case 27:

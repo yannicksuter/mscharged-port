@@ -1,5 +1,5 @@
 Subject: Use the native allocation size type in original functor and controller declarations
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Native allocation declarations require std::size_t on LLP64 as well as LP64.
 Retain the original allocation/free bodies and the console declarations. The

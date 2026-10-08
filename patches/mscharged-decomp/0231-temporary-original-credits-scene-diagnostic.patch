@@ -1,6 +1,6 @@
 Subject: [PATCH] Scope temporary original Credits scene integration
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 MSCHARGED_DIAGNOSTIC_CREDITS_SCENE explicitly omits unrelated views, material
 programs, world/input/movie initialization and later phases in a scene test.

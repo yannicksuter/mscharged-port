@@ -1,6 +1,6 @@
 Subject: [PATCH] restore original input initialization and canonical IRQ declarations
 
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Keep original pad constructors, declarations, manager initialization and action
 table outside explicit diagnostics. Restore the original cPlatPad declaration.

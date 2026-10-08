@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: [PATCH] Preserve original audio pool native teardown strides
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Use each actual native source type's physical slot size in the original pool
 free calls. Preserve original call order, logical capacities/growth, pool state,

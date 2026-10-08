@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Preserve original SDK message ring with native pointer cells
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Compile the complete Matching OSMessage TU. Native CPU messages use canonical
 pointer-width cells while msgCount/firstIndex/usedCount remain signed32. Retain

@@ -1,6 +1,6 @@
 Subject: Original Tutorial/Challenges menu admission and numeric row ABI
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Keep original factories75/76 behind an explicit default-OFF diagnostic.
 Retain all original handler methods, asset choices, camera waits and later

@@ -1,6 +1,6 @@
 From: mscharged-port contributors
 Subject: [PATCH] Select original plain font polygons and share text raster setup
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Legacy checked polygon restrictions require MSCHARGED_DIAGNOSTIC_POLYGONS.
 Original native glDraw2 retains all textured/untextured/float/scissor/utility

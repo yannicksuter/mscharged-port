@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Preserve original MEM logical capacity with native metadata backing
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 diff --git a/src/RVL_SDK/mem/mem_expHeap.c b/src/RVL_SDK/mem/mem_expHeap.c
 --- a/src/RVL_SDK/mem/mem_expHeap.c

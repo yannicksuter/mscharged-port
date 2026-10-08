@@ -1,6 +1,6 @@
 From: mscharged-port native compiler compatibility
 Subject: [PATCH] Preserve console network class assertions on native hosts
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Scope seven Wii-only native-class size checks to the console branch;
 retain field declarations, payload records, source allocations and

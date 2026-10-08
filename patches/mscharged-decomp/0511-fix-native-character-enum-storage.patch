@@ -1,5 +1,5 @@
 # Patch: 0511-fix-native-character-enum-storage
-# Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 # Scope: Fixed signed32 native storage admits literal original unnamed character values; console unchanged.
 --- a/include/Game/Character.h
 +++ b/include/Game/Character.h
@@ -14,4 +14,4 @@
 +#endif
  {
      CHARACTER_CLASS_INVALID = -1,
-     BIRDO = 0,
+     MARIO = 0,

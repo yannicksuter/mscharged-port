@@ -1,5 +1,5 @@
 Subject: Provide the original empty member-binding selector for native debug emission
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 The upstream BindMember primary template passes its declared empty const
 BindMemberNoArg selector by reference, which MWCC's inlining removes. Native

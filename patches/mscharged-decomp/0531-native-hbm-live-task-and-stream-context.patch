@@ -1,5 +1,5 @@
 # Native-only live HBM task and stream/sequence owner carriers.
-# Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 # Prerequisites: original523, real nested-type task storage524, compiler headers529.
 
 --- a/libs/RVL_SDK/include/revolution/hbm/nw4hbm/snd/Task.h

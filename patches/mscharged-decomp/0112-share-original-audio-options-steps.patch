@@ -1,6 +1,6 @@
 Subject: Share original audio options visual and volume target kernels
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Original source methods delegate to the same visual, listener, category clamp
 and target equations as checked native owners. Global GameInfo, SaveLoad, NAV
@@ -17,7 +17,7 @@ diff --git a/src/Game/DB/UserOptions.cpp b/src/Game/DB/UserOptions.cpp
  #include "Game/Audio/AudioSystem.h"
  #include "Game/Audio/AudioCalculation.h"
 @@ -25,19 +26,6 @@
-     UnidentifiedAudioCategoryLookup(0xAB29FE50, 0), // "global"
+     AudioCategorySliderEntry(0xAB29FE50, 0), // "global"
  };
  
 -static const float VOLUME_TABLE[] = {

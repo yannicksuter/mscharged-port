@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Restore complete original loading scene handlers
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retire the 0077/0086 game-side helper substitutions. The complete restored
 Matching translation unit is byte-identical to the pinned source.

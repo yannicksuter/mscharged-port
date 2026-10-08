@@ -1,5 +1,5 @@
 Subject: [PATCH] Adapt original net/fence live view addresses and compiler syntax
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Preserve original weak symbols, live view choices, quad submission and
 secondary-NIS save/restore. Use the existing pointer-width view carrier
@@ -94,7 +94,7 @@ diff --git a/src/Game/Render/ElectricFence.cpp b/src/Game/Render/ElectricFence.c
  
  static float sfGridTextureSize = 7.0f;
  static float sfNumGridSquares = 9.48f;
-@@ -260,7 +264,11 @@
+@@ -257,7 +261,11 @@
      u8 lightenAmount = (u8)(255.0f * intensity);
      quad.SetColour(
          lightenAmount, lightenAmount, lightenAmount, 0xFF);

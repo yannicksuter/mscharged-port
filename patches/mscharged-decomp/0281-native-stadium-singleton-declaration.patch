@@ -1,5 +1,5 @@
 Subject: Match original stadium singleton linkage on native compilers
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 Classification: native compiler declaration compatibility only; Wii declaration unchanged.
 
 diff --git a/include/Game/Render/StadiumLoading.h b/include/Game/Render/StadiumLoading.h

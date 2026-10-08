@@ -1,6 +1,6 @@
 Subject: Select register-independent native animation rotation decoders
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Keep the console GQR setup and paired-single assembly in the console branch.
 On native builds the port supplies scalar rotation decoding with the same

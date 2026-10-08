@@ -1,6 +1,6 @@
 Subject: Keep RVL scalar and clock fields at console widths
 
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 RVL long typedefs widen on LP64. Use fixed-width 32-bit fields and the
 standard pointer-width type. Avoid native POSIX and C++ character-type name

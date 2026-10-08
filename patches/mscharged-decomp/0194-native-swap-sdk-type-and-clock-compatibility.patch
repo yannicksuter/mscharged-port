@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Preserve native retrace callback and screenshot scalar widths
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Use four-byte native retrace callback arguments and GXPeekARGB output cells.
 Use the native SDK GXBool output type for hardware status cells.

@@ -1,5 +1,5 @@
 # Patch: 0506-original-offline-domination-selection
-# Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+# Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 # Scope: Original factory2/3 and VM9 diagnostic admission; native original inline emission and numeric ScrollBar contexts.
 --- a/src/Game/FE/BaseGameSceneManager.cpp
 +++ b/src/Game/FE/BaseGameSceneManager.cpp

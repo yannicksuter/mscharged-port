@@ -1,6 +1,6 @@
 From: mscharged-port contributors
 Subject: [PATCH] Share original SAnim bone-channel interpolation and fallback
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Share the existing rotation, translation, scale and multiplicative scale bodies
 between original console methods and the checked native retained-pose sink.

@@ -1,6 +1,6 @@
 Subject: [PATCH] restore original SAnim and hierarchy providers outside diagnostics
 
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Compile literal reconstructed animation/hierarchy algorithms in original modules.
 Isolate deleted methods, source extractions and sample validation to explicit

@@ -1,5 +1,5 @@
 Subject: [PATCH] restore the complete original animation controller provider
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retire0088 helper include and Evaluate substitution from the original controller.
 The successor is byte-identical to the committed Matching upstream TU. Legacy

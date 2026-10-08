@@ -1,6 +1,6 @@
 Subject: [PATCH] retain original impostor providers with native pointer ABI
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Keep all original methods and static construction. Size the original model
 pointer array using its actual native element width and transport the existing
@@ -24,7 +24,7 @@ diff --git a/src/Game/Render/ImpostorCharacter.cpp b/src/Game/Render/ImpostorCha
 diff --git a/src/Game/Render/ImpostorCluster.cpp b/src/Game/Render/ImpostorCluster.cpp
 --- a/src/Game/Render/ImpostorCluster.cpp
 +++ b/src/Game/Render/ImpostorCluster.cpp
-@@ -92,7 +92,11 @@
+@@ -82,7 +82,11 @@
          quad.m_colour[i].c[2] = (unsigned char)siBackgroundBlue.mValue;
          quad.m_colour[i].c[3] = 0xFF;
      }

@@ -1,6 +1,6 @@
 Subject: Hide unselected console pad implementation from native devirtualization
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Keep the console cPlatPad definition out of native source selection, retaining
 its forward declaration. GCC Release speculative devirtualization of the real

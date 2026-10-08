@@ -1,5 +1,5 @@
 Subject: Share original Main menu visual and pointer callback bodies
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retain source lookup, optional empty component selection, bounds offsets,
 Open/Close, Select dispatch and other-pointer state equations in console delegates
@@ -424,7 +424,7 @@ diff --git a/src/Game/SH/SHMainMenu.cpp b/src/Game/SH/SHMainMenu.cpp
 +        [&]() {
          if (!SaveEnabled)
          {
-             FEPopupMenu* popup = (FEPopupMenu*)GameSceneManager::Instance()->Push((SceneList)10, SCREEN_NOTHING, false);
+             FEPopupMenu* popup = (FEPopupMenu*)GameSceneManager::Instance()->Push(SCENE_POPUP_MENU, SCREEN_NOTHING, false);
 @@ -358,11 +279,8 @@
              SaveLoad::StartLoad(true);
              mWaitingForLoad = true;

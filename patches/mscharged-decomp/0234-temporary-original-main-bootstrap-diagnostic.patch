@@ -1,6 +1,6 @@
 Subject: [PATCH] add explicit temporary original-main bootstrap diagnostic
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 Owner-authorization: 2026-10-06 temporary flow gates for scene/audio diagnosis
 
 Only MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP omits the documented source statics,

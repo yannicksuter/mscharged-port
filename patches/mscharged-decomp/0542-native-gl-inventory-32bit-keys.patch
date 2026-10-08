@@ -1,5 +1,5 @@
 Subject: Key native GL inventories by the Wii 32-bit handle value
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 Classification: native ABI adaptation (integer width); no game decision changes.
 
 GLInventory keys its model/texture/animation/skin trees by unsigned long,

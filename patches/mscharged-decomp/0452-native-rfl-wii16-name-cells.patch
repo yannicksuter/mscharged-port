@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Preserve fixed Wii16 RFL name cells without changing host wchar
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 diff --git a/libs/RVL_SDK/include/RVLFaceLib/RFL_Types.h b/libs/RVL_SDK/include/RVLFaceLib/RFL_Types.h
 --- a/libs/RVL_SDK/include/RVLFaceLib/RFL_Types.h
@@ -150,7 +150,7 @@ diff --git a/src/RVL_SDK/rfl/RFL_DataUtility.c b/src/RVL_SDK/rfl/RFL_DataUtility
 diff --git a/src/Game/SH/SHOnlineMiiSelectOverlay.cpp b/src/Game/SH/SHOnlineMiiSelectOverlay.cpp
 --- a/src/Game/SH/SHOnlineMiiSelectOverlay.cpp
 +++ b/src/Game/SH/SHOnlineMiiSelectOverlay.cpp
-@@ -290,7 +290,7 @@
+@@ -289,7 +289,7 @@
          }
      }
  

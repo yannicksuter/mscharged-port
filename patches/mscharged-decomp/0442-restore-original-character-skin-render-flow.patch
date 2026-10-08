@@ -1,7 +1,7 @@
 From: native source fidelity
 Subject: [PATCH] restore original game-module character skin render calls
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Game-module bodies retain original lighting/marker/matrix/display-list decisions.
 The existing canonical SDK lowers original hardware operations; preview-only

@@ -1,6 +1,6 @@
 Subject: [PATCH] supply native standard memory declarations to original KPAD
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Whole Matching KPAD source remains authoritative for filtering, sampling,
 repeat, acceleration and IR decisions. Modern C99 compilers require the actual

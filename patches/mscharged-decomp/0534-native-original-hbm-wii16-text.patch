@@ -1,6 +1,6 @@
 From: native port preparation
 Subject: [PATCH] Preserve original HBM Wii16 text ABI and owned BE16 ingress
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 --- a/src/RVL_SDK/hbm/HBMBase.cpp
 +++ b/src/RVL_SDK/hbm/HBMBase.cpp

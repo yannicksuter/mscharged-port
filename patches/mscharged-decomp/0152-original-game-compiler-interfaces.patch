@@ -1,5 +1,5 @@
 Subject: Preserve native compiler interfaces for the original Game source
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Use authoritative audio header linkage, an explicit full-width encoded Terrain
 index cast, and emit available original nlStrNCat<char> for native linking.
@@ -20,7 +20,7 @@ diff --git a/src/Game/Game.cpp b/src/Game/Game.cpp
  #include "Game/Game.h"
  #include "Game/MathHelpers.h"
  #include "Game/Weather.h"
-@@ -281,7 +284,11 @@
+@@ -280,7 +283,11 @@
  {
      ++lbl_806E2130;
  
@@ -32,7 +32,7 @@ diff --git a/src/Game/Game.cpp b/src/Game/Game.cpp
      g_pGame = game;
  
      cTeam* team = new (8, false) cTeam(0);
-@@ -314,7 +321,11 @@
+@@ -313,7 +320,11 @@
      {
          NumberDisplay* numberDisplay
              = static_cast<NumberDisplay*>(
@@ -44,7 +44,7 @@ diff --git a/src/Game/Game.cpp b/src/Game/Game.cpp
          numberDisplay
              = new (numberDisplay) NumberDisplay();
          gpNumberDisplay = numberDisplay;
-@@ -392,7 +403,11 @@
+@@ -391,7 +402,11 @@
      m_pPostResetClock->m_uParam1 = (unsigned long)this;
  
      mpTerrain = new (nlMalloc(sizeof(Terrain), 8, false))

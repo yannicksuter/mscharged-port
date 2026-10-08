@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Retain numeric popup callback indices across native pointer width
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 The actual popup constructor stores numeric0/1/2 in the three pointer contexts.
 Recover the same original int through uintptr_t for modern native compilers.

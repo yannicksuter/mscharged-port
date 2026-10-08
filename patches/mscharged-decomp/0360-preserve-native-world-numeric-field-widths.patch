@@ -1,5 +1,5 @@
 Subject: Preserve Wii numeric world fields and shared native object prefix
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Native-only fixed-width declarations preserve the original numeric hash,
 type/layer, creation flags, effect hash and probability words. Keep full-width

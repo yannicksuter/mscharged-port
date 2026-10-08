@@ -1,6 +1,6 @@
 From: mscharged-port native integration
 Subject: [PATCH] Admit original camera services within the named frontend diagnostic
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Temporary diagnostic selection only. Original case bodies and source
 camera update location are unchanged. Default/console and the existing
@@ -75,7 +75,7 @@ diff --git a/src/Game/Render/FrontEndPresentation_interp.cpp b/src/Game/Render/F
 --- a/src/Game/Render/FrontEndPresentation_interp.cpp
 +++ b/src/Game/Render/FrontEndPresentation_interp.cpp
 @@ -51,6 +51,8 @@
-         g_pCupManager->ShowRoundNews();
+         CupManager::s_pInstance->ShowRoundNews();
          break;
  
 +#endif

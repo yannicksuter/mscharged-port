@@ -70,11 +70,11 @@ debug providers. Native services supply address checks, stack unwinding and
 terminal halt behavior; original assertion expressions and initialization side
 effects remain enabled. Full HOME-menu startup is still separate work.
 
-The current pin is `97eb01ed`, which additionally source-links `Fielder.cpp`
-and `CrowdRiot.cpp`. Upstream's typed DrawableBall owners replace patch0449.
-Native animation/input interfaces follow the renamed originals; GX declarations
-and clock transport follow the new SDK headers. Source selection remains
-explicit: an upstream match alone does not establish native gameplay readiness.
+The current pin is `9cdfc1e9`, which additionally source-links `StatsTracker.cpp`,
+`DesireStatusEffects.cpp`, and `ImpostorCluster.cpp`. The patch series follows
+upstream's statistics owners, scene names, CupManager singleton and corrected
+character enum values. Source selection remains explicit: an upstream match
+alone does not establish native gameplay readiness.
 
 Patch 0595 uses the native allocation size type in functor and animation
 controller declarations, including Windows' 64-bit pointer/32-bit `long` ABI.

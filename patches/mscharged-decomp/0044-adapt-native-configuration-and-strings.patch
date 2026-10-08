@@ -1,6 +1,6 @@
 Subject: Adapt original configuration parsing and string ownership
 
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retain original sections, hashing and typed parsing. Replace Wii array-cookie
 and fixed temporary-string storage assumptions, correct native copy-on-write

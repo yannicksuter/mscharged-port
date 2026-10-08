@@ -1,6 +1,6 @@
 From: mscharged-port native source preparation
 Subject: [PATCH] Adapt original glPlat canonical SDK compiler ABI
-Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 Classification: permanent host compiler/platform/data ABI adaptation.
 
 diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
@@ -22,7 +22,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
  
  #include "Game/TweakQuery.h"
  #include "NL/nlDebug.h"
-@@ -25,8 +30,10 @@
+@@ -28,8 +33,10 @@
  extern "C"
  {
      void DCFlushRange(void* address, u32 length);
@@ -33,7 +33,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
  
      void SCInit();
      u32 SCCheckStatus();
-@@ -35,10 +42,16 @@
+@@ -37,10 +44,16 @@
      u8 SCGetEuRgb60Mode();
  
 +#if !defined(MSCHARGED_NATIVE)
@@ -50,7 +50,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
      640,
      480,
      542,
-@@ -47,7 +60,11 @@
+@@ -48,7 +61,11 @@
      16,
      640,
      542,
@@ -62,7 +62,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
      0,
      0,
      { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 },
-@@ -95,7 +112,11 @@
+@@ -96,7 +113,11 @@
  {
      for (int i = 0; i < glx_FBSize; i += 4)
      {
@@ -74,7 +74,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
      }
      DCFlushRange(xfb, glx_FBSize);
  }
-@@ -103,7 +124,11 @@
+@@ -104,7 +125,11 @@
  static void glx_InitGX()
  {
      gxInit();
@@ -86,7 +86,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
      GXRenderModeObj& mode = glx_rmode;
      GXSetViewport(0.0f, 0.0f, (f32)mode.fbWidth, (f32)mode.efbHeight, 0.0f, 1.0f);
      GXSetScissor(0, 0, mode.fbWidth, mode.efbHeight);
-@@ -233,7 +258,11 @@
+@@ -234,7 +259,11 @@
          return false;
      }
      glx_FIFO = GXInit(glx_FIFOMem, glx_FIFOSize);
@@ -98,7 +98,7 @@ diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
  
      u32 fbSize = ((glx_rmode.fbWidth + 15) & 0xFFF0) * glx_rmode.xfbHeight * 2;
      if (fbSize < 0x9F600)
-@@ -254,7 +283,11 @@
+@@ -255,7 +284,11 @@
      glxSwapSetBlack(true);
      VIFlush();
      VIWaitForRetrace();

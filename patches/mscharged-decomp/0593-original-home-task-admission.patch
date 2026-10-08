@@ -1,5 +1,5 @@
 Subject: Admit the original HOME frame and input calls behind a native selector
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 9cdfc1e97f86bc5703ef517c467bb2bf22c93906
 
 Retire only HOME-specific temporary task omissions after their whole original
 providers and native services are selected. Preserve original input predicates,
