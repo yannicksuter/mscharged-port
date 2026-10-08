@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0529 supplies precise original HBM sound declarations, legal pure virtual
+destructor syntax, and native-width pointer alignment. Original sound methods
+and console code remain in their owning translation units.
+
 Patch 0527 preserves native-width message comparisons in the complete original
 HBM SoundThread and supplies its owning lock/list declarations. Full sound
 system and HOME-menu startup remain separate integration work.
