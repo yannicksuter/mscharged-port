@@ -51,6 +51,11 @@ Game behavior, requests and timing are unchanged.
   that hold FixedUpdateTask's simulation.
 - cTeam::UpdateTeamAI sorts its four fielder pointers with the Wii element
   size 4 (sizeof(cFielder*)); the native call uses the actual pointer size.
+- ModeledScreenTransition::LoadFromParser has no return statement (MWCC
+  returns an unspecified value; both callers discard it). Flowing off a
+  value-returning function is undefined in host C++, and GCC removed the
+  function exit so execution fell back into the parse loop, allocating pose
+  accumulators until MEM1 was exhausted. Natively it returns `this`.
 
 diff --git a/include/Game/AI/Desire.h b/include/Game/AI/Desire.h
 --- a/include/Game/AI/Desire.h
@@ -1349,6 +1354,23 @@ diff --git a/src/Game/Team.cpp b/src/Game/Team.cpp
  
      bool bSituationChanged = AssignSituation();
      if (bSituationChanged)
+diff --git a/src/Game/Transitions/ModelTransition.cpp b/src/Game/Transitions/ModelTransition.cpp
+--- a/src/Game/Transitions/ModelTransition.cpp
++++ b/src/Game/Transitions/ModelTransition.cpp
+@@ -452,6 +452,13 @@
+         cPoseAccumulator(m_pSkeleton, false);
+ 
+     FixupModel();
++#if defined(MSCHARGED_NATIVE)
++    // MWCC returns an unspecified value here and both callers discard it.
++    // Flowing off a value-returning function is undefined in host C++: GCC
++    // removed this exit and fell back into the parse loop. Return a defined
++    // value; the original parse and model setup are unchanged.
++    return this;
++#endif
+ }
+ #pragma warning reset(10184)
+ #if defined(MSCHARGED_NATIVE) && defined(__clang__)
 diff --git a/src/Game/Transitions/ScriptedTransition.cpp b/src/Game/Transitions/ScriptedTransition.cpp
 --- a/src/Game/Transitions/ScriptedTransition.cpp
 +++ b/src/Game/Transitions/ScriptedTransition.cpp
