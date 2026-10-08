@@ -5,6 +5,7 @@ include(cmake/NativeHBMDebug.cmake)
 include(cmake/OriginalHBMFontTransport.cmake)
 include(cmake/OriginalTPL.cmake)
 include(cmake/OriginalHBMAnimationTransport.cmake)
+include(cmake/NativeHBMColor.cmake)
 
 # Admit only the original AsyncLoading HBM resource services26/27. The real
 # source owns construction, language-selected requests, six NL completions and
