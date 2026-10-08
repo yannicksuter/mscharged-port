@@ -9,6 +9,8 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$" OR NOT CMAKE_SIZEOF_VOID_P E
     message(FATAL_ERROR "The original-main source diagnostic requires Linux or macOS LP64 with GCC or Clang")
 endif()
 include(cmake/OriginalModuleLinkage.cmake)
+include(cmake/OriginalRetailReturnCompatibility.cmake)
+mscharged_preserve_original_return_semantics()
 include(cmake/NativeModuleLoader.cmake)
 include(cmake/OriginalFrontendResetDiagnostic.cmake)
 include(cmake/OriginalFunctionPools.cmake)

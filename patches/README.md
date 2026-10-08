@@ -88,6 +88,11 @@ Patch 0598 extends native `size_t` allocation signatures across original class
 allocators and their matching definitions. Pool selection, allocation bodies
 and console declarations are preserved.
 
+Patches 0599 and 0650–0652 adapt native compiler annotations, delete declarations
+and intentional MWCC return semantics. Presentation script strings use the
+existing VM address decoder; their serialized words and original calls remain
+unchanged. The return compatibility option is limited to its two original TUs.
+
 Patch 0532 exposes the original HBM silence array for optional native DSP
 registration before game arena allocation. The host retains its source image
 and permits device reads only; it does not initialize the sound manager.

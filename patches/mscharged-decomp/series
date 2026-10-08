@@ -422,3 +422,7 @@
 0596-use-native-ode-size-type.patch
 0597-preserve-native-list-entry-handles.patch
 0598-use-native-class-allocation-sizes.patch
+0599-native-noinline-attribute.patch
+0650-native-game-delete-exception-spec.patch
+0651-native-presentation-vm-string-transport.patch
+0652-native-original-unspecified-return-diagnostics.patch
