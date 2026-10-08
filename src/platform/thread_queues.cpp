@@ -29,6 +29,7 @@ struct Threads {
     std::unordered_map<OSThread*, NativeThread*> live;
     std::unordered_map<OSThread*, std::shared_ptr<NativeThread>> managed;
     OSThreadQueue active{};
+    std::uint64_t next_alarm_tag{0x80000000u};
 };
 Threads& State() { static Threads state; return state; }
 void AppendActive(Threads& state, NativeThread& native);
@@ -54,6 +55,10 @@ struct NativeThread {
     // backing and native execution resources are separate physical ABI state.
     bool managed{}, started{}, completed{}, cancelled{}, active{}, self_suspended{};
     s32 suspend_count{};
+    u32 alarm_tag{};
+    // Only failed native wait unwinding consumes this bookkeeping credit.
+    // The first real resume consumes it; later suspension requests stay counted.
+    bool self_suspend_pending{};
     std::thread worker;
     void* (*entry)(void*){};
     void* argument{};
@@ -410,6 +415,28 @@ NativeThreadWaitService SetNativeThreadWaitService(NativeThreadWaitService servi
     native.service = service;
     return previous;
 }
+
+std::uint32_t NativeThreadAlarmTag() {
+    if (!NativeInterruptWaitAllowed())
+        throw std::logic_error("Cannot register a native timed sleep in an interrupt/host exclusion");
+    Mask mask;
+    auto& native = Current();
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    if (!native.service || native.waiting || native.servicing || native.self_suspended ||
+            native.sdk.state != OS_THREAD_STATE_RUNNING || native.sdk.suspend != 0 ||
+            native.suspend_count != 0 || native.sdk.queue || native.sdk.mutex ||
+            native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
+        throw std::logic_error("Native timed sleep requires its runnable owner and hardware wait service");
+    if (!native.alarm_tag) {
+        if (state.next_alarm_tag > std::numeric_limits<u32>::max())
+            throw std::overflow_error("Native SDK thread alarm identities exhausted");
+        // Original tags are u32 cancellation identities. Keep that width and
+        // uniqueness across descriptor/TLS reuse without casting a host pointer.
+        native.alarm_tag = static_cast<u32>(state.next_alarm_tag++);
+    }
+    return native.alarm_tag;
+}
 } // namespace mscharged::platform
 
 
@@ -510,7 +537,11 @@ extern "C" s32 OSResumeThread(OSThread* thread) {
             native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
         throw std::logic_error("Native SDK resume/mutex state is unqualified");
     const auto prior = native.suspend_count;
-    if (native.suspend_count > 0) --native.suspend_count;
+    if (native.suspend_count > 0) {
+        --native.suspend_count;
+        if (native.self_suspended && native.self_suspend_pending)
+            native.self_suspend_pending = false;
+    }
     native.sdk.suspend = native.suspend_count;
     if (native.suspend_count == 0) {
         if (native.waiting) {
@@ -556,19 +587,33 @@ extern "C" s32 OSSuspendThread(OSThread* thread) {
             } else if (native == &caller && native->sdk.state == OS_THREAD_STATE_RUNNING) {
                 native->sdk.state = OS_THREAD_STATE_READY;
                 native->self_suspended = true;
+                native->self_suspend_pending = true;
                 self_wait = true;
             }
         }
     }
     if (self_wait) {
         OSEnableInterrupts();
-        {
+        try {
             std::unique_lock lock(state.latch);
             Wait(*native, lock);
+        } catch (...) {
+            OSDisableInterrupts();
+            std::lock_guard lock(state.latch);
+            // No successful source resume is invented for a failed host service.
+            // Remove only this wait's unconsumed increment. A real resume may
+            // already have consumed it before a later concurrent resuspension.
+            if (native->self_suspend_pending) {
+                --native->suspend_count;
+                native->sdk.suspend = native->suspend_count;
+            }
+            native->self_suspend_pending = native->self_suspended = false;
+            native->sdk.state = native->suspend_count ? OS_THREAD_STATE_READY : OS_THREAD_STATE_RUNNING;
+            throw;
         }
         OSDisableInterrupts();
         std::lock_guard lock(state.latch);
-        native->self_suspended = false;
+        native->self_suspend_pending = native->self_suspended = false;
         native->sdk.state = OS_THREAD_STATE_RUNNING;
     }
     return prior;
