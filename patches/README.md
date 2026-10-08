@@ -24,6 +24,11 @@ They adapt C header ownership and fixed Wii record byte order, preserving
 checksum loops, file choices and source completion decisions. Async transport
 retains buffers through real callbacks, including reentrant block reuse.
 
+Patch 0520 connects the original STM terminal wait to native power removal.
+Original interrupt masking and instruction-cache ordering remain in place;
+the native device requires an explicit policy and verified device quiescence.
+This does not enable the original reset task or implement host restart.
+
 Patch 0518 retains the complete original SRAM cache, checksum and retry owner.
 The native EXI device supplies explicit persistent SRAM/RTC register storage;
 16-bit SRAM fields retain their Wii byte order. Device construction does not

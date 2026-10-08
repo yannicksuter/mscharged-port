@@ -376,3 +376,4 @@
 0518-native-rtc-sram-wire-fields.patch
 0516-native-os-state-flags-compiler-includes.patch
 0517-native-os-record-byte-transport.patch
+0520-native-stm-terminal-wait.patch
