@@ -90,6 +90,15 @@ NativeAXStereo96 NativeAXPackStereo(const NativeAXChannel96& left,const NativeAX
     }
     return result;
 }
+std::int32_t NativeAXMixAccumulate(std::int32_t bus,std::int32_t contribution) {
+    return static_cast<std::int32_t>(SignedWidth(std::int64_t(bus)+contribution,24));
+}
+std::array<std::int16_t,18> NativeAXRemoteOutput(const std::array<std::int32_t,18>& accumulator) {
+    std::array<std::int16_t,18> result{};
+    for(unsigned i=0;i<18;++i)
+        result[i]=Saturate(Floor(SignedWidth(std::int64_t(accumulator[i])*65536,40),65536));
+    return result;
+}
 NativeAXCompressorDecision NativeAXCompressorStep(std::uint16_t counter,std::uint16_t threshold,
                                                   std::uint16_t release_frames,
                                                   const NativeAXChannel96& left,
@@ -133,16 +142,18 @@ NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
     };
     const auto& setup=Take(NativeAXOpcode::Setup);
     const auto studio=Capture(f,memory,Address(setup),120);
-    // Owned Setup initializes twelve96-frame accumulators before voices/AUX.
-    // The final eight18-frame remote histories require separate output/mixing
-    // semantics; retain that honest unsupported boundary before all stores.
-    if(std::any_of(studio.begin()+72,studio.end(),[](unsigned char x){return x!=0;}))
-        Fail(NativeAXFailure::NonzeroStudio,setup,"AX remote Studio depop output/mixing is not yet qualified");
+    // Owned Setup initializes twelve96-frame accumulators before voices/AUX,
+    // then (0184..0222) eight18-frame remote ones in the order main0, aux0,
+    // main1, aux1, ... from the last eight Studio value/delta entries.
     std::array<NativeAXChannel96,12> buses{};
     constexpr unsigned studio_bus[12]={0,1,8,2,3,9,4,5,10,6,7,11};
     for(unsigned i=0;i<12;++i)
         buses[studio_bus[i]]=NativeAXStudioDepop96(SignedWord(Word(studio.data()+i*6)),
                                                 SignedHalf(Half(studio.data()+i*6+4)));
+    std::array<std::array<std::int32_t,18>,8> remote_buses{};
+    for(unsigned i=0;i<8;++i)
+        remote_buses[i]=NativeAXStudioDepop18(SignedWord(Word(studio.data()+72+i*6)),
+                                              SignedHalf(Half(studio.data()+72+i*6+4)));
     const auto& surround=list.commands[next<list.command_count?next:list.command_count-1];
     if(next>=list.command_count || (surround.opcode!=NativeAXOpcode::AddToLR && surround.opcode!=NativeAXOpcode::SubToLR))
         Fail(NativeAXFailure::UnsupportedSequence,surround,"AX DPL2 routing/output is not yet qualified");
@@ -163,6 +174,10 @@ NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
             ++f.active_voices;
             for(unsigned c=0;c<12;++c)for(unsigned i=0;i<96;++i)
                 buses[c][i]=StoreBus(std::int64_t(buses[c][i])+voice.buses[c][i]);
+            // 0CB3/0CD0 accumulate a voice's selected remote channels in place.
+            if(voice.remote_enabled)for(unsigned c=0;c<8;++c)if(voice.remote.mixed&(1u<<c))
+                for(unsigned i=0;i<18;++i)
+                    remote_buses[c][i]=NativeAXMixAccumulate(remote_buses[c][i],voice.remote.channels[c][i]);
             f.written_bytes+=voice.parameters_after.size();
         }
         voice_address=Word(voice.parameters_before.data());f.voices.push_back(voice);
@@ -214,7 +229,14 @@ NativeAXPreparedCommandFrame PrepareNativeAXCommandFrame(
     Take(NativeAXOpcode::End);
     if(next!=list.command_count)
         Fail(NativeAXFailure::UnsupportedSequence,list.commands[next],"AX staged frame has commands after END");
-    for(unsigned channel=0;channel<4;++channel)Stage(f,memory,Address(remote,channel*2),std::vector<unsigned char>(36));
+    // Owned067C..06A9 writes each speaker's main accumulator as 18 PCM16
+    // samples; the aux remote accumulators are mixed but never output.
+    for(unsigned channel=0;channel<4;++channel) {
+        const auto samples=NativeAXRemoteOutput(remote_buses[channel*2]);
+        std::vector<unsigned char> wire(36);
+        for(unsigned i=0;i<18;++i)PutHalf(wire.data()+i*2,std::uint16_t(samples[i]));
+        Stage(f,memory,Address(remote,channel*2),std::move(wire));
+    }
     std::vector<unsigned char> surround_wire(384);
     for(unsigned i=0;i<96;++i)PutWord(surround_wire.data()+i*4,std::uint32_t(buses[8][i]));
     Stage(f,memory,Address(output,1),std::move(surround_wire));

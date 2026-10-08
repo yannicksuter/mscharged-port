@@ -69,6 +69,77 @@ NativeAXCoefficientView NativeAXSuppliedCoefficientROM::View() const noexcept {
             return static_cast<const NativeAXSuppliedCoefficientROM*>(context)->Row(bank,fraction);
         }};
 }
+NativeAXRemoteBank NativeAXRemoteCoefficientBank(const NativeAXCoefficientView& coefficients) {
+    NativeAXRemoteBank bank{};
+    for (std::uint16_t phase = 0; phase < 128; ++phase) {
+        const auto row = coefficients.Row(0, static_cast<std::uint16_t>(phase << 9));
+        std::copy(row.begin(), row.end(), bank.begin() + phase * 4);
+    }
+    return bank;
+}
+NativeAXRemoteVoice NativeAXProcessRemoteVoice(const std::array<std::int16_t, 96>& filtered,
+                                               unsigned char* pb, const NativeAXRemoteBank& bank0) {
+    NativeAXRemoteVoice result;
+    // 03A7..03CB: rmtIIR selector2 is the06C3 biquad, any other nonzero
+    // value the shared06AB LPF (SET15 still live). Its output, or a plain
+    // copy, lands at0D0C behind the four rmtSrc history samples at0D08.
+    std::array<std::int16_t, 100> window{};
+    for (std::size_t t = 0; t < 4; ++t) window[t] = Signed(Half(pb + 0x10c + t * 2));
+    std::array<std::int16_t, 96> input = filtered;
+    if (const auto iir = Half(pb + 0x114)) {
+        if (iir == 2)
+            Fail(NativeAXVoiceFailure::UnsupportedRemote, "AX active remote biquad processing is unqualified");
+        const auto history = LowPass06AB(filtered, input, Signed(Half(pb + 0x116)),
+                                         Half(pb + 0x118), Half(pb + 0x11a));
+        PutHalf(pb + 0x116, static_cast<std::uint16_t>(history));
+    }
+    std::copy(input.begin(), input.end(), window.begin() + 4);
+    // 03CC..03FD (CLR15, M2, SET40): the position starts at rmtSrc's stored
+    // fraction and ADDAX advances it by0x00055555 before each of18 outputs.
+    // Integer part indexes the window; fraction>>9 selects a bank-0 row. Four
+    // signed doubled products are summed by MULAC/ADDP and stored as the
+    // saturated AC1.M. The final window position and fraction are the next
+    // history (03F3..03FD).
+    std::uint32_t position = Half(pb + 0x10a);
+    for (std::size_t n = 0; n < 18; ++n) {
+        position += 0x55555;
+        const auto index = position >> 16;
+        const auto* taps = bank0.data() + ((position & 0xffff) >> 9) * 4;
+        std::int64_t product = 0;
+        for (std::size_t t = 0; t < 4; ++t) product += std::int64_t(window[index + t]) * taps[t] * 2;
+        result.resampled[n] = Saturate(Floor(product, 65536));
+    }
+    const auto last = position >> 16;
+    PutHalf(pb + 0x10a, static_cast<std::uint16_t>(position));
+    for (std::size_t t = 0; t < 4; ++t)
+        PutHalf(pb + 0x10c + t * 2, static_cast<std::uint16_t>(window[last + t]));
+    // 02CD..0310 select IRAM[0DB3 + ((rmtMixerCtrl >> 2*channel) & 3)]: 0CB0
+    // none, 0CB3 constant, 0CD0 ramp (twice) for main0, aux0, main1, aux1, ...
+    // 03FE..0446 call them with SET15 (unsigned volume, signed sample) and M2.
+    // A ramp volume advances by delta modulo2^16 per sample and is stored back
+    // after18 samples. The last product's saturated AC0.M is the channel's
+    // rmtDpop; the none handler stores zero.
+    const auto control = Half(pb + 0xd8);
+    for (std::size_t ch = 0; ch < 8; ++ch) {
+        const auto handler = (control >> (ch * 2)) & 3;
+        const std::size_t depop = (ch % 2 ? 0x102 : 0xfa) + (ch / 2) * 2;
+        if (!handler) {
+            PutHalf(pb + depop, 0);
+            continue;
+        }
+        auto volume = Half(pb + 0xda + ch * 4);
+        const auto delta = Half(pb + 0xdc + ch * 4);
+        for (std::size_t i = 0; i < 18; ++i) {
+            result.channels[ch][i] =
+                static_cast<std::int32_t>(Floor(std::int64_t(result.resampled[i]) * volume, 32768));
+            if (handler >= 2) volume = static_cast<std::uint16_t>(volume + delta);
+        }
+        if (handler >= 2) PutHalf(pb + 0xda + ch * 4, volume);
+        PutHalf(pb + depop, static_cast<std::uint16_t>(Saturate(result.channels[ch].back())));
+        result.mixed |= static_cast<std::uint8_t>(1u << ch);
+    }
+    return result;
+}
 NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
     NativeDSPMemoryEndpoint endpoint, std::uint32_t address,
     const NativeAXCoefficientView& coefficients) {
@@ -103,7 +174,13 @@ NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
     if (Half(before + 0x44)) Fail(NativeAXVoiceFailure::UnsupportedITD, "AX active ITD/history processing is unqualified");
     if (Half(before + 0xc2))
         Fail(NativeAXVoiceFailure::UnsupportedFilter, "AX active biquad processing is unqualified");
-    if (Half(before + 0xd6)) Fail(NativeAXVoiceFailure::UnsupportedRemote, "AX active remote resampling/mixing is unqualified");
+    const bool remote = Half(before + 0xd6) != 0;
+    if (remote) {
+        // Fail before any store: rmtIIR biquad and a missing bank-0 row.
+        if (Half(before + 0x114) == 2)
+            Fail(NativeAXVoiceFailure::UnsupportedRemote, "AX active remote biquad processing is unqualified");
+        coefficients.Row(0, Half(before + 0x10a));
+    }
     const auto mixer = Word(before + 0x0c);
     if (mixer & ~std::uint32_t(0x7fff001f))
         Fail(NativeAXVoiceFailure::UnsupportedMixer, "AX DPL2/reserved mixer selection is outside this voice slice");
@@ -195,6 +272,10 @@ NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
         // saturated AC0.M in40-bit mode, for the original depop field.
         PutHalf(after + 0x52 + selected.depop * 2,
                 static_cast<std::uint16_t>(Saturate(result.buses[bus].back())));
+    }
+    if (remote) {
+        result.remote = NativeAXProcessRemoteVoice(result.filtered, after, NativeAXRemoteCoefficientBank(coefficients));
+        result.remote_enabled = true;
     }
     return result;
 }
