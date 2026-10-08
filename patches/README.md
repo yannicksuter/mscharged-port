@@ -19,6 +19,9 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0533 retains native pointers throughout the original HBM channel/track
+callback interfaces. Original numeric sound and resource IDs remain 32-bit.
+
 Patch 0531 carries original live HBM task and stream/sequence owner identities
 at native pointer width. Serialized resource IDs and original cancellation
 and queue decisions remain unchanged.
