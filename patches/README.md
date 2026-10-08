@@ -65,7 +65,7 @@ StartChallengeSequence audio instruction its Proceed runs. The whole handlers
 load each challenge's authored configuration; the following loading request
 (scene 17) keeps its existing gate.
 
-Patches 0610–0613 and 0615–0618 admit the original offline match load under
+Patches 0610–0613 and 0615–0619 admit the original offline match load under
 the explicit match-loading diagnostic. 0610 opens Stadium Select's loading
 scene, the in-game overlays the loading script pushes and the loading-to-game
 transition. 0611 and 0612 qualify the async loading services and the native
@@ -74,7 +74,9 @@ VM's address words. 0615 admits the original in-game frame updates
 (Presentation/NIS, characters, shadow views). 0616 lowers the original
 nonzero-morph software skin positions. 0617 decodes Wii data that match loading
 reads directly. 0618 keeps GL resource-pool storage valid after an original
-pool rewind until the pool reuses it, as original writers rely on.
+pool rewind until the pool reuses it, as original writers rely on. 0619 keeps
+the original bit positions of the 3D sound owner flags and finds released
+sound sources' pool entries from the native list layout.
 
 Patch 0630 admits the original Hall of Fame player cards (scene 65), opened by
 the Cup page's card buttons, under the Hall of Fame diagnostic. Profile (58),
