@@ -30,15 +30,15 @@ namespace mscharged::platform {
 namespace {
 void* armed_owner{};
 std::recursive_mutex& LoaderExclusion() { static std::recursive_mutex mutex; return mutex; }
-const char* const Names[13] = {"AXCommandLists", "AXPB", "AXITD", "AXAuxA", "AXAuxB", "AXAuxC",
-    "AXCompressor", "AXStudio", "AXStereoPCM16", "AXSurround32", "AXRemotePCM16", "AXDramContext", "AXFirmware"};
-constexpr std::uint32_t Sizes[13] = {256,30720,6144,4608,4608,3456,4032,120,1152,768,1440,64,8192};
-constexpr NativeDSPMemoryEncoding Encodings[13] = {NativeDSPMemoryEncoding::NativeU16,
+const char* const Names[CHARGED_AX_HBM_STORAGE_COUNT] = {"AXCommandLists", "AXPB", "AXITD", "AXAuxA", "AXAuxB", "AXAuxC",
+    "AXCompressor", "AXStudio", "AXStereoPCM16", "AXSurround32", "AXRemotePCM16", "AXDramContext", "AXFirmware", "HBMZeroBuffer"};
+constexpr std::uint32_t Sizes[CHARGED_AX_HBM_STORAGE_COUNT] = {256,30720,6144,4608,4608,3456,4032,120,1152,768,1440,64,8192,256};
+constexpr NativeDSPMemoryEncoding Encodings[CHARGED_AX_HBM_STORAGE_COUNT] = {NativeDSPMemoryEncoding::NativeU16,
     NativeDSPMemoryEncoding::AXParameterBlocks, NativeDSPMemoryEncoding::RawBytes,
     NativeDSPMemoryEncoding::NativeU32, NativeDSPMemoryEncoding::NativeU32, NativeDSPMemoryEncoding::NativeU32,
     NativeDSPMemoryEncoding::NativeU16, NativeDSPMemoryEncoding::AXStudio, NativeDSPMemoryEncoding::NativeU16,
     NativeDSPMemoryEncoding::NativeU32, NativeDSPMemoryEncoding::NativeU16,
-    NativeDSPMemoryEncoding::RawBytes, NativeDSPMemoryEncoding::RawBytes};
+    NativeDSPMemoryEncoding::RawBytes, NativeDSPMemoryEncoding::RawBytes, NativeDSPMemoryEncoding::RawBytes};
 const timespec& ModifiedTime(const struct stat& value) noexcept {
 #if defined(__APPLE__)
     return value.st_mtimespec;
@@ -126,10 +126,10 @@ struct NativeAXModuleMemory::State {
     std::string path, identity;
     int file{-1}; struct stat file_state{};
     std::thread::id owner{std::this_thread::get_id()};
-    std::array<OSNativeStaticMemory,13> mappings{};
-    std::array<NativeDSPMemoryPin,13> pins{};
-    std::array<void*,13> retained{};
-    std::array<ChargedAXStorage,13> storage{};
+    std::array<OSNativeStaticMemory,CHARGED_AX_HBM_STORAGE_COUNT> mappings{};
+    std::array<NativeDSPMemoryPin,CHARGED_AX_HBM_STORAGE_COUNT> pins{};
+    std::array<void*,CHARGED_AX_HBM_STORAGE_COUNT> retained{};
+    std::array<ChargedAXStorage,CHARGED_AX_HBM_STORAGE_COUNT> storage{};
     std::uint32_t mapping_count{}, pin_count{}, lease_count{};
     std::uintptr_t image_base{};
     NativeDSPMemoryEndpoint endpoint{};
@@ -146,7 +146,7 @@ struct NativeAXModuleMemory::State {
     }
     static BOOL Retain(void* context) noexcept {
         auto& self=*static_cast<State*>(context);
-        if(self.owner!=std::this_thread::get_id() || self.lease_count==13) return FALSE;
+        if(self.owner!=std::this_thread::get_id() || self.lease_count==self.retained.size()) return FALSE;
         // NOLOAD retains the real currently mapped image. LAZY preserves its
         // unresolved/unexecuted source function boundary; never upgrade NOW.
         void* image=dlopen(self.path.c_str(),RTLD_NOLOAD|RTLD_LAZY|RTLD_LOCAL);
@@ -206,7 +206,7 @@ void NativeAXModuleMemory::ConfirmLoaded(void* actual_loader_handle) {
     auto& s=*state_;s.RequireOwner();s.RequireFile();
 #if defined(__APPLE__)
     // Resolve an existing source entry without calling it. Its real image must
-    // own the same thirteen pre-static spans submitted during this dlopen.
+    // own the same selected pre-static spans submitted during this dlopen.
     void* entry=actual_loader_handle ? dlsym(actual_loader_handle,"charged_original_entry") : nullptr;
     Dl_info image{};
     if(!entry || !dladdr(entry,&image) || !image.dli_fbase || !image.dli_fname ||
@@ -262,14 +262,14 @@ extern "C" void ChargedNativeAXReserveModuleStorage(const ChargedAXStorage* stor
     auto* s=static_cast<NativeAXModuleMemory::State*>(armed_owner);
     if(!s) throw std::logic_error("Original module AX statics require an armed host before dlopen");
     s->RequireOwner();s->RequireFile();
-    if(s->reserving || s->registered || count!=13 || !storage || !observe ||
+    if(s->reserving || s->registered || (count!=CHARGED_AX_BASE_STORAGE_COUNT && count!=CHARGED_AX_HBM_STORAGE_COUNT) || !storage || !observe ||
         before.memory_initialized || before.standard_address || before.virtual_address)
         throw std::logic_error("AX reservation must precede all original source arena capture");
     if(!cpu_task.address || cpu_task.bytes!=120)
         throw std::invalid_argument("Actual CPU-only native DSPTask has an unexpected ABI");
     s->reserving=true;s->before=before;s->observe=observe;
     try {
-        for(unsigned i=0;i<13;++i) {
+        for(unsigned i=0;i<count;++i) {
             if(!storage[i].address || storage[i].bytes!=Sizes[i])
                 throw std::invalid_argument("Actual AX source array does not match its reviewed native/wire extent");
             Dl_info info{};
@@ -279,7 +279,7 @@ extern "C" void ChargedNativeAXReserveModuleStorage(const ChargedAXStorage* stor
             const auto base=reinterpret_cast<std::uintptr_t>(info.dli_fbase);
             if(i && base!=s->image_base) throw std::invalid_argument("AX static arrays belong to different images");
             s->image_base=base;s->storage[i]=storage[i];
-            const bool writable=i!=6 && i!=7 && i!=12;
+            const bool writable=i!=6 && i!=7 && i!=12 && i!=13;
             OSNativeStaticMemoryOwner owner{s->identity.c_str(),Names[i],storage[i].address,storage[i].bytes,
                 writable?TRUE:FALSE,s,NativeAXModuleMemory::State::Retain,NativeAXModuleMemory::State::Release};
             s->mappings[i]=OSNativeRegisterStaticMemory(&owner);++s->mapping_count;

@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0532 exposes the original HBM silence array for optional native DSP
+registration before game arena allocation. The host retains its source image
+and permits device reads only; it does not initialize the sound manager.
+
 Patch 0535 supplies precise owning declarations to original HBM stream, wave
 and wave-sound readers. Their parsing bodies and data decisions are unchanged.
 

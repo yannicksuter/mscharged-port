@@ -27,13 +27,13 @@ public:
           window_incarnation_(aurora::window::get_window_incarnation()),
           window_id_(window ? SDL_GetWindowID(window) : 0) {
         Require(module_.loaded && module_.reserved && !module_.retired &&
-                module_.spans == 13 && module_.after.memory_initialized,
+                (module_.spans == CHARGED_AX_BASE_STORAGE_COUNT || module_.spans == CHARGED_AX_HBM_STORAGE_COUNT) && module_.after.memory_initialized,
                 "Terminal policy needs the genuine live source module");
         Require(audio.Status().native_initialized && platform::GetNativeAIStatus().initialized,
                 "Terminal policy must follow genuine original audio initialization");
         Require(window_ && window_ == aurora_get_window() && window_id_ && window_incarnation_,
                 "Terminal policy needs its actual retained game window");
-        for (unsigned i = 0; i != words_.size(); ++i) words_[i] = memory_.PhysicalAddress(i);
+        for (unsigned i = 0; i != module_.spans; ++i) words_[i] = memory_.PhysicalAddress(i);
         AuroraVIOutputState output{};
         Require(aurora_get_video_output_state(&output), "Terminal policy has no actual VI output owner");
         before_policy_present_ = output.presentations;
@@ -72,7 +72,7 @@ private:
                 "Original OS stop has not genuinely reset and drained retained DSP hardware");
 
         const auto module = memory_.Status();
-        Require(module.loaded && module.reserved && !module.retired && module.spans == 13 &&
+        Require(module.loaded && module.reserved && !module.retired && module.spans == module_.spans &&
                 module.image_base == module_.image_base && module.reserved_bytes == module_.reserved_bytes &&
                 memory_.Endpoint().generation == endpoint_.generation &&
                 module.after.memory_initialized &&
@@ -83,9 +83,9 @@ private:
                 "Terminal path retired or changed actual source image/arena ownership");
         // These exact extents come from NativeAXModuleMemory's existing source
         // storage contract, not inferred allocator capacities or extra pins.
-        constexpr std::array<std::uint32_t, 13> bytes{
-            256, 30720, 6144, 4608, 4608, 3456, 4032, 120, 1152, 768, 1440, 64, 8192};
-        for (unsigned i = 0; i != words_.size(); ++i) {
+        constexpr std::array<std::uint32_t, CHARGED_AX_HBM_STORAGE_COUNT> bytes{
+            256, 30720, 6144, 4608, 4608, 3456, 4032, 120, 1152, 768, 1440, 64, 8192, 256};
+        for (unsigned i = 0; i != module_.spans; ++i) {
             Require(memory_.PhysicalAddress(i) == words_[i], "Source static mapping was replaced");
             DSPBackendValidateMemory(endpoint_, words_[i], bytes[i], false);
         }
@@ -132,7 +132,7 @@ private:
     platform::NativeDSPMemoryEndpoint endpoint_;
     std::uint64_t reset_count_, control_generation_, mail_generation_, window_incarnation_;
     std::uint32_t window_id_;
-    std::array<std::uint32_t, 13> words_{};
+    std::array<std::uint32_t, CHARGED_AX_HBM_STORAGE_COUNT> words_{};
     std::uint64_t before_policy_present_{};
 };
 } // namespace mscharged::diagnostic

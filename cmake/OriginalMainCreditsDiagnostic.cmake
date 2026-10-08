@@ -28,6 +28,8 @@ if(BUILD_TESTING)
     include(cmake/OriginalHBMTaskCapacity.cmake)
     mscharged_add_original_hbm_task_capacity_tests()
     include(cmake/NativeHBMArithmetic.cmake)
+    include(cmake/NativeHBMStorage.cmake)
+    mscharged_add_native_hbm_storage_tests()
 endif()
 
 add_library(mscharged_original_main_credits_module MODULE
