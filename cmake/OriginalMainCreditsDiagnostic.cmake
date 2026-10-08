@@ -224,15 +224,14 @@ target_compile_definitions(mscharged_original_main_credits_module PRIVATE
     C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)
 target_compile_options(mscharged_original_main_credits_module PRIVATE
     -O1 -ffunction-sections -fdata-sections -fno-strict-aliasing
-    -ffp-contract=off -fsigned-char -Wno-unknown-pragmas -Wno-invalid-offsetof
-    -fcheck-new)
+    -ffp-contract=off -fsigned-char -Wno-unknown-pragmas
+    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof;-fcheck-new>")
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(mscharged_original_main_credits_module PRIVATE
-        -fno-gnu-unique -fno-assume-sane-operators-new-delete
-        -fno-devirtualize-speculatively)
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique;-fno-assume-sane-operators-new-delete;-fno-devirtualize-speculatively>")
 else()
     target_compile_options(mscharged_original_main_credits_module PRIVATE
-        -fno-assume-sane-operator-new -Wno-register)
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-assume-sane-operator-new;-Wno-register>")
 endif()
 if(APPLE)
     # Original source remains incomplete: defer only unexecuted function imports.
