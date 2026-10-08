@@ -19,6 +19,11 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0540 retains the retail HOME library assertion profile and its original
+debug providers. Native services supply address checks, stack unwinding and
+terminal halt behavior; original assertion expressions and initialization side
+effects remain enabled. Full HOME-menu startup is still separate work.
+
 The current pin is `11c0bc65`, which source-links `Team.cpp` and the wind-debris
 unit. Its typed Thwomp event replaces the earlier port workaround. Model
 duplication now stays in the original `glModel.cpp`; the separate copy is used

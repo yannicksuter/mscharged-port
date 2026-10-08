@@ -13,6 +13,7 @@ include(cmake/OriginalFrontendResetDiagnostic.cmake)
 include(cmake/OriginalFunctionPools.cmake)
 include(cmake/WiiStringFormat.cmake)
 include(cmake/OriginalHBMWii16.cmake)
+include(cmake/NativeHBMDebug.cmake)
 include(cmake/NativeSystemSettings.cmake)
 include(cmake/NativeSTM.cmake)
 include(cmake/NativeVideo.cmake)
@@ -239,6 +240,7 @@ else()
     target_link_options(mscharged_original_main_credits_module PRIVATE
         -Wl,-Bsymbolic-functions -Wl,--gc-sections)
 endif()
+mscharged_select_original_hbm_debug(mscharged_original_main_credits_module)
 mscharged_set_original_module_exports(mscharged_original_main_credits_module
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_exports.map")
 
@@ -324,6 +326,7 @@ target_link_libraries(charged_original_main_credits_host PRIVATE
     charged_native_ipc_boot_buffer charged_original_rtc Threads::Threads ${CMAKE_DL_LIBS})
 
 function(mscharged_link_original_main_credits target)
+    mscharged_link_original_hbm_debug_host("${target}")
     add_dependencies(${target} mscharged_original_main_credits_module)
     target_link_libraries(${target} PRIVATE charged_original_main_credits_host
         mscharged_original_main_credits_vi aurora::core)

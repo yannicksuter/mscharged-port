@@ -1,9 +1,10 @@
 include_guard(GLOBAL)
 
-# Compiler ABI only. This adds no original HBM provider or game admission.
+# Original retail library profile and Wii16 ABI; no game admission.
 # Apply before any HBM inventory/module: every original HBM source that shares
 # its classes, inlines or wide literals must use the same isolated Wii16 ABI.
 include(cmake/WiiStringFormat.cmake)
+include(cmake/OriginalHBMRetailProfile.cmake)
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" OR MSVC)
     message(FATAL_ERROR "Original HBM Wii16 currently requires GNU/Clang")
 endif()
