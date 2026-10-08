@@ -75,6 +75,10 @@ VM's address words. 0615 admits the original in-game frame updates
 nonzero-morph software skin positions. 0617 decodes Wii data that match loading
 reads directly.
 
+Patch 0630 admits the original Hall of Fame player cards (scene 65), opened by
+the Cup page's card buttons, under the Hall of Fame diagnostic. Profile (58),
+which no retail code pushes, and the earned trophy histories (66–74) stay gated.
+
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
 A GCC option scoped to the disposal manager preserves its cross-TU virtual
