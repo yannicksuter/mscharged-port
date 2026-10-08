@@ -316,7 +316,18 @@ void Run(int argc,char** argv) {
     const auto saturated=DecodeNativeAXRawADPCM(endpoint,state,4);
     constexpr std::array<s16,4> clip{32767,32767,-32768,-32768};
     Check(std::equal(clip.begin(),clip.end(),saturated.samples.begin()),"signed residual/scale15 saturation changed");
+    // Only a looping voice decodes from its loop address (firmware 0F61..0F71).
+    state.loop_flag=1;
     state.loop_nibble=base+6;Throws([&]{DecodeNativeAXRawADPCM(endpoint,state,1);},"loop target beyond authored inclusive end was accepted");
+    state.loop_nibble=base+16;Throws([&]{DecodeNativeAXRawADPCM(endpoint,state,1);},"looping header-nibble target became ordinary decoding");
+    // A one-shot voice stops at its end exception; its silence-buffer loop
+    // address at a frame header beyond the sample is only written back.
+    state.loop_flag=0;
+    const auto one_shot=DecodeNativeAXRawADPCM(endpoint,state,6);
+    Check(one_shot.samples_decoded==4 && one_shot.end_reached && !one_shot.next.running && one_shot.loops==0 &&
+              one_shot.next.current_nibble==base+16 && one_shot.next.predictor_scale==15 &&
+              std::equal(clip.begin(),clip.end(),one_shot.samples.begin()),
+          "one-shot end did not stop at its unread header-aligned loop address");
     state.loop_nibble=base+2;
     Throws([&]{DecodeNativeAXRawADPCM(endpoint,state,97);},"raw block crossed original96-sample frame capacity");
     std::cout<<"Native AX raw DSP ADPCM: "<<checks<<" checks; "<<raw_samples

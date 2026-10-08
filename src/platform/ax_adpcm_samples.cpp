@@ -1,7 +1,9 @@
 #include "platform/ax_adpcm_samples.h"
 #include <revolution/thp/THPAdpcmStep.h>
+#include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 
 namespace mscharged::platform {
 namespace {
@@ -29,13 +31,23 @@ std::int16_t DecodeSample(unsigned char nibble,const NativeAXADPCMState& state) 
     const auto pcm=accumulator>=0?accumulator/65536:-((-accumulator+65535)/65536);
     return static_cast<std::int16_t>(pcm);
 }
+std::string Hex(std::uint32_t value) {
+    char text[11];std::snprintf(text,sizeof(text),"0x%08x",value);return text;
+}
 void Geometry(const NativeAXADPCMState& state) {
     if(state.current_nibble&0x40000000u || state.end_nibble&0xc0000000u || state.loop_nibble&0xc0000000u)
         throw std::invalid_argument("AX ADPCM nibble address uses an unqualified hardware address domain");
     if((state.end_nibble&15)<2)
         throw std::logic_error("AX ADPCM special header-nibble end-address behavior is not implemented");
-    if((state.current_nibble&15)<2 || (state.loop_nibble&15)<2 || state.current_nibble>state.end_nibble || state.loop_nibble>state.end_nibble)
-        throw std::logic_error("AX ADPCM raw decoding requires the original ordinary payload/end domain");
+    // Firmware0F61..0F71: the end exception of a voice whose loopFlag is not1
+    // stops it and points AR2 at the zero cell. Its loop address (often a
+    // silence buffer at a frame header) is never decoded; the accelerator's
+    // wrapped address is only written back as the final current address.
+    if((state.current_nibble&15)<2 || state.current_nibble>state.end_nibble ||
+       (state.loop_flag && ((state.loop_nibble&15)<2 || state.loop_nibble>state.end_nibble)))
+        throw std::logic_error("AX ADPCM raw decoding requires the original ordinary payload/end domain (current=" +
+                               Hex(state.current_nibble) + " loop=" + Hex(state.loop_nibble) + " end=" +
+                               Hex(state.end_nibble) + " loopFlag=" + std::to_string(state.loop_flag) + ")");
     if(state.loop_flag>1 || state.voice_type>1)
         throw std::logic_error("AX ADPCM loop/type descriptor is outside the qualified source domain");
 }
