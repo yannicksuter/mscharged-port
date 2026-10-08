@@ -65,6 +65,16 @@ StartChallengeSequence audio instruction its Proceed runs. The whole handlers
 load each challenge's authored configuration; the following loading request
 (scene 17) keeps its existing gate.
 
+Patches 0610–0613 and 0615–0617 admit the original offline match load under
+the explicit match-loading diagnostic. 0610 opens Stadium Select's loading
+scene, the in-game overlays the loading script pushes and the loading-to-game
+transition. 0611 and 0612 qualify the async loading services and the native
+widths of the gameplay sources they reach. 0613 transports the fuzzy AI script
+VM's address words. 0615 admits the original in-game frame updates
+(Presentation/NIS, characters, shadow views). 0616 lowers the original
+nonzero-morph software skin positions. 0617 decodes Wii data that match loading
+reads directly.
+
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
 A GCC option scoped to the disposal manager preserves its cross-TU virtual

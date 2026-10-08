@@ -1,0 +1,80 @@
+From: mscharged-port
+Subject: Admit the original in-game frame updates under the match-loading diagnostic
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+
+E13 admission of original BeginFrameTask::Run blocks that the frontend task
+diagnostic omits, under the explicit MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING
+profile only: hiding the two shadow-volume layer views, the game Presentation
+and NisPlayer update in states 0x2001B, the per-character frame update, the
+depth-of-field turn-off outside states 0x18, and the co-planar reference /
+particle in-front / safe-frame / grid block. Without the Presentation update
+the original "GameBegin" presentation never completes, so
+FixedUpdateTask::mSimulationStarted stays false and the match never kicks off.
+The bodies are unchanged original source; the HOME-button render and the debug
+screenshot request remain omitted (HOME is internally owned). Matching
+depthoffield.cpp declares PSMTXIdentity itself, outside the SDK header, so its
+native build applies the same PSMTXIdentity -> C_MTXIdentity alias as
+revolution/mtx/mtx.h.
+
+diff --git a/src/Game/Render/depthoffield.cpp b/src/Game/Render/depthoffield.cpp
+--- a/src/Game/Render/depthoffield.cpp
++++ b/src/Game/Render/depthoffield.cpp
+@@ -21,6 +21,10 @@ extern "C"
+     void GXProject(float x, float y, float z, const Mtx matrix,
+         const float* projection, const float* viewport, float* screenX,
+         float* screenY, float* screenZ);
++#if defined(MSCHARGED_NATIVE)
++// As in revolution/mtx/mtx.h, the native SDK supplies the C matrix routine.
++#define PSMTXIdentity C_MTXIdentity
++#endif
+     void PSMTXIdentity(Mtx matrix);
+     void* memcpy(void* destination, const void* source, u32 size);
+ }
+diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
+--- a/src/Game/Task/BeginFrameTask.cpp
++++ b/src/Game/Task/BeginFrameTask.cpp
+@@ -441,7 +441,7 @@ void BeginFrameTask::Run(float dt)
+     }
+ 
+ #endif // uninitialized HBM/warble/screenshot endpoints omitted
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     HideLayerView(eCLV_ShadowVolume);
+     HideLayerView(eCLV_ShadowVolumeBlend);
+ #endif // both3D shadow views are omitted by existing Anark-only setup
+@@ -465,7 +465,7 @@ void BeginFrameTask::Run(float dt)
+         g_FrameCounter.DisplayFrameTicker();
+     }
+ 
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     if (nlTaskManager::m_pInstance->mCurrentState & 0x2001B)
+     {
+         GetPresentation()->Update(dt);
+@@ -475,7 +475,7 @@ void BeginFrameTask::Run(float dt)
+ #endif // normal Presentation/NIS startup omitted
+     glBeginFrame();
+ 
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     for (int i = 0; i < 10; i++)
+     {
+         if (g_pCharacters[i] != NULL)
+@@ -488,7 +488,7 @@ void BeginFrameTask::Run(float dt)
+ #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_CAMERAS)
+     cCameraManager::Update(dt);
+ #endif
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     if (!(nlTaskManager::m_pInstance->mCurrentState & 0x18))
+     {
+         DepthOfFieldManager::instance.TurnOff();
+@@ -504,7 +504,7 @@ void BeginFrameTask::Run(float dt)
+ #endif // full original primary and secondary setup, with the genuine NIS owner
+     SetupRenderInfo();
+ 
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     if (!g_bProjectedShadows)
+     {
+         DrawCoPlanarReference();
