@@ -413,3 +413,4 @@
 0586-native-original-impostor-marker-fields.patch
 0583-native-original-hbm-layout-data.patch
 0585-native-original-tpl-bind.patch
+0587-native-original-variant-scalar-and-pointer-abi.patch

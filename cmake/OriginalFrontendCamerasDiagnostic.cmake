@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include(cmake/NativeVariantABI.cmake)
 
 # Selected original camera dispatcher/update admission. The original script7
 # must request its cameras after real prior services; this adds no main preload.
