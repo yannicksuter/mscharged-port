@@ -59,6 +59,12 @@ remain in their whole source units. Embedded resources use exact archive-file
 bounds; native metadata retires with its original allocation. This qualifies
 RFNT 1.4 data transport, not complete HOME-menu rendering.
 
+Patch 0600 admits the original Strikers 101/Challenge briefing (scene 77) and
+tournament Choose Sides (scene 78) in the frontend diagnostic, plus the
+StartChallengeSequence audio instruction its Proceed runs. The whole handlers
+load each challenge's authored configuration; the following loading request
+(scene 17) keeps its existing gate.
+
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
 A GCC option scoped to the disposal manager preserves its cross-TU virtual
