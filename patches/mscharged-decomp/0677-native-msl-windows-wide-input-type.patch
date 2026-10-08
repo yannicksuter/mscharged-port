@@ -1,0 +1,15 @@
+Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+
+--- a/libs/MSL_C/include/wchar_t.h
++++ b/libs/MSL_C/include/wchar_t.h
+@@ -5,6 +5,10 @@
+ typedef unsigned short wchar_t;
+ #endif
+ 
++#if defined(MSCHARGED_NATIVE) && defined(_WIN32)
++typedef __WINT_TYPE__ wint_t;
++#else
+ typedef wchar_t wint_t;
++#endif
+ 
+ #endif // WCHAR_T_H
