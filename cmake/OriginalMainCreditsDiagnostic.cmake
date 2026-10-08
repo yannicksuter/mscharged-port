@@ -177,6 +177,7 @@ add_library(mscharged_original_main_credits_module MODULE
     "${MSCHARGED_PREPARED}/src/Game/FE/BaseSceneHandler.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Task/FrontEndTask.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Team.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/AI/StatsGatherer.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feSceneResource.cpp"
     "${MSCHARGED_PREPARED}/src/Game/FE/feTextureResource.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlTask.cpp"

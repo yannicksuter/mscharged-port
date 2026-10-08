@@ -19,6 +19,12 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+The current pin is `11c0bc65`, which source-links `Team.cpp` and the wind-debris
+unit. Its typed Thwomp event replaces the earlier port workaround. Model
+duplication now stays in the original `glModel.cpp`; the separate copy is used
+only by the historical scene preview. Native clock and matrix-handle adapters
+follow the new upstream header ownership.
+
 Patch 0532 exposes the original HBM silence array for optional native DSP
 registration before game arena allocation. The host retains its source image
 and permits device reads only; it does not initialize the sound manager.
