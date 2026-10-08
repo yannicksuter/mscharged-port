@@ -36,6 +36,8 @@ the frontend module, using the complete original `LidOpenMessage.cpp`.
 Patch 0522 retains failed native reads through the original DVD-status wait.
 The frontend profile enables the original error screen; media recovery remains
 unqualified, and the original fatal-error wait is preserved.
+Patch 0525 restores the original initial loading message at its existing
+post-graphics-startup call, using that same complete message owner.
 
 Patch 0518 retains the complete original SRAM cache, checksum and retry owner.
 The native EXI device supplies explicit persistent SRAM/RTC register storage;

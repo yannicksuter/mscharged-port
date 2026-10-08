@@ -2,8 +2,14 @@ include_guard(GLOBAL)
 
 option(MSCHARGED_DIAGNOSTIC_FRONTEND_DVD_MESSAGES
     "Admit the original DVD message callbacks in the frontend source module" OFF)
+option(MSCHARGED_DIAGNOSTIC_FRONTEND_INITIAL_LOADING_MESSAGE
+    "Admit the literal original initial loading message in frontend main" OFF)
 
 function(mscharged_select_original_frontend_dvd_messages target)
+    if(MSCHARGED_DIAGNOSTIC_FRONTEND_INITIAL_LOADING_MESSAGE
+            AND NOT MSCHARGED_DIAGNOSTIC_FRONTEND_DVD_MESSAGES)
+        message(FATAL_ERROR "Original initial loading message requires the whole DVD message owner")
+    endif()
     if(NOT MSCHARGED_DIAGNOSTIC_FRONTEND_DVD_MESSAGES)
         return()
     endif()
@@ -33,5 +39,11 @@ function(mscharged_select_original_frontend_dvd_messages target)
     get_target_property(_existing "${target}" SOURCES)
     if(NOT _source IN_LIST _existing)
         target_sources("${target}" PRIVATE "${_source}")
+    endif()
+    if(MSCHARGED_DIAGNOSTIC_FRONTEND_INITIAL_LOADING_MESSAGE)
+        set_property(TARGET "${target}" PROPERTY MSCHARGED_ORIGINAL_INITIAL_LOADING_MESSAGE_OWNER TRUE)
+        set_property(SOURCE "${MSCHARGED_PREPARED}/src/Game/main.cpp" APPEND PROPERTY
+            COMPILE_DEFINITIONS
+            "$<$<BOOL:$<TARGET_PROPERTY:MSCHARGED_ORIGINAL_INITIAL_LOADING_MESSAGE_OWNER>>:MSCHARGED_DIAGNOSTIC_FRONTEND_INITIAL_LOADING_MESSAGE=1>")
     endif()
 endfunction()
