@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0527 preserves native-width message comparisons in the complete original
+HBM SoundThread and supplies its owning lock/list declarations. Full sound
+system and HOME-menu startup remain separate integration work.
+
 Patch 0524 sizes the original HBM task pool from its actual native task and MEM
 layouts, preserving 128 slots and the original allocation/execution/cancellation
 logic. Native owning headers and the unit-header size query are adapted too.

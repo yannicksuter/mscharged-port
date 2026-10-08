@@ -384,3 +384,4 @@
 0526-restore-original-sanim-decode-owner.patch
 0523-native-original-hbm-task-thread-types.patch
 0524-native-original-hbm-task-storage.patch
+0527-native-original-hbm-sound-thread-types.patch
