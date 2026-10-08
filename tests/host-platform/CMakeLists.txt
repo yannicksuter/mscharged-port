@@ -37,6 +37,16 @@ mscharged_add_list_entry_checks("${DECOMP}" verify_host_sources)
 include("${PORT_ROOT}/cmake/NativeWordABI.cmake")
 mscharged_add_native_word_checks("${DECOMP}" "${AURORA}" verify_host_sources)
 
+function(mscharged_add_host_function_layout_check)
+    set(MSCHARGED_PREPARED "${DECOMP}")
+    set(MSCHARGED_AURORA_PREPARED "${AURORA}")
+    include("${PORT_ROOT}/cmake/OriginalFunctionPools.cmake")
+    if(TARGET original_function_layout_tests)
+        add_dependencies(original_function_layout_tests verify_host_sources)
+    endif()
+endfunction()
+mscharged_add_host_function_layout_check()
+
 add_library(host_headers INTERFACE)
 target_include_directories(host_headers INTERFACE "${PORT_ROOT}/src"
     "${AURORA}/include" "${DECOMP}/include" "${DECOMP}/libs/RVL_SDK/include")
