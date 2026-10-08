@@ -29,6 +29,12 @@ written against the exact upstream text, never against the formatted copy.
 
 ## Charged series
 
+Patch 0580 adapts original HOME font resources to native pointer widths and
+byte order. Original ResFont attachment, rebuilding, glyph lookup and detach
+remain in their whole source units. Embedded resources use exact archive-file
+bounds; native metadata retires with its original allocation. This qualifies
+RFNT 1.4 data transport, not complete HOME-menu rendering.
+
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
 A GCC option scoped to the disposal manager preserves its cross-TU virtual
