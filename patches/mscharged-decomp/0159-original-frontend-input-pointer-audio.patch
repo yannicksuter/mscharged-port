@@ -1,5 +1,5 @@
 Subject: Restore original frontend input, pointer and audio-status source
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 Retain whole reconstructed source decisions, pointer callbacks/bounds and audio
 state policy. Remove replacement helper calls and the native exclusion of actual

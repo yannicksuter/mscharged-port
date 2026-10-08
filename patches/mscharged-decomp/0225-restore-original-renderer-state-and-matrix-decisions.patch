@@ -1,6 +1,6 @@
 Subject: Restore original renderer state and matrix decisions outside diagnostics
 
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 Retire invented GL readiness/reset/live-matrix rejection from the original
 source path; keep legacy diagnostics explicit. Restore original memory startup

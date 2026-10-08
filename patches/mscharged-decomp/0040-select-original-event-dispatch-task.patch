@@ -1,6 +1,6 @@
 Subject: Select original dispatch task and shared base header
 
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 Upstream now owns the default nlTask::StateTransition inline in its header.
 Retain the original DispatchEventsTask::Run(true) path and diagnostic destructor

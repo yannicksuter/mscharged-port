@@ -1,6 +1,6 @@
 Subject: Native compiler closure for whole original HBM player/heap owners
 
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 Use actual owning declarations, standard placement new, qualified original
 outer-handle friendships, the existing reverse-iterator operation and full

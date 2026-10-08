@@ -1,5 +1,5 @@
 Subject: [PATCH] Service actual native hardware at the original RFL wait
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 Only the native SDK wait invokes the existing owner hardware/yield boundary.
 Original status, callbacks, console code and source requests are unchanged.

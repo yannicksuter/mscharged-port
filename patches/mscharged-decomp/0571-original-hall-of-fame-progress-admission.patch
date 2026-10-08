@@ -1,5 +1,5 @@
 Subject: Admit original Hall of Fame progress pages in the existing named diagnostic
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 Classification: temporary explicit original-source diagnostic admission; depends on 0506.
 
 Move the existing original factory cases 59-61 (SHHallOfFameSummary modes

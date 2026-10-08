@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Read original ARC wire records under native source APIs
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
 
 diff --git a/src/RVL_SDK/arc/arc.c b/src/RVL_SDK/arc/arc.c
 --- a/src/RVL_SDK/arc/arc.c
