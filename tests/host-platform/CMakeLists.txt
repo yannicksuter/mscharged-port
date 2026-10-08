@@ -62,6 +62,14 @@ function(host_check name source provider)
 endfunction()
 host_check(native_ios tests/native_ios.cpp host_interrupts
     "${PORT_ROOT}/src/platform/ios_device.cpp")
+add_executable(native_filesystem_physical
+    "${PORT_ROOT}/tests/native_filesystem_physical.cpp"
+    "${PORT_ROOT}/src/platform/filesystem_device.cpp"
+    "${PORT_ROOT}/src/platform/ios_device.cpp")
+target_link_libraries(native_filesystem_physical PRIVATE host_interrupts)
+add_test(NAME native_filesystem_physical COMMAND native_filesystem_physical
+    "${CMAKE_CURRENT_BINARY_DIR}/filesystem-test-data")
+set_tests_properties(native_filesystem_physical PROPERTIES TIMEOUT 30)
 host_check(native_thread_queues tests/native_thread_queues.cpp host_threads)
 host_check(original_os_messages tests/original_os_messages.cpp host_messages)
 host_check(native_thread_lifecycle tests/native_thread_lifecycle.cpp host_messages)
