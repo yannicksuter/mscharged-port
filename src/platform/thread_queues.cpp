@@ -110,7 +110,8 @@ struct NativeThread {
         auto& state = State();
         std::lock_guard lock(state.latch);
         if (state.reschedule > 0 && state.scheduler_owner == this) std::terminate();
-        if (waiting || sdk.queue) std::terminate();
+        if (waiting || sdk.queue || sdk.mutex || sdk.queueMutex.head || sdk.queueMutex.tail)
+            std::terminate();
         sdk.state = OS_THREAD_STATE_MORIBUND;
         RemoveActive(state, *this);
         state.live.erase(&sdk);
@@ -178,6 +179,93 @@ void Insert(OSThreadQueue* queue, OSThread* thread) {
     else queue->head = thread;
     if (next) next->link.prev = thread;
     else queue->tail = thread;
+}
+
+void ValidatePriorityOwner(Threads& state, OSThread* thread) {
+    auto& native = Find(state, thread);
+    if (thread->suspend != native.suspend_count ||
+            thread->base < OS_PRIORITY_MIN || thread->base > OS_PRIORITY_MAX)
+        throw std::logic_error("Native SDK priority owner/counter is invalid");
+}
+
+s32 EffectivePriority(Threads& state, OSThread* thread) {
+    ValidatePriorityOwner(state, thread);
+    s32 priority = thread->base;
+    OSMutex* previous{};
+    std::vector<OSMutex*> visited;
+    // Original __OSGetEffectivePriority: the minimum base and first waiter
+    // priority among the actual mutexes held by this same source thread.
+    for (auto* mutex = thread->queueMutex.head; mutex; mutex = mutex->link.next) {
+        for (auto* seen : visited)
+            if (seen == mutex) throw std::logic_error("Native SDK held-mutex list has a cycle");
+        visited.push_back(mutex);
+        if (mutex->thread != thread || mutex->count <= 0 || mutex->link.prev != previous)
+            throw std::logic_error("Native SDK held-mutex owner/list is invalid");
+        ValidateQueue(state, &mutex->queue);
+        if (auto* waiter = mutex->queue.head)
+            if (waiter->priority < priority) priority = waiter->priority;
+        previous = mutex;
+    }
+    if (previous != thread->queueMutex.tail)
+        throw std::logic_error("Native SDK held-mutex tail is invalid");
+    return priority;
+}
+
+OSThread* SetEffectivePriority(Threads& state, OSThread* thread, s32 priority) {
+    auto& native = Find(state, thread);
+    switch (thread->state) {
+    case OS_THREAD_STATE_WAITING: {
+        if (!native.waiting || !thread->queue)
+            throw std::logic_error("Native SDK priority waiter lacks its real queue");
+        auto* queue = thread->queue;
+        ValidateQueue(state, queue);
+        OSThread* owner{};
+        if (thread->mutex) {
+            owner = thread->mutex->thread;
+            if (queue != &thread->mutex->queue || !owner || owner == thread)
+                throw std::logic_error("Native SDK mutex wait owner is invalid");
+            (void)Find(state, owner);
+        }
+        Remove(queue, thread);
+        thread->priority = priority;
+        Insert(queue, thread); // Behind existing equal priorities, as in OSThread.c.
+        if (owner) return owner;
+        break;
+    }
+    case OS_THREAD_STATE_READY:
+    case OS_THREAD_STATE_RUNNING:
+        // Native execution owns physical runnable threads; the canonical SDK
+        // priority and source wait order remain in this sole registry.
+        thread->priority = priority;
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
+void UpdatePriority(Threads& state, OSThread* thread) {
+    std::size_t changes{};
+    while (thread) {
+        ValidatePriorityOwner(state, thread);
+        if (thread->suspend > 0) return;
+        const auto priority = EffectivePriority(state, thread);
+        if (thread->priority == priority) return;
+        if (++changes > state.live.size())
+            throw std::logic_error("Native SDK priority inheritance failed to converge");
+        thread = SetEffectivePriority(state, thread, priority);
+    }
+}
+
+void PromoteThread(Threads& state, OSThread* thread, s32 priority) {
+    std::size_t changes{};
+    while (thread) {
+        ValidatePriorityOwner(state, thread);
+        if (thread->suspend > 0 || thread->priority <= priority) return;
+        if (++changes > state.live.size())
+            throw std::logic_error("Native SDK priority promotion failed to converge");
+        thread = SetEffectivePriority(state, thread, priority);
+    }
 }
 
 void Wait(NativeThread& native, std::unique_lock<std::mutex>& lock) {
@@ -356,6 +444,22 @@ void JoinHost(const std::shared_ptr<NativeThread>& native) {
 
 extern "C" OSThread* OSGetCurrentThread() { return &Current().sdk; }
 
+extern "C" s32 __OSGetEffectivePriority(OSThread* thread) {
+    Mask mask;
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    return EffectivePriority(state, thread);
+}
+
+extern "C" void __OSPromoteThread(OSThread* thread, s32 priority) {
+    if (priority < OS_PRIORITY_MIN || priority > OS_PRIORITY_MAX + 1)
+        throw std::invalid_argument("Native SDK inherited priority is invalid");
+    Mask mask;
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    PromoteThread(state, thread, priority);
+}
+
 extern "C" s32 OSDisableScheduler() {
     Mask mask;
     auto& current = Current();
@@ -431,9 +535,18 @@ extern "C" void OSSleepThread(OSThreadQueue* queue) {
         if (state.reschedule > 0 && state.scheduler_owner == &native)
             throw std::logic_error("Native SDK disabled-scheduler caller cannot deschedule");
         if (native.waiting || native.servicing || native.sdk.queue ||
-                native.sdk.state != OS_THREAD_STATE_RUNNING || native.sdk.suspend != 0 ||
-                native.sdk.mutex || native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
+                native.sdk.state != OS_THREAD_STATE_RUNNING || native.sdk.suspend != 0)
             throw std::logic_error("Native SDK thread wait state is unqualified");
+        (void)EffectivePriority(state, &native.sdk);
+        // Whole original OSLockMutex publishes mutex before this actual sleep;
+        // source holders may also wait on messages while retaining their locks.
+        if (native.sdk.mutex) {
+            auto* owner = native.sdk.mutex->thread;
+            if (queue != &native.sdk.mutex->queue || !owner || owner == &native.sdk ||
+                    native.sdk.mutex->count <= 0)
+                throw std::logic_error("Native SDK source mutex wait is invalid");
+            (void)Find(state, owner);
+        }
         ValidateQueue(state, queue);
         native.sdk.state = OS_THREAD_STATE_WAITING;
         native.waiting = true;
@@ -463,15 +576,10 @@ extern "C" BOOL OSSetThreadPriority(OSThread* thread, OSPriority priority) {
     Mask mask;
     auto& state = State();
     std::lock_guard lock(state.latch);
-    auto& native = Find(state, thread);
-    if (thread->mutex || thread->queueMutex.head || thread->queueMutex.tail || thread->suspend != native.suspend_count)
-        throw std::logic_error("Native SDK mutex/suspension scheduling is unqualified");
+    ValidatePriorityOwner(state, thread);
     if (thread->base != priority) {
-        auto* queue = native.waiting ? thread->queue : nullptr;
-        if (queue) { ValidateQueue(state, queue); Remove(queue, thread); }
         thread->base = priority;
-        if (native.suspend_count == 0) thread->priority = priority;
-        if (queue) Insert(queue, thread);
+        UpdatePriority(state, thread);
     }
     return TRUE;
 }
@@ -618,9 +726,7 @@ extern "C" s32 OSResumeThread(OSThread* thread) {
     auto& state = State();
     std::lock_guard lock(state.latch);
     auto& native = Find(state, thread);
-    if (native.sdk.suspend != native.suspend_count || native.sdk.mutex ||
-            native.sdk.queueMutex.head || native.sdk.queueMutex.tail)
-        throw std::logic_error("Native SDK resume/mutex state is unqualified");
+    ValidatePriorityOwner(state, thread);
     const auto prior = native.suspend_count;
     if (native.suspend_count > 0) {
         --native.suspend_count;
@@ -628,15 +734,16 @@ extern "C" s32 OSResumeThread(OSThread* thread) {
             native.self_suspend_pending = false;
     }
     native.sdk.suspend = native.suspend_count;
-    if (native.suspend_count == 0) {
+    if (prior == 1) {
         if (native.waiting) {
             auto* queue = native.sdk.queue;
             ValidateQueue(state, queue);
             Remove(queue, thread);
-            thread->priority = thread->base;
+            thread->priority = EffectivePriority(state, thread);
             Insert(queue, thread);
+            if (thread->mutex) UpdatePriority(state, thread->mutex->thread);
         } else if (native.sdk.state == OS_THREAD_STATE_READY) {
-            thread->priority = thread->base;
+            thread->priority = EffectivePriority(state, thread);
         }
         native.changed.notify_one();
     }
@@ -656,8 +763,8 @@ extern "C" s32 OSSuspendThread(OSThread* thread) {
         native = &Find(state, thread);
         if (native == &caller && state.reschedule > 0 && state.scheduler_owner == &caller)
             throw std::logic_error("Native SDK disabled-scheduler caller cannot self-suspend");
-        if (native->sdk.suspend != native->suspend_count || native->sdk.mutex ||
-                native->sdk.queueMutex.head || native->sdk.queueMutex.tail || native->completed ||
+        ValidatePriorityOwner(state, thread);
+        if (native->completed ||
                 native->suspend_count == std::numeric_limits<s32>::max())
             throw std::logic_error("Native SDK suspend state is unqualified");
         if (!native->waiting && native->sdk.state == OS_THREAD_STATE_RUNNING && native != &caller)
@@ -671,6 +778,7 @@ extern "C" s32 OSSuspendThread(OSThread* thread) {
                 Remove(queue, thread);
                 thread->priority = OS_PRIORITY_MAX + 1;
                 Insert(queue, thread);
+                if (thread->mutex) UpdatePriority(state, thread->mutex->thread);
             } else if (native == &caller && native->sdk.state == OS_THREAD_STATE_RUNNING) {
                 native->sdk.state = OS_THREAD_STATE_READY;
                 native->self_suspended = true;
