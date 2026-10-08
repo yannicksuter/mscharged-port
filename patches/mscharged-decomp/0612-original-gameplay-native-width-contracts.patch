@@ -16,6 +16,12 @@ Game behavior, requests and timing are unchanged.
 - ODE: intP is pointer-sized for the obstack alignment arithmetic.
 - GoalieActions' MWCC asm LobSaveOwnerDiagnostic only branches to its next
   instruction (retail code layout); natively it is an empty inline function.
+- Retail emits the inline Desire::UnidentifiedVirtual7 (DesireDebug.inl) and
+  UnidentifiedFuzzyVariantData constructor (FuzzyVariantCollection.inl) out of
+  line in Fielder.cpp. Natively Desire.h and DesireUpdate.h include those
+  unchanged inline bodies, so every referencing vtable and caller has them.
+  Likewise the Desire units that call CallFielderFuzzyFunction include the
+  original inline FuzzyRuntimeCall.h natively.
 - MWCC's double __fabs(double) intrinsic maps to std::fabs on a double.
 - C++ conformance MWCC accepted: `false` as the null AIContext constant, a
   jump to `default:` past case-local initializations (scoped natively), and a
@@ -41,6 +47,34 @@ Game behavior, requests and timing are unchanged.
 - cTeam::UpdateTeamAI sorts its four fielder pointers with the Wii element
   size 4 (sizeof(cFielder*)); the native call uses the actual pointer size.
 
+diff --git a/include/Game/AI/Desire.h b/include/Game/AI/Desire.h
+--- a/include/Game/AI/Desire.h
++++ b/include/Game/AI/Desire.h
+@@ -510,4 +510,10 @@
+ float GetRunInDirectionMaxDistance(const DesireRunInDirection*);
+ float GetRunInDirectionDistanceTravelled(const DesireRunInDirection*);
+ 
++#if defined(MSCHARGED_NATIVE)
++// Retail emits this inline body out of line in Fielder.cpp; native vtables and
++// callers need it visible wherever the class is declared.
++#include "Game/AI/DesireDebug.inl"
++#endif
++
+ #endif // GAME_AI_DESIRE_H
+diff --git a/include/Game/AI/DesireUpdate.h b/include/Game/AI/DesireUpdate.h
+--- a/include/Game/AI/DesireUpdate.h
++++ b/include/Game/AI/DesireUpdate.h
+@@ -284,4 +284,10 @@
+     return *this;
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++// Retail emits this inline body out of line in Fielder.cpp; native vtables and
++// callers need it visible wherever the class is declared.
++#include "Game/AI/FuzzyVariantCollection.inl"
++#endif
++
+ #endif // GAME_AI_DESIREUPDATE_H
 diff --git a/include/Game/AI/Fielder.h b/include/Game/AI/Fielder.h
 --- a/include/Game/AI/Fielder.h
 +++ b/include/Game/AI/Fielder.h
@@ -499,6 +533,20 @@ diff --git a/include/ode/error.h b/include/ode/error.h
  
  #ifdef __cplusplus
  extern "C"
+diff --git a/src/Game/AI/DesireMark.cpp b/src/Game/AI/DesireMark.cpp
+--- a/src/Game/AI/DesireMark.cpp
++++ b/src/Game/AI/DesireMark.cpp
+@@ -17,6 +17,10 @@
+ #include "NL/nlString.h"
+ 
+ #include "Game/UnidentifiedStaticStorage.h"
++#if defined(MSCHARGED_NATIVE)
++// Retail emits these inline calls out of line in Fielder.cpp.
++#include "Game/AI/FuzzyRuntimeCall.h"
++#endif
+ 
+ extern "C" DesireUpdate fn_800B9020(void*, cFielder*, const char*);
+ 
 diff --git a/src/Game/AI/DesireMegaStrike.cpp b/src/Game/AI/DesireMegaStrike.cpp
 --- a/src/Game/AI/DesireMegaStrike.cpp
 +++ b/src/Game/AI/DesireMegaStrike.cpp
@@ -516,6 +564,20 @@ diff --git a/src/Game/AI/DesireMegaStrike.cpp b/src/Game/AI/DesireMegaStrike.cpp
  
  bool gMegaStrikeUsePassButton;
  bool gMegaStrikeInvincible;
+diff --git a/src/Game/AI/DesirePass.cpp b/src/Game/AI/DesirePass.cpp
+--- a/src/Game/AI/DesirePass.cpp
++++ b/src/Game/AI/DesirePass.cpp
+@@ -16,6 +16,10 @@
+ #include "NL/nlMemory.h"
+ 
+ #include "Game/UnidentifiedStaticStorage.h"
++#if defined(MSCHARGED_NATIVE)
++// Retail emits these inline calls out of line in Fielder.cpp.
++#include "Game/AI/FuzzyRuntimeCall.h"
++#endif
+ 
+ static bool sDebugPassSpaceSearch;
+ const nlVector3 sStationaryTargetVelocity = { 0.0f, 0.0f, 0.0f };
 diff --git a/src/Game/AI/DesireShoot.cpp b/src/Game/AI/DesireShoot.cpp
 --- a/src/Game/AI/DesireShoot.cpp
 +++ b/src/Game/AI/DesireShoot.cpp
@@ -530,6 +592,34 @@ diff --git a/src/Game/AI/DesireShoot.cpp b/src/Game/AI/DesireShoot.cpp
  
  static float sWindupShotTimeLimitMargin = 0.5f;
  static unsigned short sDesireWindupShotType = 0xFFFF;
+diff --git a/src/Game/AI/DesireSuperPower.cpp b/src/Game/AI/DesireSuperPower.cpp
+--- a/src/Game/AI/DesireSuperPower.cpp
++++ b/src/Game/AI/DesireSuperPower.cpp
+@@ -47,6 +47,10 @@
+ #include "Game/Audio/AudioResourceRuntime.h"
+ #include "Game/EventRegistry.h"
+ #include "NL/nlFunction.inl"
++#if defined(MSCHARGED_NATIVE)
++// Retail emits these inline calls out of line in Fielder.cpp.
++#include "Game/AI/FuzzyRuntimeCall.h"
++#endif
+ 
+ int ChooseRunDirection(cFielder*, const unsigned short*, int,
+     const nlVector2*, float*);
+diff --git a/src/Game/AI/DesireUsePowerup.cpp b/src/Game/AI/DesireUsePowerup.cpp
+--- a/src/Game/AI/DesireUsePowerup.cpp
++++ b/src/Game/AI/DesireUsePowerup.cpp
+@@ -18,6 +18,10 @@
+ #include "Game/Team.h"
+ #include <stddef.h>
+ #include "Game/UnidentifiedStaticStorage.h"
++#if defined(MSCHARGED_NATIVE)
++// Retail emits these inline calls out of line in Fielder.cpp.
++#include "Game/AI/FuzzyRuntimeCall.h"
++#endif
+ 
+ static unsigned short sDesireUsePowerupType = 0xFFFF;
+ #pragma explicit_zero_data on
 diff --git a/src/Game/AI/Fielder.cpp b/src/Game/AI/Fielder.cpp
 --- a/src/Game/AI/Fielder.cpp
 +++ b/src/Game/AI/Fielder.cpp
