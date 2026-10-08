@@ -19,6 +19,9 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0535 supplies precise owning declarations to original HBM stream, wave
+and wave-sound readers. Their parsing bodies and data decisions are unchanged.
+
 Patch 0533 retains native pointers throughout the original HBM channel/track
 callback interfaces. Original numeric sound and resource IDs remain 32-bit.
 

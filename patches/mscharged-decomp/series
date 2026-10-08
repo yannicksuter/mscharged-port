@@ -390,3 +390,4 @@
 0528-native-original-hbm-ax-types.patch
 0531-native-hbm-live-task-and-stream-context.patch
 0533-native-hbm-channel-pointer-context.patch
+0535-native-original-hbm-sound-reader-headers.patch
