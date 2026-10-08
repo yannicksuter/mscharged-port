@@ -450,3 +450,6 @@
 0675-qualify-native-msl-empty-format-literals.patch
 0676-native-msl-pointer-difference-type.patch
 0677-native-msl-windows-wide-input-type.patch
+0678-native-msl-varargs-cursor.patch
+0679-native-msl-format-word-carriers.patch
+0680-native-msl-pointer-format-argument.patch
