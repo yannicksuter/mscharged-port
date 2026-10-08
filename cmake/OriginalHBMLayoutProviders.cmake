@@ -37,8 +37,11 @@ function(mscharged_select_original_hbm_layout_providers target)
         src/RVL_SDK/hbm/nw4hbm/ut/ut_CharWriter.cpp
         src/RVL_SDK/hbm/nw4hbm/ut/ut_TextWriterBase.cpp
         src/RVL_SDK/hbm/nw4hbm/ut/ut_TagProcessorBase.cpp
+        src/RVL_SDK/hbm/nw4hbm/ut/ut_list.cpp
         src/RVL_SDK/hbm/HBMAnmController.cpp
         src/RVL_SDK/hbm/HBMFrameController.cpp
+        src/RVL_SDK/hbm/HBMRemoteSpk.cpp
+        src/RVL_SDK/hbm/HBMController.cpp
         src/RVL_SDK/mem/mem_allocator.c)
         set(_source "${MSCHARGED_PREPARED}/${_relative}")
         if(NOT _source IN_LIST _selected)
