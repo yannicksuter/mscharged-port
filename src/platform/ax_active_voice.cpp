@@ -25,6 +25,19 @@ std::int16_t Saturate(std::int64_t value) {
 [[noreturn]] void Fail(NativeAXVoiceFailure reason, const char* message) {
     throw NativeAXVoiceError(reason, message);
 }
+// Owned06AB..06C2 one-pole LPF. Both callers run it with SET15/M2/SET40 live
+// (set at0356/034C/0364), so the AX1.L coefficient operands of MULX/MADDX are
+// unsigned16 while PCM/history in AX0.H stay signed. The two products are
+// added before dropping15 fractional bits; the saturated accumulator middle
+// is both output and feedback. There is no added rounding.
+std::int16_t LowPass06AB(const std::array<std::int16_t, 96>& input, std::array<std::int16_t, 96>& output,
+                         std::int16_t history, std::uint16_t a0, std::uint16_t b0) {
+    for (std::size_t i = 0; i < 96; ++i) {
+        history = Saturate(Floor(std::int64_t(input[i]) * a0 + std::int64_t(history) * b0, 32768));
+        output[i] = history;
+    }
+    return history;
+}
 struct Bus { unsigned enabled, ramp, depop; };
 constexpr std::array<Bus, 12> MixBuses{{
     {0,2,0},{1,2,4},{16,18,1},{17,18,5},{21,23,2},{22,23,6},
@@ -162,19 +175,9 @@ NativeAXPreparedVoiceFrame PrepareNativeAXADPCMVoiceFrame(
     PutHalf(after + 0x6a, envelope);
     result.filtered = result.enveloped;
     if (Half(before + 0xba)) {
-        auto history = Signed(Half(before + 0xbc));
-        const auto a0 = Signed(Half(before + 0xbe));
-        const auto b0 = Signed(Half(before + 0xc0));
-        for (std::size_t i = 0; i < 96; ++i) {
-            // Owned06AB..06C2: signed fractional MULX + MADDX, then
-            // saturated40-bit accumulator-middle feedback/output. The two
-            // products are added before dropping15 fractional bits; there
-            // is no added rounding. The LPF follows VE and precedes mixing.
-            const auto product = std::int64_t(result.enveloped[i]) * a0 +
-                                 std::int64_t(history) * b0;
-            history = Saturate(Floor(product, 32768));
-            result.filtered[i] = history;
-        }
+        // The LPF follows VE and precedes mixing (firmware0375..0381).
+        const auto history = LowPass06AB(result.enveloped, result.filtered, Signed(Half(before + 0xbc)),
+                                         Half(before + 0xbe), Half(before + 0xc0));
         PutHalf(after + 0xbc, static_cast<std::uint16_t>(history));
     }
     for (std::size_t bus = 0; bus < MixBuses.size(); ++bus) {
