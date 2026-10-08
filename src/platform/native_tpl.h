@@ -35,6 +35,10 @@ template<class T> struct NativeTPLAddress32
     {
         return NativeTPLAddressLessThan(this, reinterpret_cast<std::uintptr_t>(boundary));
     }
+    // Original TPLBind tests relative address cells against NULL before their
+    // relocation. A zero test must not decode a not-yet-bound relative word.
+    bool operator==(T* other) const { return other ? Get() == other : word == 0; }
+    bool operator!=(T* other) const { return !(*this == other); }
     operator T*() const { return Get(); }
     T* operator->() const { return Get(); }
 };
@@ -43,13 +47,28 @@ static_assert(alignof(NativeTPLAddress32<char>) == 4);
 static_assert(std::is_trivially_copyable_v<NativeTPLAddress32<char>>);
 static_assert(std::is_standard_layout_v<NativeTPLAddress32<char>>);
 
-// Original nonmip I4/IA4/IA8/RGB5A3 TPL header/address transport. Pixel bytes
-// remain tiled Wii data for the original GX requests and NAND banner copies.
-void BindNativeTPLImage(void* palette);
+// Temporary native scalar/header views beneath whole original TPLBind.
+// Original source decides null/unpacked branches and owns the relocation loop.
+// Relative words become real cached SDK addresses; pixel bytes remain raw.
+// Commit publishes only source-visited structural records, after all bounds
+// and host metadata reservations succeed. The raw source owner stays retained.
+class NativeTPLBinding
+{
+public:
+    explicit NativeTPLBinding(void* palette);
+    ~NativeTPLBinding();
+    NativeTPLBinding(const NativeTPLBinding&) = delete;
+    NativeTPLBinding& operator=(const NativeTPLBinding&) = delete;
+    void* Palette() const noexcept;
+    std::uint32_t RelocateDescriptors(std::uint32_t relative, std::uint32_t count);
+    std::uint32_t RelocateTexture(std::uint32_t relative);
+    std::uint32_t RelocatePixels(std::uint32_t relative, const void* header);
+    std::uint32_t RelocateClut(std::uint32_t relative);
+    std::uint32_t RelocateClutPixels(std::uint32_t relative);
+    void Commit();
+private:
+    void* pending_;
+};
 }
 
 } // C++ linkage
-
-// The original partial TPL declarations use an opaque native parameter only at
-// this library boundary. Their palette/table/header strides stay Wii-sized.
-extern "C" void TPLBind(void* palette);

@@ -29,6 +29,11 @@ written against the exact upstream text, never against the formatted copy.
 
 ## Charged series
 
+Patch 0585 restores the original SDK texture-binding loop and its panic,
+null and unpacked branches. Native address conversion publishes structural
+headers atomically; allocation failure leaves the source bytes intact.
+Standalone SaveLoad and HOME share the same original TPL provider.
+
 Patch 0583 adapts HOME layout byte order and relative offsets beneath the
 original layout constructors. Original layout, material, text and animation
 providers share the existing resource owners. Generated-data tests cover

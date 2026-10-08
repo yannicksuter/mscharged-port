@@ -14,10 +14,25 @@
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <new>
 #include <vector>
 
 namespace aurora { extern AuroraConfig g_config; }
 void AuroraOSShutdown();
+
+#if defined(MSCHARGED_TPL_METADATA_FAULT_TEST)
+namespace {
+std::size_t metadataCalls = 0;
+std::size_t metadataFailAt = 0;
+bool observeMetadata = false;
+}
+extern "C" void* __real_ChargedNativeMetadataAllocate(std::size_t bytes);
+extern "C" void* __wrap_ChargedNativeMetadataAllocate(std::size_t bytes)
+{
+    if (observeMetadata && ++metadataCalls == metadataFailAt) throw std::bad_alloc();
+    return __real_ChargedNativeMetadataAllocate(bytes);
+}
+#endif
 
 namespace {
 using namespace mscharged::platform;
@@ -109,7 +124,7 @@ void Run(MemoryAllocator& owner) {
     for (unsigned cycle=0;cycle<2;++cycle) {
         auto* raw=static_cast<unsigned char*>(owner.Allocate(archive.raw.size(),32,false));
         Check(raw!=nullptr,"Original archive allocation failed");
-        Reject([&]{ TPLBind(raw+archive.starts[0]); });
+        Reject([&]{ TPLBind(reinterpret_cast<TPLPalette*>(raw+archive.starts[0])); });
         Publish(raw,archive.raw);
         NativeARCFileSpan span{};
         Check(FindNativeARCFileSpan(raw+archive.starts[0],span) && span.bytes==archive.sizes[0],
@@ -174,19 +189,101 @@ void Run(MemoryAllocator& owner) {
         reinterpret_cast<TPLPalette*>(raw+archive.starts[0]),0); });
     Check(std::memcmp(raw,invalid.data(),invalid.size())==0,
         "Rejected cross-file pixel range partially mutated the archive");
+    Check(FindGameByteDomain(raw,invalid.size())==GameByteDomain::WiiSerialized,
+        "Rejected cross-file request invalidated its original completion domain");
     owner.Free(raw);
     Check(owner.TotalFreeMemory()==initial,
         "Original allocator did not recover all test owners");
 }
+void SourceBranches(MemoryAllocator& owner) {
+    auto authored=Palette(specs[0],21);
+    // A genuinely NULL descriptor must not decode a relative target or visit
+    // a texture header. It retains the original source's NULL branch.
+    W(authored.data()+20,0);
+    auto* raw=static_cast<unsigned char*>(owner.Allocate(authored.size(),32,false));
+    Check(raw!=nullptr,"Source branch allocation failed"); Publish(raw,authored);
+    auto* pal=reinterpret_cast<TPLPalette*>(raw); TPLBind(pal);
+    Check(TPLGet(pal,1)->textureHeader.word==0 && TPLGet(pal,1)->textureHeader==nullptr,
+        "Original NULL descriptor acquired a target");
+    Check(TPLGet(pal,0)->textureHeader->unpacked==TRUE,
+        "Original unpacked0 branch did not write TRUE");
+    owner.Free(raw);
+    // Original !unpacked accepts any nonzero byte as already unpacked, rather
+    // than repairing it to TRUE. Supply its real cached SDK data word as Wii
+    // bytes and prove that branch leaves both the word and marker untouched.
+    authored=Palette(specs[0],22);
+    raw=static_cast<unsigned char*>(owner.Allocate(authored.size(),32,false));
+    Check(raw!=nullptr,"Already-unpacked allocation failed");
+    const auto cached=OSCachedToPhysical(raw+64)|0x80000000u;
+    W(authored.data()+36,cached); authored[63]=2; Publish(raw,authored);
+    pal=reinterpret_cast<TPLPalette*>(raw); TPLBind(pal);
+    auto* header=TPLGet(pal,0)->textureHeader.Get();
+    Check(header->unpacked==2 && header->data.word==cached && header->data.Get()==reinterpret_cast<char*>(raw+64),
+        "Original nonzero unpacked branch changed its authored marker/data word");
+    Check(std::memcmp(raw+64,authored.data()+64,specs[0].pixelBytes)==0,
+        "Already-unpacked source branch changed pixels");
+    owner.Free(raw);
 }
-int main() {
+void VersionPanic(MemoryAllocator& owner) {
+    auto authored=Palette(specs[0],23); W(authored.data(),0x0020af31);
+    auto* raw=static_cast<unsigned char*>(owner.Allocate(authored.size(),32,false));
+    Check(raw!=nullptr,"Version-panic source allocation failed"); Publish(raw,authored);
+    std::fflush(stdout);
+    TPLBind(reinterpret_cast<TPLPalette*>(raw));
+    throw std::runtime_error("Whole original invalid-version OSPanic unexpectedly returned");
+}
+#if defined(MSCHARGED_TPL_METADATA_FAULT_TEST)
+void MetadataOOM(MemoryAllocator& owner) {
+    const auto initial=owner.TotalFreeMemory();
+    const auto authored=Palette(specs[0],24);
+    auto* raw=static_cast<unsigned char*>(owner.Allocate(authored.size(),32,false));
+    Check(raw!=nullptr,"Metadata OOM allocation failed"); Publish(raw,authored);
+    metadataCalls=0; metadataFailAt=0; observeMetadata=true;
+    TPLBind(reinterpret_cast<TPLPalette*>(raw));
+    observeMetadata=false;
+    const auto total=metadataCalls;
+    Check(total>6,"TPL source did not reserve the three real structural publications");
+    // Rewrite with the actual producer, then fail the final allocation inside
+    // the batch after earlier records' map/split reservations have succeeded.
+    Publish(raw,authored);
+    metadataCalls=0; metadataFailAt=total; observeMetadata=true;
+    bool failed=false;
+    try { TPLBind(reinterpret_cast<TPLPalette*>(raw)); }
+    catch(const std::bad_alloc&) { failed=true; }
+    catch(...) { observeMetadata=false; throw; }
+    observeMetadata=false;
+    Check(failed && metadataCalls==total,"Late real metadata reservation did not fail as requested");
+    Check(std::memcmp(raw,authored.data(),authored.size())==0,
+        "Late metadata OOM partially wrote original source bytes");
+    Check(FindGameByteDomain(raw,authored.size())==GameByteDomain::WiiSerialized,
+        "Late metadata OOM partially invalidated original completed byte domains");
+    GameCompletedSpan complete{};
+    Check(FindGameCompletedSpan(raw,authored.size(),complete) && complete.base==raw
+        && complete.bytes==authored.size(),"Late metadata OOM lost its completed producer extent");
+    TPLBind(reinterpret_cast<TPLPalette*>(raw));
+    Check(TPLGet(reinterpret_cast<TPLPalette*>(raw),0)->textureHeader->unpacked==TRUE,
+        "Source binding could not retry after metadata OOM");
+    owner.Free(raw);
+    Check(owner.TotalFreeMemory()==initial,"Metadata OOM retained a source owner");
+    std::printf("Late structural publication OOM: allocation %zu/%zu, no bytes/domain changed\n",total,total);
+}
+#endif
+
+}
+int main(int argc, char** argv) {
     try {
         aurora::g_config.mem1Size=MEM1_DEFAULT_SIZE; aurora::g_config.mem2Size=64u*1024u*1024u;
         OSInit();
         constexpr unsigned arenaBytes=65536;
         auto* arena=OSAllocFromArenaLo(arenaBytes,64);
         Check(arena!=nullptr,"Real SDK arena allocation failed");
-        MemoryAllocator owner{}; owner.Initialize(arena,arenaBytes); Run(owner);
+        MemoryAllocator owner{}; owner.Initialize(arena,arenaBytes);
+        if(argc==2 && std::strcmp(argv[1],"version-panic")==0) VersionPanic(owner);
+#if defined(MSCHARGED_TPL_METADATA_FAULT_TEST)
+        else if(argc==2 && std::strcmp(argv[1],"metadata-oom")==0) MetadataOOM(owner);
+#endif
+        else if(argc==1) { Run(owner); SourceBranches(owner); }
+        else throw std::invalid_argument("Unknown TPL fixture mode");
         AuroraOSShutdown();
         std::printf("Original HOME TPL/GX descriptors: %u checks passed (CPU only)\n",checks);
         return 0;
