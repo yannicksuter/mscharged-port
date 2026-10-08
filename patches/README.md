@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0523 adapts original HBM task headers and live message comparisons to
+native pointer widths. A separate test module exercises original worker
+creation, messages and joins; full HOME-menu initialization remains pending.
+
 Patch 0526 restores all animation rotation decoder bodies to the complete
 original `SAnimDecode.cpp`. Native helpers replace only the fixed quantized
 load/store instructions; the copied runtime decoder is retired.

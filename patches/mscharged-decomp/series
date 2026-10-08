@@ -382,3 +382,4 @@
 0522-original-dvd-error-request-retention.patch
 0525-original-initial-loading-message-admission.patch
 0526-restore-original-sanim-decode-owner.patch
+0523-native-original-hbm-task-thread-types.patch
