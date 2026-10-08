@@ -396,6 +396,14 @@ DVD admission result. Native NL callers can then restore their reserved request
 slot and pending count. Synthetic tests cover both providers and all 64 slots;
 music replacement tests also exercise this path under scoped sanitizers.
 
+`0057-drain-native-dvd-before-reset.patch` implements original SDK reset
+requests through the native DVD worker. It drains actual reads and callbacks,
+preserves silently removed waiting commands and their caller-owned handles,
+and reports cover state from the mounted disc. Reset/close reject unsafe
+interrupt contexts and overlapping media operations; reads remain rejected
+after close until a successful remount. Synthetic-disc tests cover these
+lifetimes. This does not complete original game shutdown or optical timing.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.

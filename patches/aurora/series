@@ -50,3 +50,4 @@
 0054-retire-native-vi-render-mode-outside-device-lock.patch
 0055-name-native-xfb-resolve-format.patch
 0056-scan-out-newest-completed-xfb-copy.patch
+0057-drain-native-dvd-before-reset.patch
