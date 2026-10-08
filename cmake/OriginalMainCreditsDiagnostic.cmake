@@ -19,6 +19,7 @@ include(cmake/NativeHardwareOwner.cmake)
 include(cmake/NativeVideoOutput.cmake)
 include(cmake/NativeFilesystemBoot.cmake)
 include(cmake/NativeOSShutdownRequests.cmake)
+include(cmake/OriginalOSShutdown.cmake)
 find_package(Threads REQUIRED)
 
 add_library(mscharged_original_main_credits_module MODULE
