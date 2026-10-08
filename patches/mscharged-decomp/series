@@ -436,3 +436,4 @@
 0660-retain-native-platform-macro-bindings.patch
 0661-expose-original-audio-inline-definitions.patch
 0662-use-native-original-inflater-prototypes.patch
+0663-preserve-native-file-callback-contexts.patch
