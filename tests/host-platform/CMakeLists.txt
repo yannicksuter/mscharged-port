@@ -34,6 +34,8 @@ add_custom_target(verify_host_sources
 
 include("${PORT_ROOT}/cmake/NativeListEntryHandles.cmake")
 mscharged_add_list_entry_checks("${DECOMP}" verify_host_sources)
+include("${PORT_ROOT}/cmake/NativeAudioTrackingKeys.cmake")
+mscharged_add_audio_tracking_key_checks("${DECOMP}" "${AURORA}" verify_host_sources)
 include("${PORT_ROOT}/cmake/NativeWordABI.cmake")
 mscharged_add_native_word_checks("${DECOMP}" "${AURORA}" verify_host_sources)
 

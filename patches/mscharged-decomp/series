@@ -446,3 +446,4 @@
 0670-preserve-native-async-image-contexts.patch
 0671-preserve-native-audio-resource-contexts.patch
 0672-match-native-ode-allocation-handlers.patch
+0673-native-audio-tracking-key-width.patch
