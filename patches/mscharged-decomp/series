@@ -441,3 +441,4 @@
 0665-use-windows-native-font-alloca.patch
 0666-native-sdk-scalar-carriers.patch
 0667-native-audio-factory-callback-types.patch
+0668-declare-native-localization-name-literals.patch
