@@ -329,6 +329,10 @@ builds.
 
 ## Aurora series
 
+Patch 0058 implements the original STM display-disable register request. It
+keeps the VI clock, source callbacks and framebuffer owners alive while draining
+queued presentation and displaying black on a presentable native surface.
+
 Patch 0011 adds bounded video/PCM entry points to the existing THP decoder,
 sharing its valid decoding arithmetic. Native movie reads validate container,
 frame and output bounds. Decoding is separate from presentation and playback.
