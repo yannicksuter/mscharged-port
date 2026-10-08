@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: [PATCH] Preserve original AX word copies at native halfword alignment
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The original addr/adpcm fields are at offsets 0x6e/0x7e. A native u32
 lvalue there is not aligned even though the source halfwords are aligned.

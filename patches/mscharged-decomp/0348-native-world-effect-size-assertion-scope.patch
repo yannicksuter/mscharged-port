@@ -1,6 +1,6 @@
 From: mscharged-port native integration
 Subject: [PATCH] Retain the WorldEffect byte-size assertion only for the Wii ABI
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Compiler compatibility only. Native declaration layout is measured
 separately; no fields, algorithms, serialized stream strides, placement

@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: [PATCH] native MWCC WENC int absolute-value intrinsic
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Map the original signed32 MWCC __abs intrinsic to its native compiler
 operation. Original WENC loops, clamps, predictor/history and requests remain

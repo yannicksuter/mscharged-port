@@ -1,5 +1,5 @@
 Subject: Share original frontend scene catalog and lifecycle ordering
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Retain all107 original scene IDs and filenames in a shared initializer; extract
 unchanged scene enums/record and original enqueue, stack insertion, initialize,

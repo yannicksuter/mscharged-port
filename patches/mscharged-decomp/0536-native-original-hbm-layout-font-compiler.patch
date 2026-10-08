@@ -1,6 +1,6 @@
 Subject: Preserve original HBM layout/font bodies under native compiler and GX call ABI
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Keep original whole layout/font/list algorithms, chunk walks and presentation
 decisions. Adapt native new includes, live pointer arithmetic, the typed GX

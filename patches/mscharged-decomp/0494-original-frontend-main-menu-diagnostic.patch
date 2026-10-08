@@ -1,5 +1,5 @@
 # Patch: 0494-original-frontend-main-menu-diagnostic
-# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+# Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 # Scope: Default-off native factory admission of the literal original MainMenu case.
 # Original handlers, authored transition, save/HOF/slide/input waits and all other factory scopes are unchanged.
 --- a/src/Game/FE/BaseGameSceneManager.cpp

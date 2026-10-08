@@ -1,5 +1,5 @@
 Subject: Restore original NPC loading flow
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Retire the historical0131 helper substitutions from the original source TU.
 Selection order, resource paths, wait conditions and all callbacks are again the

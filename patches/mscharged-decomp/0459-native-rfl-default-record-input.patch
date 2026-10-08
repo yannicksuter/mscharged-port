@@ -1,5 +1,5 @@
 # Original RFL default-record byte/ABI input boundary only.
-# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+# Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 # Requires: 0452 native RFL name cells; native record writers unchanged.
 
 diff --git a/src/RVL_SDK/rfl/RFL_DefaultDatabase.c b/src/RVL_SDK/rfl/RFL_DefaultDatabase.c

@@ -1,6 +1,6 @@
 Subject: Share original NAV visuals and back button kernels
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Console methods delegate to the same authored selection, visibility, label,
 pointer and back-button operations as the retained native adapter.

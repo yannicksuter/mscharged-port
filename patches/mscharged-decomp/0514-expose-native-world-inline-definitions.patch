@@ -1,5 +1,5 @@
 # Patch: 0514-expose-native-world-inline-definitions
-# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+# Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 # Scope: Make existing original inline world bodies visible to every native owning-header consumer.
 --- a/include/Game/World/WorldObject_80129EE0.h
 +++ b/include/Game/World/WorldObject_80129EE0.h

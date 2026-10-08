@@ -1,7 +1,7 @@
 From: native port preparation
 Subject: [PATCH] retain original mesh/model game flow and scope preview checks
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 diff --git a/include/Game/GL/GLTexturedColourMeshWriter.h b/include/Game/GL/GLTexturedColourMeshWriter.h
 --- a/include/Game/GL/GLTexturedColourMeshWriter.h

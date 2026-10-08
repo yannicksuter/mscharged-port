@@ -1,5 +1,5 @@
 Subject: Restore ordinary game allocation in an isolated original source module
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Enable original ordinary new/delete only in the explicit original game module.
 Host/SDK libraries retain their own operators. Preserve the source lazy memory

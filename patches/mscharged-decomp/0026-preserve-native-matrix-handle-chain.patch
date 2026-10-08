@@ -1,6 +1,6 @@
 Subject: Keep the complete matrix-handle chain pointer-sized on native hosts
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Matrix handles address live GL matrix storage. Preserve their width through
 allocation, global state, model packets, draw/text callers, render caches and

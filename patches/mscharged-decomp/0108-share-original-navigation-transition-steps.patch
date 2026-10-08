@@ -1,6 +1,6 @@
 Subject: Share original eight-door frontend NAV transition steps
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Preserve reset order, once-only pending call before inclusive0.6s hide, and
 pointer flag restoration. Native caller supplies the real script service.

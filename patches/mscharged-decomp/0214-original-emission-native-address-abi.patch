@@ -1,6 +1,6 @@
 Subject: [PATCH] preserve original emission source and native borrowed address words
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Restore literal controller/manager decisions, preserve retail numeric word
 overflow, and transport genuine native pointer/callback bits without truncation.
@@ -125,7 +125,7 @@ diff --git a/src/Game/AI/DesireSuperPower.cpp b/src/Game/AI/DesireSuperPower.cpp
 diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
 --- a/src/Game/AI/GoalieActions.cpp
 +++ b/src/Game/AI/GoalieActions.cpp
-@@ -1638,7 +1638,11 @@
+@@ -1606,7 +1606,11 @@
          nlSNPrintf(effectName, sizeof(effectName), "%s_mega_bg", mpShooter->mUnidentified11C->mName);
          EffectsGroup* group = EmissionManager::Instance()->GetEffectsGroup(effectName);
          EmissionController* effect = EmissionManager::Instance()->Create(group, 3, true, 0);
@@ -135,7 +135,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
          effect->m_uUserData = (u32)this;
 +#endif
          nlVector3 position;
-         nlVec3Set(position, 0.0f, 0.0f, lbl_806DBC38);
+         nlVec3Set(position, 0.0f, 0.0f, gfMegaBallSpawnHeight);
          nlVector3 velocity = { 0.0f, 0.0f, 1.0f };
 diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
 --- a/src/Game/AI/Powerups.cpp

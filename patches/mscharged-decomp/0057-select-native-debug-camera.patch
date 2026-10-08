@@ -1,6 +1,6 @@
 Subject: Select original debug-camera desktop controls with explicit native inputs
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Select matching orbit/pan/radius/height, input-toggle and view math independently
 of global pad/task/tweak initialization. The port owner supplies checked desktop

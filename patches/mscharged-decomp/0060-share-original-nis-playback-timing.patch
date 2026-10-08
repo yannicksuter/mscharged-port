@@ -1,5 +1,5 @@
 Subject: [PATCH] share original NIS camera timing and trigger crossing arithmetic
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Extract the original frame product/clamp/carry ordering, positive primary carry
 and half-open trigger crossing into shared inline helpers. The original methods

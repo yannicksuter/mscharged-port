@@ -1,5 +1,5 @@
 Subject: [PATCH] Retain original authored game material vertex formats
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Game modules consume the original raw S8/6 normals and S16/10 UV streams.
 Earlier float-format alternatives remain scoped to standalone diagnostics.

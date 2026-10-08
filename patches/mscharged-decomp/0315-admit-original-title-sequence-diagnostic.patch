@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Named diagnostic admission of the original Title factory case
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Temporarily admit only the genuine Title case within the existing selected
 frontend sequence. The original Intro abort chooses it; no scene queue,

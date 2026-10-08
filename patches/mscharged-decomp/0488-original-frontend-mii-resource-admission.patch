@@ -1,5 +1,5 @@
 # Patch: 0488-original-frontend-mii-resource-admission
-# Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+# Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 # Scope: Explicit native diagnostic admits literal original resource services34/35.
 # Original MiiManager constructor, async archive request and readiness predicate unchanged.
 # No icon rendering, replacement assets or successful readiness substitutions.

@@ -1,5 +1,5 @@
 Subject: [PATCH] Preserve original OS reset source with native SDK thread registry
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 Purpose: Canonical compiler declarations and full-width native thread-list ABI; original shutdown algorithms retained.
 
 diff --git a/libs/RVL_SDK/include/revolution/os/OS.h b/libs/RVL_SDK/include/revolution/os/OS.h

@@ -1,5 +1,5 @@
 Subject: Decode the original material hash through a native pointer-sized carrier
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The RLG decoder stores the wire u32 material hash as a temporary void pointer.
 Convert through uintptr_t before restoring that u32 key on LLP64, preserving

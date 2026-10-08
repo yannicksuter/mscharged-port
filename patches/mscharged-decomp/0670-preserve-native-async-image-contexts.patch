@@ -1,5 +1,5 @@
 Subject: Preserve original AsyncImage bundle callback contexts
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Use the existing BundleAsyncParam at the original OpenAsync/ReadFileAsync boundaries.
 Retain original load states, buffer ownership, texture hashes and request order.

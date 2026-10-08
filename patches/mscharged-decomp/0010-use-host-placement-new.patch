@@ -1,6 +1,6 @@
 Subject: Use standard placement new and native allocation signatures
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The host C++ library supplies placement new. Do not redefine it in the
 shared game header; native allocation operators take size_t. This does not

@@ -1,6 +1,6 @@
 Subject: [PATCH] admit original HBM resources in named frontend diagnostic
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Restore exactly original AsyncLoading services26/27 under an explicit native
 diagnostic. Original creation, requests, callback and finalizer bodies are

@@ -1,7 +1,7 @@
 From: native port compatibility
 Subject: [PATCH] Decode original NIS string address words on native hosts
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Retain the original VM32 stack and six original string consumers. Native calls
 resolve the existing cached Wii address words using the same transport as the

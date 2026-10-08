@@ -1,6 +1,6 @@
 Subject: Separate legacy tweak diagnostics from original native source
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The historical registration wrapper, parsing guards and game-side fixes
 require MSCHARGED_DIAGNOSTIC_TWEAKS. Original native TUs retain retail

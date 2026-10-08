@@ -1,5 +1,5 @@
 Subject: Express the read-only native localization filename literals
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Only the native table pointee becomes const. Keep table pointer mutability, all
 original names/indices and both original filename formatting uses unchanged.

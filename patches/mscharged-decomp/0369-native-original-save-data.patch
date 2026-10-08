@@ -1,6 +1,6 @@
 Subject: [PATCH] Preserve original ordinary-save Wii byte records on native hosts
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 Scope: Serialized-data transport only; original save requests, callbacks, CRC and readiness decisions remain.
 
 diff --git a/src/Game/DB/SaveLoad.cpp b/src/Game/DB/SaveLoad.cpp

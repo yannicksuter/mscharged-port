@@ -1,5 +1,5 @@
 Subject: Restore whole original TPL binding over native header transport
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Retire the port-owned TPLBind loop. The whole original SDK source owns version
 panic, descriptor iteration, null/unpacked branches and the original TRUE stores.

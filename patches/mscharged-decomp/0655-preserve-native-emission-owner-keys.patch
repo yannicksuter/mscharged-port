@@ -1,5 +1,5 @@
 Subject: Preserve original emission owner keys across native pointer ABIs
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Use full-width native address transport through the original manager and
 mixed electric-fence ball helper. Keep original numeric IDs, controller

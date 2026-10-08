@@ -1,6 +1,6 @@
 From: mscharged native port
 Subject: [PATCH] Keep original IPC heap alignment checks native pointer wide
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The original IPC allocator owns live CPU chunks, not serialized device records.
 Retain its best-fit, split, alignment helper, free-list and coalescing flow.

@@ -1,4 +1,4 @@
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 Purpose: Retain original native thread entry typedef and state API names using canonical types/values; no context or scheduler implementation. Requires0455 owning declarations.
 
 diff --git a/libs/RVL_SDK/include/revolution/os/OSThread.h b/libs/RVL_SDK/include/revolution/os/OSThread.h

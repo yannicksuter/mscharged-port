@@ -1,5 +1,5 @@
 Subject: Retain physically stopped native SDK contexts through final power removal
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 The native SDK cannot destroy live original C++ stacks as Wii context removal
 would. Mark only the original final power-off boundary after its real shutdown

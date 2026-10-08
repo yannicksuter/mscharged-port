@@ -1,5 +1,5 @@
 Subject: Read original world-stream scalar words as four-byte big endian
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Adapt only three original serialized word expressions beneath LoadObjects.
 Preserve all branches, callbacks, class selection, raw cursor increments,

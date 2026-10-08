@@ -1,6 +1,6 @@
 Subject: Share original frontend named slide selection reset predicates
 
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 
 Share the original presentation/component clock reset conditions with retained
 native scene playback. Preserve missing-selection clearing, first hash lookup

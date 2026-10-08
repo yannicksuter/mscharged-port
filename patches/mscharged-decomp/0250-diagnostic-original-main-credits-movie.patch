@@ -1,6 +1,6 @@
 From: mscharged-port source integration
 Subject: [PATCH] Select original Credits movie in original-main diagnostic
-Upstream-base: a402726e10728f928959d843a8353a8b51e68cef
+Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
 Classification: temporary diagnostic-only selected source flow.
 Scope: named MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE, no normal game behavior change.
 Prerequisite: original-main native-frame diagnostic0249 and movie0247.
