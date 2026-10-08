@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(mscharged_port VERSION 0.0.1 LANGUAGES C CXX)
+include(cmake/MacOSDeploymentTarget.cmake)
+mscharged_set_macos_deployment_target()
 set(MSCHARGED_PORT_VERSION "${PROJECT_VERSION}-dev")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
