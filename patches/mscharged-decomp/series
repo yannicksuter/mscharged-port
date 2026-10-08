@@ -421,3 +421,4 @@
 0595-native-functor-allocation-size.patch
 0596-use-native-ode-size-type.patch
 0597-preserve-native-list-entry-handles.patch
+0598-use-native-class-allocation-sizes.patch

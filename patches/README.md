@@ -84,6 +84,10 @@ Patches 0596–0597 use the host ODE size declaration and carry native list-node
 handles at pointer width. The original list and allocator operations are tested
 with real addresses above 4 GiB, including Windows' 32-bit `long` ABI.
 
+Patch 0598 extends native `size_t` allocation signatures across original class
+allocators and their matching definitions. Pool selection, allocation bodies
+and console declarations are preserved.
+
 Patch 0532 exposes the original HBM silence array for optional native DSP
 registration before game arena allocation. The host retains its source image
 and permits device reads only; it does not initialize the sound manager.
