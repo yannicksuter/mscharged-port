@@ -440,3 +440,4 @@
 0664-preserve-native-retarget-byte-cursor.patch
 0665-use-windows-native-font-alloca.patch
 0666-native-sdk-scalar-carriers.patch
+0667-native-audio-factory-callback-types.patch
