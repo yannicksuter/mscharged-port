@@ -1,5 +1,5 @@
 Subject: Restore original frontend quad providers and native packet ABI
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
 
 Restore all reconstructed GLDraw3 methods beneath the unchanged original
 frontend decisions. Retain legacy validation only in explicitly diagnostic
@@ -121,7 +121,7 @@ diff --git a/src/Game/Drawable/DrawablePowerup.cpp b/src/Game/Drawable/DrawableP
 --- a/src/Game/Drawable/DrawablePowerup.cpp
 +++ b/src/Game/Drawable/DrawablePowerup.cpp
 @@ -136,7 +136,7 @@
-     glSetTextureState((eGLTextureState)0, 3);
+     glSetTextureState(GLTS_DiffuseWrap, 3);
      glSetCurrentTextureState(glHandleizeTextureState());
  
 -    quad.Attach((eGLView)(u32)GetUnshadowedView(), 0);
@@ -468,33 +468,25 @@ diff --git a/src/NL/glx/glxDisplayList.cpp b/src/NL/glx/glxDisplayList.cpp
 diff --git a/src/NL/glx/glxGX.cpp b/src/NL/glx/glxGX.cpp
 --- a/src/NL/glx/glxGX.cpp
 +++ b/src/NL/glx/glxGX.cpp
-@@ -6,6 +6,8 @@
- // points are declared here rather than through <revolution/gx.h> because that
- // header's <revolution/types.h> and the game's own "types.h" spell the
- // fixed-width typedefs differently.
-+
+@@ -12,7 +12,9 @@
+     void GXSetCullMode(s32 mode);
+     void GXSetCoPlanar(u8 enable);
+     void GXSetNumChans(u8 nChans);
 +#if !defined(MSCHARGED_NATIVE)
- struct GXColor
- {
-     u8 r;
-@@ -13,6 +15,7 @@
-     u8 b;
-     u8 a;
- };
+     void GXSetChanCtrl(s32 chan, u8 enable, s32 amb_src, s32 mat_src, u32 light_mask, s32 diff_fn, s32 attn_fn);
 +#endif
- 
- extern "C"
- {
-@@ -46,6 +49,8 @@
+     void GXSetTevColorIn(s32 stage, s32 a, s32 b, s32 c, s32 d);
+     void GXSetTevAlphaIn(s32 stage, s32 a, s32 b, s32 c, s32 d);
+     void GXSetTevColorOp(s32 stage, s32 op, s32 bias, s32 scale, u8 clamp, s32 out_reg);
+@@ -34,6 +36,7 @@
  
  }
  
-+
 +#if !defined(MSCHARGED_NATIVE)
  enum
  {
      GX_CULL_BACK = 2,
-@@ -86,6 +91,10 @@
+@@ -68,6 +71,10 @@
  
      GX_MAX_TEVSTAGE = 16
  };

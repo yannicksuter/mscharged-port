@@ -70,12 +70,11 @@ debug providers. Native services supply address checks, stack unwinding and
 terminal halt behavior; original assertion expressions and initialization side
 effects remain enabled. Full HOME-menu startup is still separate work.
 
-The current pin is `8b0505a4`, which source-links `Variant.cpp` and
-`ImpostorManager.cpp` and names the wind-debris sources. The temporary impostor
-render-count patch is retired because upstream removed that dependency. Native
-VI/GX aliases and retrace callbacks follow the new SDK header ownership; MSL
-character tables use their original owning declarations. Model duplication
-remains in the original `glModel.cpp`.
+The current pin is `97eb01ed`, which additionally source-links `Fielder.cpp`
+and `CrowdRiot.cpp`. Upstream's typed DrawableBall owners replace patch0449.
+Native animation/input interfaces follow the renamed originals; GX declarations
+and clock transport follow the new SDK headers. Source selection remains
+explicit: an upstream match alone does not establish native gameplay readiness.
 
 Patch 0532 exposes the original HBM silence array for optional native DSP
 registration before game arena allocation. The host retains its source image

@@ -1,55 +1,17 @@
 From: mscharged native port
-Subject: [PATCH] Reuse native SDK colour/compare types and forward the hardware clock
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Subject: [PATCH] Preserve native retrace callback and screenshot scalar widths
+Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
 
-The canonical native GX header already supplies the original four-byte colour
-and compare value. Keep the console declarations, and use those SDK identities
-on native builds. Read the actual Wii-configured native bus clock beneath the
-original swap timing arithmetic rather than dereferencing a console address.
-No source function body, callback selection, frame counter or swap decision
-changes. Native runtime swap/screenshot/VI/GX execution remains unqualified.
+Use four-byte native retrace callback arguments and GXPeekARGB output cells.
+Use the native SDK GXBool output type for hardware status cells.
+Upstream now uses shared SDK declarations and clock macros, retiring the old
+local colour/compare guards and hardware-clock hunk. Native clock transport
+remains in0244. Preserve source callbacks, screenshot and swap decisions.
 
 diff --git a/src/NL/glx/glxSwap.cpp b/src/NL/glx/glxSwap.cpp
 --- a/src/NL/glx/glxSwap.cpp
 +++ b/src/NL/glx/glxSwap.cpp
-@@ -47,6 +47,7 @@
-     int fclose(FILE* file);
- }
- 
-+#ifndef MSCHARGED_NATIVE
- struct GXColor
- {
-     u8 r;
-@@ -54,6 +55,7 @@
-     u8 b;
-     u8 a;
- };
-+#endif
- 
- extern "C" void GXSetCopyClear(GXColor clear_clr, u32 clear_z);
- 
-@@ -61,12 +63,19 @@
- // the nlConfig translation unit and called from here as well.
- void* ConfigParserAllocate(unsigned long size, unsigned int alignment, bool fromEnd);
- 
-+#ifndef MSCHARGED_NATIVE
- enum
- {
-     GX_LEQUAL = 3
- };
--
-+#endif
-+
-+#ifdef MSCHARGED_NATIVE
-+extern "C" u32 ChargedGetBusClock();
-+#define OS_BUS_CLOCK                 ChargedGetBusClock()
-+#else
- #define OS_BUS_CLOCK                 (*(u32*)0x800000F8)
-+#endif
- #define OS_TIMER_CLOCK               (OS_BUS_CLOCK / 4)
- #define OSTicksToMicroseconds(ticks) (((ticks) * 8) / (OS_TIMER_CLOCK / 125000))
- 
-@@ -96,8 +96,16 @@
+@@ -42,8 +42,16 @@
  static void glx_ScreenCapture(bool isMovie);
  static void PutPixel(u8* dst, u32 argbColor);
  static void loading_indicator();
@@ -66,7 +28,19 @@ diff --git a/src/NL/glx/glxSwap.cpp b/src/NL/glx/glxSwap.cpp
  static void draw_done_cb();
  static void AdvanceFrame();
  static void ReportGPStatus();
-@@ -274,12 +282,20 @@
+@@ -116,7 +124,11 @@
+     char filename[0x40];
+     FILE* file;
+     TargaHeader header;
++#if defined(MSCHARGED_NATIVE)
++    u32 argbColor;
++#else
+     unsigned long argbColor;
++#endif
+     s32 pixelOffset;
+     s32 y, x;
+     u8* imageData;
+@@ -220,12 +232,20 @@
      }
  }
  
@@ -87,3 +61,23 @@ diff --git a/src/NL/glx/glxSwap.cpp b/src/NL/glx/glxSwap.cpp
  {
      HandleSoftReset();
      if (glx_bLoadingIndicator != 0)
+@@ -310,11 +330,19 @@
+ 
+ static void ReportGPStatus()
+ {
++#if defined(MSCHARGED_NATIVE)
++    GXBool overhi;
++    GXBool underlow;
++    GXBool readIdle;
++    GXBool cmdIdle;
++    GXBool brkpt;
++#else
+     u8 overhi;
+     u8 underlow;
+     u8 readIdle;
+     u8 cmdIdle;
+     u8 brkpt;
++#endif
+ 
+     GXGetGPStatus(&overhi, &underlow, &readIdle, &cmdIdle, &brkpt);
+     OSReport("overhi = %s\n", overhi ? "true" : "false");

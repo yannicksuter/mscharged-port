@@ -1,39 +1,40 @@
 From: mscharged-port native source preparation
 Subject: [PATCH] Adapt original glPlat canonical SDK compiler ABI
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
 Classification: permanent host compiler/platform/data ABI adaptation.
 
 diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
 --- a/src/NL/gl/glPlat.cpp
 +++ b/src/NL/gl/glPlat.cpp
-@@ -1,7 +1,12 @@
+@@ -1,9 +1,15 @@
 +#if defined(MSCHARGED_NATIVE)
 +#include <dolphin/gx.h>
 +#include <dolphin/vi.h>
++#include <revolution/os/OSError_fwd.h>
 +#else
  #include <revolution/gx/GXPixel.h>
  #include <revolution/gx/GXFrameBuf.h>
  #include <revolution/vi/vi_fwd.h>
+ #include <revolution/gx/GXMisc_fwd.h>
+ #include <revolution/os/OSError_fwd.h>
  #include <revolution/gx/GXTransform.h>
 +#endif
  
  #include "Game/TweakQuery.h"
  #include "NL/nlDebug.h"
-@@ -25,9 +30,11 @@
+@@ -25,8 +30,10 @@
  extern "C"
  {
      void DCFlushRange(void* address, u32 length);
 +#if !defined(MSCHARGED_NATIVE)
      void GXSetMisc(s32 token, s32 value);
-     void GXFlush();
      void* GXInit(void* fifo, u32 size);
 +#endif
  
      void SCInit();
      u32 SCCheckStatus();
-@@ -35,11 +42,17 @@
+@@ -35,10 +42,16 @@
      u8 SCGetEuRgb60Mode();
-     void OSReport(const char* format, ...);
  
 +#if !defined(MSCHARGED_NATIVE)
      void GXInitFifoLimits(void* fifo, u32 highWatermark, u32 lowWatermark);

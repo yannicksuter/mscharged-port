@@ -1,6 +1,6 @@
 Subject: [PATCH] preserve original emission source and native borrowed address words
 
-Upstream-base: 8b0505a47990d684d1588749f40babb9c0483490
+Upstream-base: 97eb01eda53350cf42dbd5ffb01c209db2c36a2c
 
 Restore literal controller/manager decisions, preserve retail numeric word
 overflow, and transport genuine native pointer/callback bits without truncation.
@@ -292,7 +292,7 @@ diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
 diff --git a/src/Game/CrowdRiot.cpp b/src/Game/CrowdRiot.cpp
 --- a/src/Game/CrowdRiot.cpp
 +++ b/src/Game/CrowdRiot.cpp
-@@ -271,7 +271,11 @@
+@@ -327,7 +327,11 @@
                      placeholder0));
              controller->SetUpdateCallback(callback);
          }
@@ -301,7 +301,7 @@ diff --git a/src/Game/CrowdRiot.cpp b/src/Game/CrowdRiot.cpp
 +#else
          controller->m_uUserData = (u32)this;
 +#endif
-         PlaySound(13, 0x198B7ED3, "CrowdRiot", this);
+         PlayCrowdRiotSound(this);
      }
  }
 diff --git a/src/Game/Effects/EmissionController.cpp b/src/Game/Effects/EmissionController.cpp
