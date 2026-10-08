@@ -76,6 +76,10 @@ Native animation/input interfaces follow the renamed originals; GX declarations
 and clock transport follow the new SDK headers. Source selection remains
 explicit: an upstream match alone does not establish native gameplay readiness.
 
+Patch 0595 uses the native allocation size type in functor and animation
+controller declarations, including Windows' 64-bit pointer/32-bit `long` ABI.
+Original pool selection and allocation bodies remain unchanged.
+
 Patch 0532 exposes the original HBM silence array for optional native DSP
 registration before game arena allocation. The host retains its source image
 and permits device reads only; it does not initialize the sound manager.

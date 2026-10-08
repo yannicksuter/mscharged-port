@@ -418,3 +418,4 @@
 0591-native-original-matrix-inverse-alias.patch
 0593-original-home-task-admission.patch
 0594-native-terminal-thread-context-lifetime.patch
+0595-native-functor-allocation-size.patch
