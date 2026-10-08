@@ -1,6 +1,6 @@
 Subject: Share original audio options visual and volume target kernels
 
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Original source methods delegate to the same visual, listener, category clamp
 and target equations as checked native owners. Global GameInfo, SaveLoad, NAV

@@ -1,5 +1,5 @@
 Subject: Restore original NIS source flow and retail-compatible native address/stores
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Restore original timing and overlay bodies. Native-only address casts and exact
 whole-header byte stores preserve the retail overlapping dictionary writes.

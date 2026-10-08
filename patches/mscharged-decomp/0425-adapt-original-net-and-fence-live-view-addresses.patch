@@ -1,5 +1,5 @@
 Subject: [PATCH] Adapt original net/fence live view addresses and compiler syntax
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Preserve original weak symbols, live view choices, quad submission and
 secondary-NIS save/restore. Use the existing pointer-width view carrier

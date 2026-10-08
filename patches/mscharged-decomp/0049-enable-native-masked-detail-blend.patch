@@ -1,5 +1,5 @@
 Subject: Select original masked detail blending with bounded native streams
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Retain the original mask-weighted detail blend, four/five-stage lighting,
 projected shadows and diffuse alpha preparation. Adapt packed vertex data to

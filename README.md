@@ -10,7 +10,7 @@ source into native machine code; it is not a recompilation of the PowerPC binary
 
 ## Status
 
-**Work in progress.** The port grows alongside the unfinished decompilation.
+**Work in progress.** Native platform integration is ongoing.
 Experimental startup and menus run on Linux; a complete playable game and
 Windows/macOS game support remain in development.
 

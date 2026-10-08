@@ -1,6 +1,6 @@
 From: mscharged-port contributors
 Subject: [PATCH] Select matched original pose accumulation with native ownership
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Select original Init/Blend/BuildNodeMatrices equations from the matching unit.
 Pair native arrays with game-arena allocation/free, define scratch storage and

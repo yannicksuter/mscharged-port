@@ -1,5 +1,5 @@
 Subject: [PATCH] Route original RFL PS matrix requests to the sole native SDK
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 --- a/libs/RVL_SDK/include/revolution/mtx/mtx.h
 +++ b/libs/RVL_SDK/include/revolution/mtx/mtx.h

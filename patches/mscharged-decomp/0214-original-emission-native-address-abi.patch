@@ -1,6 +1,6 @@
 Subject: [PATCH] preserve original emission source and native borrowed address words
 
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Restore literal controller/manager decisions, preserve retail numeric word
 overflow, and transport genuine native pointer/callback bits without truncation.
@@ -108,7 +108,7 @@ diff --git a/src/Game/AI/DesireSuperPower.cpp b/src/Game/AI/DesireSuperPower.cpp
          controller->m_uUserData = (u32)self->m_pFielder;
 +#endif
          controller->SetPosition(
-             self->m_pFielder->mUnidentified024.m_v3Position);
+             self->m_pFielder->m_DetChar.m_v3Position);
          controller->SetVelocity(
 @@ -1562,7 +1566,11 @@
                      if (group != 0)
@@ -119,14 +119,14 @@ diff --git a/src/Game/AI/DesireSuperPower.cpp b/src/Game/AI/DesireSuperPower.cpp
 +#else
                          emitter->m_uUserData = (unsigned int)m_pFielder;
 +#endif
-                         emitter->SetPosition(m_pFielder->mUnidentified024.m_v3Position);
-                         emitter->SetVelocity(m_pFielder->mUnidentified024.m_v3Velocity);
+                         emitter->SetPosition(m_pFielder->m_DetChar.m_v3Position);
+                         emitter->SetVelocity(m_pFielder->m_DetChar.m_v3Velocity);
                          emitter->SetUpdateCallback(UpdateEmitterFromCharacterBackward);
 diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
 --- a/src/Game/AI/GoalieActions.cpp
 +++ b/src/Game/AI/GoalieActions.cpp
 @@ -1606,7 +1606,11 @@
-         nlSNPrintf(effectName, sizeof(effectName), "%s_mega_bg", mpShooter->mUnidentified11C->mName);
+         nlSNPrintf(effectName, sizeof(effectName), "%s_mega_bg", mpShooter->m_pCharacterInfo->mName);
          EffectsGroup* group = EmissionManager::Instance()->GetEffectsGroup(effectName);
          EmissionController* effect = EmissionManager::Instance()->Create(group, 3, true, 0);
 +#if defined(MSCHARGED_NATIVE)
@@ -213,7 +213,7 @@ diff --git a/src/Game/Character.cpp b/src/Game/Character.cpp
 +#endif
      pEmissionController->SetPoseAccumulator(*m_pPoseAccumulator);
      pEmissionController->SetAnimController(*m_pCurrentAnimController);
-     pEmissionController->m_aFacing = mUnidentified024.m_aActualFacingDirection;
+     pEmissionController->m_aFacing = m_DetChar.m_aActualFacingDirection;
 diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
 --- a/src/Game/CharacterTriggers.cpp
 +++ b/src/Game/CharacterTriggers.cpp
@@ -613,8 +613,8 @@ diff --git a/src/Game/Physics/PhysicsWaluigiWall.cpp b/src/Game/Physics/PhysicsW
 +++ b/src/Game/Physics/PhysicsWaluigiWall.cpp
 @@ -449,7 +449,11 @@
                      EmissionController* controller = EmissionManager::Instance()->Create(group, 3, true, 0);
-                     controller->SetPosition(owner->mUnidentified024.m_v3Position);
-                     controller->SetVelocity(owner->mUnidentified024.m_v3Velocity);
+                     controller->SetPosition(owner->m_DetChar.m_v3Position);
+                     controller->SetVelocity(owner->m_DetChar.m_v3Velocity);
 +#if defined(MSCHARGED_NATIVE)
 +                    controller->m_uUserData = reinterpret_cast<EmissionAddressWord>(wall);
 +#else

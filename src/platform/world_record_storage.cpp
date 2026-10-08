@@ -55,7 +55,7 @@ Layout Describe(WorldRecordStorageLayout kind) {
     case WorldRecordStorageLayout::Physics:
         return {0x90, sizeof(WorldPhysicsDrawable), alignof(WorldPhysicsDrawable)};
     case WorldRecordStorageLayout::CommonObject:
-        return {0x60, sizeof(WorldObject_80129EE0), alignof(WorldObject_80129EE0)};
+        return {0x60, sizeof(WorldHelperObject), alignof(WorldHelperObject)};
     case WorldRecordStorageLayout::Crowd:
         return {0x80, sizeof(CrowdLayoutObject), alignof(CrowdLayoutObject)};
     case WorldRecordStorageLayout::NPC:
@@ -145,12 +145,12 @@ void Physics(unsigned char* dst, const unsigned char* src) {
 }
 
 #define OFFSET_EQ(A, F, B, G) static_assert(offsetof(A, F) == offsetof(B, G))
-OFFSET_EQ(WorldDrawable, m_uHashID, WorldObject_80129EE0, mUnidentified004);
-OFFSET_EQ(WorldDrawable, m_pWorldContext, WorldObject_80129EE0, m_pWorld);
-OFFSET_EQ(WorldDrawable, m_nAnimNode, WorldObject_80129EE0, m_nAnimNode);
-OFFSET_EQ(WorldDrawable, m_pAnimController, WorldObject_80129EE0, m_pAnimController);
-OFFSET_EQ(WorldDrawable, mUnidentified1C, WorldObject_80129EE0, mUnidentified01C);
-OFFSET_EQ(WorldDrawable, mWorldMatrix, WorldObject_80129EE0, mWorldMatrix);
+OFFSET_EQ(WorldDrawable, m_uHashID, WorldHelperObject, mUnidentified004);
+OFFSET_EQ(WorldDrawable, m_pWorldContext, WorldHelperObject, m_pWorld);
+OFFSET_EQ(WorldDrawable, m_nAnimNode, WorldHelperObject, m_nAnimNode);
+OFFSET_EQ(WorldDrawable, m_pAnimController, WorldHelperObject, m_pAnimController);
+OFFSET_EQ(WorldDrawable, mUnidentified1C, WorldHelperObject, mUnidentified01C);
+OFFSET_EQ(WorldDrawable, mWorldMatrix, WorldHelperObject, mWorldMatrix);
 OFFSET_EQ(WorldDrawable, m_uHashID, WorldAnimObject, m_uHashID);
 OFFSET_EQ(WorldDrawable, m_uRenderLayer, WorldAnimObject, m_pad08);
 OFFSET_EQ(WorldDrawable, m_pWorldContext, WorldAnimObject, m_pWorld);
@@ -158,7 +158,7 @@ OFFSET_EQ(WorldDrawable, m_nAnimNode, WorldAnimObject, m_nAnimNode);
 OFFSET_EQ(WorldDrawable, m_pAnimController, WorldAnimObject, m_pAnimController);
 OFFSET_EQ(WorldDrawable, mUnidentified1C, WorldAnimObject, m_pad1C);
 OFFSET_EQ(WorldDrawable, mWorldMatrix, WorldAnimObject, mWorldMatrix);
-static_assert(alignof(WorldObject_80129EE0) == 8);
+static_assert(alignof(WorldHelperObject) == 8);
 #undef OFFSET_EQ
 
 void Decode(WorldRecordStorageLayout kind, unsigned char* dst, const unsigned char* src) {
@@ -191,7 +191,7 @@ void Decode(WorldRecordStorageLayout kind, unsigned char* dst, const unsigned ch
         OpaquePrefix(dst, offsetof(WorldNPC, mUnidentified004), src, 28);
         Word4(dst, offsetof(WorldNPC, mTransform), src, 0x20, 16);
         WordLong(dst, offsetof(WorldNPC, mTemplateHash), src, 0x60);
-        Bytes(dst, offsetof(WorldNPC, mUnidentified064), src, 0x64, 12);
+        Bytes(dst, offsetof(WorldNPC, mPadding64), src, 0x64, 12);
         return;
     case WorldRecordStorageLayout::StadiumDrawable:
     case WorldRecordStorageLayout::StadiumHighRange:
@@ -204,7 +204,7 @@ void Decode(WorldRecordStorageLayout kind, unsigned char* dst, const unsigned ch
     case WorldRecordStorageLayout::StadiumMarker:
         Prefix(dst, src);
         Word4(dst, offsetof(StadiumFEModelMarker, mMarkerID), src, 0x60);
-        Bytes(dst, offsetof(StadiumFEModelMarker, mUnidentified064), src, 0x64, 12);
+        Bytes(dst, offsetof(StadiumFEModelMarker, m_pad64), src, 0x64, 12);
         return;
     case WorldRecordStorageLayout::ShadowHeight:
         Prefix(dst, src);

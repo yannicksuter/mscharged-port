@@ -1,5 +1,5 @@
 Subject: Restore original frontend pointer/back buttons and native event-owner width
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 Classification: original whole-source restoration; native event owner pointer ABI only.
 
 diff --git a/src/Game/FE/fePointerButton.cpp b/src/Game/FE/fePointerButton.cpp

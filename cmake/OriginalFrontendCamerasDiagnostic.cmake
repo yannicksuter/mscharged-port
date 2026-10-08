@@ -29,7 +29,7 @@ function(mscharged_select_original_frontend_cameras target)
         src/Game/Camera/DebugCam.cpp
         src/Game/Camera/rumblefilter.cpp
         src/Game/Camera/noisefilter.cpp
-        src/Game/Camera/tu_800F9460.cpp
+        src/Game/Camera/GameplayCameraEffects.cpp
         src/Game/FE/feCamera.cpp
         src/Game/AI/AiUtil.cpp
         src/Game/objectblur.cpp

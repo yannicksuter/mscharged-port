@@ -153,7 +153,7 @@ void Valid()
         Check(!weak.expired(),"Retained native animation disappeared");
     }
     for(unsigned roots:{0u,1u})
-    {SAnimAssets assets(Fixture(1,roots));auto a=assets.At(0);Check(a->Root(0).rotation==(roots?65530:0)&&a->Root(1).rotation==(roots?65530:0),"Zero/single root changed");Bits(a->Data().UnidentifiedGetLinearSpeed(),0);}
+    {SAnimAssets assets(Fixture(1,roots));auto a=assets.At(0);Check(a->Root(0).rotation==(roots?65530:0)&&a->Root(1).rotation==(roots?65530:0),"Zero/single root changed");Bits(a->Data().GetLinearSpeed(),0);}
     auto multi=Fixture();Animation(multi,7,0,false,5);SAnimAsset::Handle retained;
     {SAnimAssets assets(multi);Check(assets.Size()==2&&assets.At(1)->Data().m_nNumKeys==7,"Inventory ordering/absolute alignment differs");retained=assets.At(1);Reject([&]{assets.At(2);});}
     multi.clear();Check(retained->Data().GetNumFrames()==7,"Track depended on inventory/file lifetime");

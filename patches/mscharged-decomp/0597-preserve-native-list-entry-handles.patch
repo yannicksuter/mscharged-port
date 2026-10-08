@@ -1,6 +1,6 @@
 Subject: Preserve native list entry handles at pointer width
 
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Project native node-address carriers to uintptr_t, including pointer outputs.
 Retain the original unsigned-long spelling in the console projection and all

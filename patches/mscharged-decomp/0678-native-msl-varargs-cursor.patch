@@ -1,5 +1,5 @@
 # Address the actual native va_list cursor without copying or changing format requests.
-# Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+# Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 --- a/src/MSL/wprintf.c
 +++ b/src/MSL/wprintf.c
 @@ -1023,7 +1023,17 @@

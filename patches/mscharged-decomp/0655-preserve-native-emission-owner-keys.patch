@@ -1,5 +1,5 @@
 Subject: Preserve original emission owner keys across native pointer ABIs
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Use full-width native address transport through the original manager and
 mixed electric-fence ball helper. Keep original numeric IDs, controller
@@ -107,18 +107,18 @@ fields, algorithms, and console type/cast tokens. No ownership is added.
              EmissionManager::Instance()->Destroy(
 -                (unsigned long)pBallTrail, NULL);
 +                MSCHARGED_EMISSION_OWNER_ADDRESS(pBallTrail), NULL);
-             if (pBallTrail->mUnidentified038 != NULL)
+             if (pBallTrail->blurHandler != NULL)
              {
-                 pBallTrail->mUnidentified038->Die(lbl_806DB54C);
+                 pBallTrail->blurHandler->Die(lbl_806DB54C);
 @@ -3445,7 +3445,7 @@
      if (!pBallTrail->visible)
      {
          EmissionManager::Instance()->Destroy(
 -            (unsigned long)pBallTrail, NULL);
 +            MSCHARGED_EMISSION_OWNER_ADDRESS(pBallTrail), NULL);
-         if (pBallTrail->mUnidentified038 != NULL)
+         if (pBallTrail->blurHandler != NULL)
          {
-             pBallTrail->mUnidentified038->Die(lbl_806DB54C);
+             pBallTrail->blurHandler->Die(lbl_806DB54C);
 --- a/src/Game/BasicStadium.cpp
 +++ b/src/Game/BasicStadium.cpp
 @@ -314,7 +314,7 @@
@@ -218,7 +218,7 @@ fields, algorithms, and console type/cast tokens. No ownership is added.
  
      if (!pCharacter->IsPlayingEffect(pGroup))
 @@ -1897,7 +1897,7 @@
-     if (pFielder->mUnidentified024.m_eCharacterClass == 3)
+     if (pFielder->m_DetChar.m_eCharacterClass == 3)
      {
          EffectsGroup* pGroup = EmissionManager::Instance()->GetEffectsGroup("dk_deke");
 -        EmissionManager::Instance()->Destroy((unsigned long)g_pBall, pGroup);

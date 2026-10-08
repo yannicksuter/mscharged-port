@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: [PATCH] Preserve original 96-byte audio stream headers on native hosts
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Keep the six Wii numeric words at32 bits, retaining original pool slot sizes,
 header/read strides and every voice/read state decision. Convert completed

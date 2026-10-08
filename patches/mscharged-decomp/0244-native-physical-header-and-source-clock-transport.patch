@@ -1,6 +1,6 @@
 Subject: [PATCH] Keep native physical hardware declarations external and route source clock reads
 
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 Prepared-preimage: exact strict 0244 prefix; original time declarations moved to OSTime_fwd
 
 MWCC absolute-address declarations must not become allocated native BSS after

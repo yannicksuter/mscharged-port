@@ -1,6 +1,6 @@
 Subject: Separate legacy tweak diagnostics from original native source
 
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 The historical registration wrapper, parsing guards and game-side fixes
 require MSCHARGED_DIAGNOSTIC_TWEAKS. Original native TUs retain retail
@@ -304,7 +304,7 @@ diff --git a/src/Game/TweakNameRecycler.cpp b/src/Game/TweakNameRecycler.cpp
 --- a/src/Game/TweakNameRecycler.cpp
 +++ b/src/Game/TweakNameRecycler.cpp
 @@ -24,7 +24,11 @@
-     /* 0x14 */ u8 mUnidentified014[4]; // not accessed by retained code
+     /* 0x14 */ u8 m_pad014[4]; // not accessed by retained code
  }; // size: 0x18
  
 +#ifdef MSCHARGED_NATIVE

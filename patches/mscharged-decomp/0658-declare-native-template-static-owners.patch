@@ -1,5 +1,5 @@
 Subject: Declare actual native singleton specializations and timeline instantiations before use
-Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 --- a/include/Game/GameInfo.h
 +++ b/include/Game/GameInfo.h
@@ -91,17 +91,17 @@ Upstream-base: 57e225ad76854180e5376c060a4faea18cccfbca
  
  class AISandbox : public nlSingleton<AISandbox>
  {
---- a/include/Game/Camera/tu_800F9460.h
-+++ b/include/Game/Camera/tu_800F9460.h
+--- a/include/Game/Camera/GameplayCameraEffects.h
++++ b/include/Game/Camera/GameplayCameraEffects.h
 @@ -3,6 +3,12 @@
  
  #include "NL/nlMath.h"
  #include "NL/nlSingleton.h"
 +
 +#if defined(MSCHARGED_NATIVE)
-+class UnidentifiedCameraEffects;
++class GameplayCameraEffects;
 +template <>
-+UnidentifiedCameraEffects* nlSingleton<UnidentifiedCameraEffects>::s_pInstance;
++GameplayCameraEffects* nlSingleton<GameplayCameraEffects>::s_pInstance;
 +#endif
  #include "types.h"
  
