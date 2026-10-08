@@ -383,3 +383,4 @@
 0525-original-initial-loading-message-admission.patch
 0526-restore-original-sanim-decode-owner.patch
 0523-native-original-hbm-task-thread-types.patch
+0524-native-original-hbm-task-storage.patch

@@ -25,6 +25,8 @@ find_package(Threads REQUIRED)
 if(BUILD_TESTING)
     include(cmake/OriginalHBMTaskLifecycle.cmake)
     mscharged_add_original_hbm_task_lifecycle_tests()
+    include(cmake/OriginalHBMTaskCapacity.cmake)
+    mscharged_add_original_hbm_task_capacity_tests()
 endif()
 
 add_library(mscharged_original_main_credits_module MODULE

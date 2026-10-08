@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0524 sizes the original HBM task pool from its actual native task and MEM
+layouts, preserving 128 slots and the original allocation/execution/cancellation
+logic. Native owning headers and the unit-header size query are adapted too.
+
 Patch 0523 adapts original HBM task headers and live message comparisons to
 native pointer widths. A separate test module exercises original worker
 creation, messages and joins; full HOME-menu initialization remains pending.
