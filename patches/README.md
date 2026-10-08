@@ -19,6 +19,9 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0528 retains native-width original HBM voice callbacks and checked SDK
+physical addresses while preserving the original voice and sample calculations.
+
 Patch 0530 adapts original HBM UI declarations and native pointer transport,
 including the original PowerPC float selection/sign operations. The original
 UI control flow and resource requests are retained.
