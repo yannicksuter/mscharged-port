@@ -598,14 +598,23 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
                 frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt(); ++frames;
                 // The original frame performs every GX/VI wait it needs. Join the
-                // FIFO/render workers only for host observations: until the first
-                // encoded draw, every 30 frames and before a due stage or readback.
+                // FIFO/render workers only for a pending, usable host observation.
                 const bool logoDue=sourceBoot && lastBootPhase==3 && !bootLogoCaptured &&
                     now-bootLogoStart>=std::chrono::milliseconds(600);
                 const bool stageDue=!stageAnnounced && now-stageStart>=std::chrono::milliseconds(500);
-                const bool captureDue=now-stageStart>=std::chrono::seconds(resizeStage?8:3) &&
-                    (!snapshot || (resizeCheck && resizeStage<2));
-                if(encoded && frames%30 && !logoDue && !stageDue && !captureDue) {
+                const bool captureDue=!snapshot &&
+                    now-stageStart>=std::chrono::seconds(resizeStage?8:3) &&
+                    (!optionsScene || optionsReady) && bootReady;
+                if(!logoDue && !stageDue && !captureDue) {
+                    std::this_thread::yield(); continue;
+                }
+                // This mutex-protected completion is only an eligibility probe.
+                // Keep both joins and the retained snapshot query below before
+                // reading worker-owned draw statistics/EFB storage or pixels.
+                AuroraVIPresentedState observed{};
+                if(!aurora_get_presented_video_output_state(&observed) ||
+                   !observed.framebuffer || observed.black || !observed.copy_revision ||
+                   observed.presentation_sequence<3) {
                     std::this_thread::yield(); continue;
                 }
                 AuroraGXSync(); aurora::gfx::synchronize();
@@ -641,8 +650,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                         viewport.left,viewport.top,viewport.width,viewport.height);
                     std::fflush(stdout); stageAnnounced=true;
                 }
-                if(now-stageStart>=std::chrono::seconds(resizeStage?8:3) && nativePresented && encoded &&
-                   (!optionsScene || optionsReady) && bootReady) {
+                if(captureDue && nativePresented && encoded) {
                     if(!snapshot) {
                         const auto filename=resizeCheck?
                             "original-main-native-xfb-stage"+std::to_string(resizeStage)+".ppm":
