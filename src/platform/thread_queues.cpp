@@ -767,6 +767,70 @@ extern "C" void OSCancelThread(OSThread* thread) {
     JoinHost(native);
 }
 namespace mscharged::platform {
+NativeThreadPowerRemovalStatus ValidateNativeThreadsForPowerRemoval() {
+    if (NativeInterruptsEnabled() || !NativeInterruptWaitAllowed())
+        throw std::logic_error("Native terminal thread fence requires the source plain interrupt mask");
+    auto& caller = Current();
+    auto& state = State();
+    std::lock_guard lock(state.latch);
+    if (!caller.active || caller.waiting || caller.servicing || caller.self_suspended ||
+            caller.self_suspend_pending || caller.sdk.state != OS_THREAD_STATE_RUNNING ||
+            caller.sdk.suspend != 0 || caller.sdk.queue || caller.sdk.mutex ||
+            caller.sdk.queueMutex.head || caller.sdk.queueMutex.tail ||
+            (state.reschedule > 0 && state.scheduler_owner != &caller))
+        throw std::logic_error("Native terminal caller still borrows an unfinished SDK lifetime");
+
+    NativeThreadPowerRemovalStatus status;
+    // Complete is published only after the original entry and all ordinary
+    // native C++ frame destructors have ended. A std::thread may still have a
+    // joinable handle at that point; power removal retains that handle/image.
+    // Inactive joined/detached descriptors may already be freed by their source
+    // owner, so only native metadata is read in this pass, never their sdk alias.
+    for (const auto& entry : state.managed) {
+        const auto& native = *entry.second;
+        if (&native == &caller) continue;
+        if (!native.completed || native.failure || native.waiting || native.servicing ||
+                native.self_suspended || native.self_suspend_pending)
+            throw std::logic_error("Native power removal has an unfinished or failed source worker");
+        ++status.completed_workers;
+    }
+    for (const auto& entry : state.live) {
+        const auto& native = *entry.second;
+        if (&native != &caller && !native.managed)
+            throw std::logic_error("Native power removal still owns a foreign SDK caller");
+    }
+
+    // Original OSCancelThread leaves joinable threads MORIBUND in this actual
+    // active list; OSReset::KillThreads does not join them. Verify the retained
+    // source records without changing their state, links, results or ownership.
+    OSThread* previous{};
+    std::size_t count{};
+    bool found_caller{};
+    for (auto* thread = state.active.head; thread; thread = thread->linkActive.next) {
+        if (++count > state.live.size())
+            throw std::logic_error("Native terminal active thread list has a cycle");
+        auto& native = Find(state, thread);
+        if (!native.active || thread->linkActive.prev != previous)
+            throw std::logic_error("Native terminal active thread list ownership is invalid");
+        if (&native == &caller) {
+            found_caller = true;
+        } else {
+            if (!native.managed || !native.completed || native.failure ||
+                    thread->state != OS_THREAD_STATE_MORIBUND || thread->queue ||
+                    thread->mutex || thread->queueMutex.head || thread->queueMutex.tail ||
+                    thread->queueJoin.head || thread->queueJoin.tail)
+                throw std::logic_error("Native terminal source descriptor is not genuinely quiescent");
+            ++status.retained_moribund_threads;
+        }
+        previous = thread;
+    }
+    std::size_t active_count{};
+    for (const auto& entry : state.live) if (entry.second->active) ++active_count;
+    if (!found_caller || previous != state.active.tail || count != active_count)
+        throw std::logic_error("Native terminal source caller/list ownership is invalid");
+    return status;
+}
+
 void DrainNativeThreadLifetimes() {
     if (!NativeInterruptWaitAllowed())
         throw std::logic_error("Cannot retire SDK workers inside an interrupt/host exclusion");

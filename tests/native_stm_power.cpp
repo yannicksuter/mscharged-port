@@ -4,6 +4,7 @@
 #include "platform/ios_device.h"
 #include "platform/stm_device.h"
 #include "platform/thread_registry_abi.h"
+#include "platform/thread_queues.h"
 #include "platform/video_device.h"
 #include <aurora/video.h>
 #include <revolution/os.h>
@@ -11,6 +12,9 @@
 #include <dolphin/vi.h>
 
 #include <array>
+#include <atomic>
+#include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
@@ -22,6 +26,10 @@ namespace {
 unsigned checks{}, completions{}, verifications{};
 std::thread::id owner;
 OSContext* context;
+OSThread* retained_thread{};
+OSThread retained_image{};
+std::atomic<unsigned> thread_entries{};
+
 void Check(bool value, const char* message) {
     ++checks;
     if (!value) throw std::runtime_error(message);
@@ -48,6 +56,14 @@ void Quiescent(void* opaque, const NativeSTMPowerRequest& request) {
         "Received request changed actual device/input ownership");
     for (auto byte : request.input)
         Check(!byte, "Cold original shutdown changed its source32-byte input");
+    if (retained_thread) {
+        const auto terminal=ValidateNativeThreadsForPowerRemoval();
+        Check(terminal.completed_workers==1&&terminal.retained_moribund_threads==1,
+            "Actual completed source descriptor was not retained through terminal power");
+        Check(std::memcmp(retained_thread,&retained_image,sizeof(retained_image))==0,
+            "Terminal power changed the original MORIBUND descriptor/list/result");
+        Check(thread_entries==0||thread_entries==1,"Terminal power repeated a source worker entry");
+    }
     // This leaf owns only the real CPU VI/IRQ and STM/IOS endpoints. No audio,
     // DVD, renderer or game owner exists here; their full-drain predicates must
     // be provided by the production owner before any ResetTask admission.
@@ -59,9 +75,11 @@ s32 Pending(s32, void*) { ++completions; return IPC_RESULT_OK; }
 void* NeverEntered(void*) {
     throw std::logic_error("Parked source worker entry must not run in this leaf");
 }
+void* Returned(void* value) { ++thread_entries;return value; }
 void Run(const std::string& mode) {
     owner = std::this_thread::get_id();
     context = OSGetCurrentContext();
+    (void)OSGetCurrentThread(); // Real default SDK caller exists before borrowed worker records.
     InitializeNativeInterruptController();
     ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT, false);
     VIInit(); // Actual CPU VI owner, with no GPU/output endpoint installed.
@@ -79,9 +97,27 @@ void Run(const std::string& mode) {
         Check(IOS_OpenAsync("/dev/stm/immediate", IPC_OPEN_NONE, Pending, &checks) == 0
             && GetNativeIOSStatus().pending == 1 && !completions,
             "Actual asynchronous predecessor lost its retained source receiver");
-    } else if (mode == "thread") {
-        Check(OSCreateThread(&parked, NeverEntered, nullptr, stack.data() + stack.size(),
-            stack.size(), 10, 0), "Genuine parked SDK thread could not be constructed");
+    } else if (mode == "thread" || mode == "thread-cancelled" || mode == "thread-completed") {
+        Check(OSCreateThread(&parked, mode=="thread-completed"?Returned:NeverEntered, &checks,
+            stack.data() + stack.size(),stack.size(), 10, 0), "Genuine SDK thread could not be constructed");
+        if (mode=="thread-completed") {
+            Check(OSResumeThread(&parked)==1,"Actual terminal source worker did not resume");
+            const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+            while(!OSIsThreadTerminated(&parked)) {
+                if(std::chrono::steady_clock::now()>=end)
+                    throw std::runtime_error("Actual terminal source worker did not complete");
+                std::this_thread::yield();
+            }
+            Check(thread_entries==1&&parked.val==&checks,"Original worker completion/result was not genuine");
+        } else if (mode=="thread-cancelled") {
+            OSCancelThread(&parked);
+            Check(!thread_entries&&OSIsThreadTerminated(&parked),"Actual parked cancellation ran a source entry");
+        }
+        if (mode!="thread") {
+            Check(parked.state==OS_THREAD_STATE_MORIBUND&&!parked.attr,
+                "Native completion removed the original unjoined MORIBUND record");
+            retained_thread=&parked;retained_image=parked;
+        }
         const auto mask = OSDisableInterrupts();
         auto* queue = ChargedNativeActiveThreadQueue();
         Check(queue->head != queue->tail, "Parked source descriptor absent from sole SDK registry");
@@ -99,7 +135,8 @@ void Run(const std::string& mode) {
             __OSShutdownToSBY();
         }
     } catch (const std::logic_error&) { rejected = true; }
-    Check(mode != "power", "Configured genuine source power request unexpectedly returned");
+    Check(mode != "power"&&mode!="thread-cancelled"&&mode!="thread-completed",
+        "Configured genuine source power request unexpectedly returned");
     Check(rejected && !verifications && !completions,
         "Unsupported/unfinished terminal flow returned successful power removal");
     if (mode == "pending") {
@@ -129,7 +166,8 @@ int main(int argc, char** argv) {
         if (argc != 2) throw std::invalid_argument("Expected one terminal leaf mode");
         const std::string mode = argv[1];
         Check(mode == "power" || mode == "unconfigured" || mode == "pending"
-            || mode == "thread" || mode == "irq" || mode == "restart", "Unknown terminal leaf mode");
+            || mode == "thread" || mode == "thread-cancelled" || mode == "thread-completed"
+            || mode == "irq" || mode == "restart", "Unknown terminal leaf mode");
         Run(mode);
     } catch (const std::exception& error) {
         std::fprintf(stderr, "STM source terminal boundary: %s (%u checks)\n", error.what(), checks);

@@ -3,6 +3,7 @@
 #include "platform/ios_device.h"
 #include "platform/interrupts.h"
 #include "platform/instruction_cache.h"
+#include "platform/thread_queues.h"
 #include "platform/thread_registry_abi.h"
 #include <aurora/video.h>
 #include <revolution/ipc.h>
@@ -228,10 +229,7 @@ extern "C" void mscharged_stm_terminal_wait(void) {
         throw std::logic_error("STM power removal requires drained IOS receivers and real disabled VI output");
     if (NativeInstructionCacheSequence() <= request.instruction_cache_sequence)
         throw std::logic_error("STM terminal caller omitted original instruction-cache synchronization");
-    const auto* queue = ChargedNativeActiveThreadQueue();
-    if (queue->head != OSGetCurrentThread() || queue->tail != queue->head ||
-        queue->head->state != OS_THREAD_STATE_RUNNING)
-        throw std::logic_error("STM power removal has an unfinished source SDK thread lifetime");
+    (void)ValidateNativeThreadsForPowerRemoval();
     policy.verify_quiescent(policy.context, request);
     // Actual configured removal of this native game instance. Retain source
     // storage until the OS ends the process; never run destructors or return

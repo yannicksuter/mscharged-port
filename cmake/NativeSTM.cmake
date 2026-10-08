@@ -46,13 +46,14 @@ if(BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND UNIX AND NOT 
     target_compile_features(native_stm_power_tests PRIVATE cxx_std_20)
     target_link_libraries(native_stm_power_tests PRIVATE charged_native_stm)
     target_link_options(native_stm_power_tests PRIVATE -Wl,--gc-sections)
-    foreach(mode IN ITEMS power unconfigured pending thread irq restart)
+    foreach(mode IN ITEMS power unconfigured pending thread thread-cancelled thread-completed irq restart)
         # Each source terminal/negative owns a fresh process. No late callback,
         # source worker, source static or SDK arena is retired after its exit.
         add_test(NAME native_stm_power_${mode} COMMAND native_stm_power_tests ${mode})
         set_tests_properties(native_stm_power_${mode} PROPERTIES TIMEOUT 10)
     endforeach()
-    set_tests_properties(native_stm_power_power PROPERTIES
+    set_tests_properties(native_stm_power_power native_stm_power_thread-cancelled
+        native_stm_power_thread-completed PROPERTIES
         PASS_REGULAR_EXPRESSION "Native STM source power removal PASS")
     foreach(mode IN ITEMS unconfigured pending thread irq restart)
         set_tests_properties(native_stm_power_${mode} PROPERTIES
