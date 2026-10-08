@@ -2,8 +2,9 @@ include_guard(GLOBAL)
 include(cmake/OriginalWorldOwners.cmake)
 
 # Temporary admission of the original offline Domination setup pages: gameplay
-# options (pushed first by the authored transition) and captain/sidekick
-# selection. The authored MainMenu script owns the transition and real E3 selection.
+# options (pushed first by the authored transition), captain/sidekick
+# selection, Choose Sides and Stadium Select. The authored MainMenu script owns
+# the transition and real E3 selection; the source handlers own every push.
 option(MSCHARGED_DIAGNOSTIC_FRONTEND_DOMINATION
     "Admit original offline Domination captain and sidekick selection" OFF)
 
@@ -31,6 +32,8 @@ function(mscharged_select_original_frontend_domination target)
             src/Game/SH/SHGameplayOptions.cpp
             src/Game/SH/SHChooseCaptains.cpp
             src/Game/SH/SHChooseSidekicks.cpp
+            src/Game/SH/SHChooseSides.cpp
+            src/Game/SH/SHStadiumSelect.cpp
             src/Game/FE/feCharacterPDAComponent.cpp
             src/Game/FE/feCaptainComponent.cpp
             src/Game/FE/feScrollBar.cpp
@@ -48,7 +51,8 @@ function(mscharged_select_original_frontend_domination target)
     # 16-bit formatter; other TUs retain their existing native wchar width.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
         foreach(_domination_wii16 IN ITEMS
-                src/Game/SH/SHGameplayOptions.cpp src/Game/SH/OnlineGameInfo.cpp)
+                src/Game/SH/SHGameplayOptions.cpp src/Game/SH/OnlineGameInfo.cpp
+                src/Game/SH/SHStadiumSelect.cpp)
             set_property(SOURCE "${MSCHARGED_PREPARED}/${_domination_wii16}"
                 APPEND PROPERTY COMPILE_OPTIONS -fshort-wchar)
         endforeach()
