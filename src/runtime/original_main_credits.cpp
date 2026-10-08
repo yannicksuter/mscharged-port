@@ -25,6 +25,7 @@
 #include <dolphin/vi.h>
 #include "webgpu/gpu.hpp"
 #include "platform/stm_device.h"
+#include "platform/ios_device.h"
 #include "platform/hardware_owner.h"
 #include "platform/desktop_presented_dpd.h"
 #include "platform/ai.h"
@@ -343,6 +344,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 {launch.disc_path, dataDirectory / "nand", 0x1001});
         }
         mscharged::platform::InitializeNativeSTMDevice();
+        // Report this live host IOS provider, not the disc-requested Wii IOS.
+        mscharged::platform::ConfigureNativeIOSServiceRevision();
         if(!__OSInitSTM())throw std::runtime_error("Actual original STM initialization failed");
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
         // and FE methods retain their original mappings and decisions.
