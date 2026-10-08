@@ -5,6 +5,8 @@ include(cmake/NativeHBMDebug.cmake)
 include(cmake/OriginalHBMFontTransport.cmake)
 include(cmake/OriginalTPL.cmake)
 include(cmake/OriginalHBMAnimationTransport.cmake)
+include(cmake/OriginalHBMLayoutProviders.cmake)
+include(cmake/OriginalHBMLayoutTransport.cmake)
 include(cmake/NativeHBMColor.cmake)
 
 # Admit only the original AsyncLoading HBM resource services26/27. The real
@@ -36,6 +38,8 @@ function(mscharged_select_original_frontend_hbm target)
     mscharged_select_original_hbm_debug("${target}")
     mscharged_select_original_hbm_font_transport("${target}")
     mscharged_add_original_tpl("${target}")
+    mscharged_select_original_hbm_layout_providers("${target}")
+    mscharged_select_original_hbm_layout_transport("${target}")
     # SaveLoad and HOME share the same native binder/ARC byte registry.
     # Original TPLGet is selected once; HBMManager source remains unmodified.
 endfunction()

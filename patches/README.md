@@ -29,6 +29,11 @@ written against the exact upstream text, never against the formatted copy.
 
 ## Charged series
 
+Patch 0583 adapts HOME layout byte order and relative offsets beneath the
+original layout constructors. Original layout, material, text and animation
+providers share the existing resource owners. Generated-data tests cover
+scalar/color/text records and resource lifetime; full HOME startup is pending.
+
 Patch 0584 preserves the HOME library's original RGBA word/byte relationship
 on native hosts. Color storage remains four GX bytes; numeric constructors,
 assignments and operators retain the original big-endian scalar interpretation.
