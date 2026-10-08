@@ -22,6 +22,11 @@ Game behavior, requests and timing are unchanged.
   unchanged inline bodies, so every referencing vtable and caller has them.
   Likewise the Desire units that call CallFielderFuzzyFunction include the
   original inline FuzzyRuntimeCall.h natively.
+- PowerupBase::AwardPowerup reads the captain power-up through Wii offsets
+  0x11C/0x14; natively these are cCharacter::mUnidentified11C and
+  CharacterInfo::unknown_0x14.
+- GoalieActions instantiates a queued-event Function<bool> through header
+  inlines; natively it includes the original nlFunction.inl template bodies.
 - MWCC's double __fabs(double) intrinsic maps to std::fabs on a double.
 - C++ conformance MWCC accepted: `false` as the null AIContext constant, a
   jump to `default:` past case-local initializations (scoped natively), and a
@@ -650,7 +655,18 @@ diff --git a/src/Game/AI/FielderDesireMachine.cpp b/src/Game/AI/FielderDesireMac
 diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
 --- a/src/Game/AI/GoalieActions.cpp
 +++ b/src/Game/AI/GoalieActions.cpp
-@@ -1989,7 +1989,7 @@
+@@ -67,6 +67,10 @@
+ #include "math.h"
+ #include "Game/UnidentifiedStaticStorage.h"
+ #include "Game/Audio/RegistryPools.h"
++#if defined(MSCHARGED_NATIVE)
++// Header inlines reached here instantiate the original callable templates.
++#include "NL/nlFunction.inl"
++#endif
+ 
+ static const nlVector3 v3Zero = { 0.0f, 0.0f, 0.0f };
+ static int gOffplayDejected[5] = { 0x99, 0x9A, 0x9B, 0x9C, 0x9D };
+@@ -1989,7 +1993,7 @@
  }
  
  void Goalie::MoveDirectionCB(
@@ -659,7 +675,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      float result = 0.0f;
-@@ -2001,7 +2001,7 @@
+@@ -2001,7 +2005,7 @@
  }
  
  void Goalie::MoveWeightCB(
@@ -668,7 +684,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      blender->m_fDesiredWeight
-@@ -2009,7 +2009,7 @@
+@@ -2009,7 +2013,7 @@
  }
  
  void Goalie::StrafeSynchronizedSpeedCallback(
@@ -677,7 +693,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      controller->m_fPlaybackSpeedScale = pGoalie->mfSpeedScale;
-@@ -2393,7 +2393,7 @@
+@@ -2393,7 +2397,7 @@
  }
  
  void Goalie::RunWeightCB(
@@ -686,7 +702,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      const Goalie* pGoalie = (Goalie*)nParam;
  
-@@ -2425,7 +2425,7 @@
+@@ -2425,7 +2429,7 @@
  }
  
  void Goalie::RunSynchronizedSpeedCallback(
@@ -695,7 +711,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      GoalieTweaks* pTweaks = (GoalieTweaks*)pGoalie->m_pTweaks;
-@@ -2455,7 +2455,7 @@
+@@ -2455,7 +2459,7 @@
              pCtrlr->m_fSynchronizedWeight = 0.0f;
              pCtrlr->m_pPlaybackSpeedCallback = RunSynchronizedSpeedCallback;
              pCtrlr->m_nPlaybackSpeedCallbackParam
@@ -704,7 +720,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
          }
          else
          {
-@@ -4217,6 +4217,9 @@
+@@ -4217,6 +4221,9 @@
          {
          case 1:
          case 2:
@@ -714,7 +730,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
              if (mpTarget->m_eActionState != (eFielderActionState)1)
              {
                  break;
-@@ -4239,6 +4242,9 @@
+@@ -4239,6 +4246,9 @@
                  mPursueDekeType = 0;
              }
              break;
@@ -724,7 +740,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  
          default:
              break;
-@@ -5676,6 +5682,13 @@
+@@ -5676,6 +5686,13 @@
  }
  
  // The ball-path-change check retains an unused owner comparison.
@@ -738,7 +754,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  // clang-format off
  static inline asm void LobSaveOwnerDiagnostic()
  {
-@@ -5683,6 +5696,7 @@
+@@ -5683,6 +5700,7 @@
   done:
  }
  // clang-format on
@@ -774,6 +790,74 @@ diff --git a/src/Game/AI/GoalieSave.cpp b/src/Game/AI/GoalieSave.cpp
 +#endif
      mpPositionTable = (SavePositionData*)__construct_new_array(
          nlMalloc(0x70, 8, false), 0, 0, 0x10, 6);
+ 
+diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
+--- a/src/Game/AI/Powerups.cpp
++++ b/src/Game/AI/Powerups.cpp
+@@ -38,6 +38,9 @@
+ #include "Game/Render/StadiumLoading.h"
+ #include "Game/UnidentifiedStaticStorage.h"
+ #include "Game/Audio/RegistryPools.h"
++#if defined(MSCHARGED_NATIVE)
++#include "Game/DB/CharacterInfo.h"
++#endif
+ 
+ void UpdateBobombEmitter(EmissionController&);
+ 
+@@ -1370,8 +1373,14 @@
+         if (!pTeam->fn_800A6764()
+             && pTeam->GetCaptain()->IsShattered() != 1)
+         {
++#if defined(MSCHARGED_NATIVE)
++            // Wii 0x11C is cCharacter::mUnidentified11C and its Wii 0x14 is
++            // CharacterInfo::unknown_0x14 (the captain's power-up).
++            powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++#else
+             powerUpType = *(ePowerUpType*)(
+                 *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
++#endif
+         }
+         break;
+     default:
+@@ -1400,8 +1409,12 @@
+     }
+     else if (nChance < nChanceForCaptainPowerup)
+     {
++#if defined(MSCHARGED_NATIVE)
++        powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++#else
+         powerUpType = *(ePowerUpType*)(
+             *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
++#endif
+     }
+     else if (nChance < nChanceForSpinyShell)
+     {
+@@ -1434,9 +1447,13 @@
+ 
+     if (GameInfoManager::Instance()->GetRule0x0() == 9)
+     {
++#if defined(MSCHARGED_NATIVE)
++        if (powerUpType != (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14)
++#else
+         if (powerUpType
+             != *(ePowerUpType*)(
+                 *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14))
++#endif
+         {
+             powerUpType = POWER_UP_NONE;
+         }
+@@ -1445,8 +1462,12 @@
+             && powerUpType == POWER_UP_NONE && !pTeam->fn_800A6764()
+             && pTeam->GetCaptain()->IsShattered() == 0)
+         {
++#if defined(MSCHARGED_NATIVE)
++            powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++#else
+             powerUpType = *(ePowerUpType*)(
+                 *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
++#endif
+         }
+     }
  
 diff --git a/src/Game/AI/TeamPlayMachine.cpp b/src/Game/AI/TeamPlayMachine.cpp
 --- a/src/Game/AI/TeamPlayMachine.cpp
