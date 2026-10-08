@@ -13,7 +13,7 @@ std::int16_t SignedHalf(const unsigned char* p) {
     const auto bits=Half(p);std::int16_t value;std::memcpy(&value,&bits,sizeof(value));return value;
 }
 unsigned char Byte(NativeDSPMemoryEndpoint endpoint,std::uint32_t address) {
-    unsigned char result{};DSPBackendReadMemory(endpoint,address,&result,1);return result;
+    return DSPBackendReadSampleByte(endpoint,address);
 }
 std::int16_t DecodeSample(unsigned char nibble,const NativeAXADPCMState& state) {
     const auto predictor=(state.predictor_scale>>4)&7;
@@ -80,6 +80,8 @@ NativeAXRawADPCMBlock DecodeNativeAXRawADPCM(NativeDSPMemoryEndpoint endpoint,
     auto& state=result.next;
     if(!state.running)return result;
     Geometry(state);state.predictor_scale&=0x7f;state.loop_predictor_scale&=0x7f;
+    const auto initial=state;
+    try {
     while(result.samples_decoded<limit && state.running) {
         const auto at=state.current_nibble;
         const auto packed=Byte(endpoint,at/2);
@@ -90,8 +92,9 @@ NativeAXRawADPCMBlock DecodeNativeAXRawADPCM(NativeDSPMemoryEndpoint endpoint,
         const bool ended=at==state.end_nibble;
         ++state.current_nibble;
         // Header prefetch is a real accelerator boundary, including a payload
-        // end at nibble15. It must retain genuine pin/bounds failures; no guessed
-        // padded byte or substituted predictor is supplied by the native host.
+        // end at nibble15: the next frame's header is read before the end
+        // check, past the allocation if the sample ends there. A looping voice
+        // then takes its loop pred/scale; a one-shot voice writes it back.
         if((state.current_nibble&15)==0) {
             state.predictor_scale=Byte(endpoint,state.current_nibble/2)&0x7f;
             state.current_nibble+=2;
@@ -106,6 +109,12 @@ NativeAXRawADPCMBlock DecodeNativeAXRawADPCM(NativeDSPMemoryEndpoint endpoint,
                 ++result.loops;
             } else state.running=false;
         }
+    }
+    } catch(const std::out_of_range& error) {
+        throw std::out_of_range(std::string(error.what())+" during ADPCM decode at nibble "+Hex(state.current_nibble)+
+                                " (voice current="+Hex(initial.current_nibble)+" loop="+Hex(initial.loop_nibble)+
+                                " end="+Hex(initial.end_nibble)+" loopFlag="+std::to_string(initial.loop_flag)+
+                                " type="+std::to_string(initial.voice_type)+")");
     }
     return result;
 }
