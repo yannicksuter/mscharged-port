@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0526 restores all animation rotation decoder bodies to the complete
+original `SAnimDecode.cpp`. Native helpers replace only the fixed quantized
+load/store instructions; the copied runtime decoder is retired.
+
 Patches 0516–0517 retain the complete original SDK state/play-record owners.
 They adapt C header ownership and fixed Wii record byte order, preserving
 checksum loops, file choices and source completion decisions. Async transport

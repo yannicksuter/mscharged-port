@@ -57,7 +57,7 @@ add_library(mscharged_original_main_credits_module MODULE
     "${MSCHARGED_PREPARED}/src/NL/nlTime.cpp"
     "${MSCHARGED_PREPARED}/src/Game/Core/mtRandom.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMemoryInit.cpp"
-    src/runtime/sanim_decode.cpp
+    "${MSCHARGED_PREPARED}/src/Game/SAnimDecode.cpp"
     "${MSCHARGED_PREPARED}/src/Game/main.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxTexture.cpp"
     "${MSCHARGED_PREPARED}/src/Game/TweakRegistry.cpp"
