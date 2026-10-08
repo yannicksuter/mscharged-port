@@ -296,10 +296,16 @@ function(mscharged_select_original_frontend_match_loading target)
         charged_native_os_shutdown_requests)
     mscharged_require_original_host_symbol(charged_original_main_credits_host
         INTERFACE OSGetConsoleType)
-    # MatchLoadingScene formats Wii16 L"%d" literals through the original
-    # 16-bit formatter; other TUs retain their existing native wchar width.
+    # MatchLoadingScene, the HUD clock, the goal overlay's time/score and the
+    # in-game text spacing format Wii16 L"..." literals through the original
+    # 16-bit formatter/strings; these TUs make no host wide-character calls.
+    # Other TUs retain their existing native wchar width.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
-        set_property(SOURCE "${MSCHARGED_PREPARED}/src/Game/SH/SHLoading.cpp"
-            APPEND PROPERTY COMPILE_OPTIONS -fshort-wchar)
+        foreach(_match_wii16 IN ITEMS
+                src/Game/SH/SHLoading.cpp src/Game/FE/Overlay/OverlayHandlerHUD.cpp
+                src/Game/FE/Overlay/OverlayHandlerGoal.cpp src/Game/FE/Overlay/OverlayHandlerInGameText.cpp)
+            set_property(SOURCE "${MSCHARGED_PREPARED}/${_match_wii16}"
+                APPEND PROPERTY COMPILE_OPTIONS -fshort-wchar)
+        endforeach()
     endif()
 endfunction()
