@@ -9,6 +9,7 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$" OR NOT CMAKE_SIZEOF_VOID_P E
     message(FATAL_ERROR "The original-main source diagnostic requires Linux or macOS LP64 with GCC or Clang")
 endif()
 include(cmake/OriginalModuleLinkage.cmake)
+include(cmake/NativeModuleLoader.cmake)
 include(cmake/OriginalFrontendResetDiagnostic.cmake)
 include(cmake/OriginalFunctionPools.cmake)
 include(cmake/WiiStringFormat.cmake)
@@ -318,6 +319,7 @@ target_compile_definitions(charged_original_main_credits_host PRIVATE
 target_compile_options(charged_original_main_credits_host PRIVATE
     -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off)
 target_link_libraries(charged_original_main_credits_host PRIVATE
+    charged_native_module_loader
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm
     charged_native_system_settings charged_native_video_device charged_credits_movie_hardware

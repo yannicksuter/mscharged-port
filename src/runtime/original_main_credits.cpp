@@ -51,7 +51,7 @@
 #include "platform/os_shutdown_requests.h"
 #endif
 #include <SDL3/SDL_video.h>
-#include <dlfcn.h>
+#include "platform/native_module_loader.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -414,15 +414,14 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // failure. Unwinding a device with active source pins is not retirement.
         try {
         if(frontend)
-            axModuleMemory=std::make_unique<mscharged::platform::NativeAXModuleMemory>(modulePath.c_str());
-        auto* module=dlopen(modulePath.c_str(),RTLD_LAZY|RTLD_LOCAL);
-        if(!module)throw std::runtime_error(dlerror());
+            axModuleMemory=std::make_unique<mscharged::platform::NativeAXModuleMemory>(modulePath);
+        auto* module=mscharged::platform::LoadNativeModule(modulePath);
         if(axModuleMemory)axModuleMemory->ConfirmLoaded(module);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)
             gameAudioHardware=std::make_unique<mscharged::diagnostic::OriginalGameAudioHardware>(*axModuleMemory);
 #endif
-        auto entry=reinterpret_cast<int(*)()>(dlsym(module,"charged_original_entry"));
+        auto entry=reinterpret_cast<int(*)()>(mscharged::platform::FindNativeModuleSymbol(module,"charged_original_entry"));
         if(!entry)throw std::runtime_error("Original source main export unavailable");
         std::fprintf(stderr,"Entering actual source main with real Aurora %s/FIFO owner and native PI_VI under temporary MAIN_BOOTSTRAP; flow remains incomplete.\n",
                      mscharged::platform::NativeGraphicsBackendName);
@@ -435,17 +434,17 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         using AudioAction = void(*)();
         using AudioIdle = bool(*)();
         auto observeAudio=sourceAudio ? reinterpret_cast<ObserveAudio>(
-            dlsym(module,"charged_original_audio_observe")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_observe")) : nullptr;
         auto shutdownAudio=sourceAudio ? reinterpret_cast<AudioAction>(
-            dlsym(module,"charged_original_audio_shutdown")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_shutdown")) : nullptr;
         auto idleAudio=sourceAudio ? reinterpret_cast<AudioIdle>(
-            dlsym(module,"charged_original_audio_idle")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_idle")) : nullptr;
         auto idleBankReads=sourceAudio ? reinterpret_cast<bool(*)()>(
-            dlsym(module,"charged_original_audio_bank_reads_idle")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_bank_reads_idle")) : nullptr;
         auto unloadIdleBanks=sourceAudio ? reinterpret_cast<AudioAction>(
-            dlsym(module,"charged_original_audio_unload_idle_banks")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_unload_idle_banks")) : nullptr;
         auto retireAudioPin=sourceAudio ? reinterpret_cast<AudioAction>(
-            dlsym(module,"charged_original_audio_retire_silence_pin")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_audio_retire_silence_pin")) : nullptr;
         if(sourceAudio) {
             Check(observeAudio && shutdownAudio && idleAudio && idleBankReads && unloadIdleBanks && retireAudioPin,
                   "Original audio source observations and retirement exports unavailable");
@@ -465,11 +464,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         }
 #endif
         auto observeBootScript=sourceBoot ? reinterpret_cast<ObserveAudio>(
-            dlsym(module,"charged_original_boot_script_observe")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_boot_script_observe")) : nullptr;
         auto bootInstruction=sourceBoot ? reinterpret_cast<int(*)()>(
-            dlsym(module,"charged_original_boot_script_instruction")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_boot_script_instruction")) : nullptr;
         auto bootPhase=sourceBoot ? reinterpret_cast<int(*)()>(
-            dlsym(module,"charged_original_boot_scene_phase")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_boot_scene_phase")) : nullptr;
         Check(!sourceBoot || (observeBootScript && bootInstruction && bootPhase),
               "Original authored Boot observation exports unavailable");
         unsigned lastBootFlags=0;
@@ -493,16 +492,16 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if(bootReady)bootReady=gameAudioHardware->Status().last_active_voices==0;
 #endif
         };
-        auto frame=reinterpret_cast<void(*)(float)>(dlsym(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
+        auto frame=reinterpret_cast<void(*)(float)>(mscharged::platform::FindNativeModuleSymbol(module,nativeSend?"charged_original_scene_native_frame":"charged_original_scene_frame"));
         Check(frame,"Same original-main module scene-frame export unavailable");
-        auto stopMovie=reinterpret_cast<void(*)()>(dlsym(module,"charged_original_scene_stop_movie"));
+        auto stopMovie=reinterpret_cast<void(*)()>(mscharged::platform::FindNativeModuleSymbol(module,"charged_original_scene_stop_movie"));
         Check(stopMovie,"Original main movie-stop export unavailable");
         using ObserveSH = std::uint32_t(*)(OriginalSHSnapshot*,std::uint32_t);
         using RequestSH = std::uint32_t(*)();
         auto observeSH=optionsScene ? reinterpret_cast<ObserveSH>(
-            dlsym(module,"charged_original_sh_observe")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_sh_observe")) : nullptr;
         auto requestSH=optionsScene ? reinterpret_cast<RequestSH>(
-            dlsym(module,"charged_original_sh_request_options")) : nullptr;
+            mscharged::platform::FindNativeModuleSymbol(module,"charged_original_sh_request_options")) : nullptr;
         Check(!optionsScene || (observeSH && requestSH),
               "Original Options diagnostic requires MSCHARGED_DIAGNOSTIC_FRONTEND_SH_MENUS=ON");
         OriginalSHSnapshot sh{};
