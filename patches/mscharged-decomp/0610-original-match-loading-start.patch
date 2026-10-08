@@ -19,7 +19,7 @@ request stops with its service number.
 diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneManager.cpp
 --- a/src/Game/FE/BaseGameSceneManager.cpp
 +++ b/src/Game/FE/BaseGameSceneManager.cpp
-@@ -360,6 +360,8 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -360,6 +360,8 @@
      case (SceneList)16:
          newHandler = new (nlMalloc(sizeof(CrossFaderScene), 8, false)) CrossFaderScene();
          break;
@@ -28,7 +28,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
      case SCENE_SUPER_LOADING:
          newHandler = new (nlMalloc(sizeof(SuperLoadingScene), 8, false)) SuperLoadingScene();
          break;
-@@ -390,6 +392,8 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -390,6 +392,8 @@
      case (SceneList)24:
          newHandler = new (nlMalloc(sizeof(NetworkStartScene), 8, false)) NetworkStartScene();
          break;
@@ -37,7 +37,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
      case SCENE_ASYNC_LOADING:
          newHandler = new (nlMalloc(sizeof(BaseLoadingScene), 8, false)) BaseLoadingScene();
          break;
-@@ -410,10 +414,12 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -410,10 +414,12 @@
      case (SceneList)29:
          newHandler = new (nlMalloc(sizeof(SHNavigation), 8, false)) SHNavigation();
          break;
@@ -51,7 +51,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
      case (SceneList)31:
          newHandler = new (nlMalloc(sizeof(RoadToStrikersCupHubScene), 8, false)) RoadToStrikersCupHubScene();
          break;
-@@ -589,12 +595,16 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -589,12 +595,16 @@
      case (SceneList)87:
          newHandler = new (nlMalloc(sizeof(LessonMoviePlayerScene), 8, false)) LessonMoviePlayerScene();
          break;
@@ -68,7 +68,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
      case (SceneList)91:
          newHandler = new (nlMalloc(sizeof(PausePostGameScene), 8, false)) PausePostGameScene(PausePostGameScene::MODE_RESULTS);
          break;
-@@ -607,15 +617,21 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -607,15 +617,21 @@
      case (SceneList)94:
          newHandler = new (nlMalloc(sizeof(StrikerTimesOverlay), 8, false)) StrikerTimesOverlay();
          break;
@@ -90,7 +90,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
      case (SceneList)100:
          newHandler = new (nlMalloc(sizeof(MegaStrikeMeterOverlay), 8, false)) MegaStrikeMeterOverlay();
          break;
-@@ -625,6 +641,8 @@ BaseSceneHandler* BaseGameSceneManager::Push(SceneList newscene, ScreenMovement
+@@ -625,6 +641,8 @@
      case (SceneList)102:
          newHandler = new (nlMalloc(sizeof(SuperAbilityOverlay), 8, false)) SuperAbilityOverlay();
          break;
@@ -102,7 +102,7 @@ diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneMan
 diff --git a/src/Game/Render/FrontEndPresentation_interp.cpp b/src/Game/Render/FrontEndPresentation_interp.cpp
 --- a/src/Game/Render/FrontEndPresentation_interp.cpp
 +++ b/src/Game/Render/FrontEndPresentation_interp.cpp
-@@ -213,7 +213,8 @@ void FrontEndPresentation::DoFunctionCall(unsigned int function)
+@@ -213,7 +213,8 @@
      }
  
  #endif
@@ -115,7 +115,7 @@ diff --git a/src/Game/Render/FrontEndPresentation_interp.cpp b/src/Game/Render/F
 diff --git a/src/Game/Task/LoadingTask.cpp b/src/Game/Task/LoadingTask.cpp
 --- a/src/Game/Task/LoadingTask.cpp
 +++ b/src/Game/Task/LoadingTask.cpp
-@@ -70,6 +70,16 @@ void LoadingTask::Run(float dt)
+@@ -70,6 +70,16 @@
  #endif
  }
  
@@ -132,22 +132,22 @@ diff --git a/src/Game/Task/LoadingTask.cpp b/src/Game/Task/LoadingTask.cpp
  void LoadingTask::StateTransition(unsigned int from, unsigned int to)
  {
  #if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
-@@ -80,6 +90,11 @@ void LoadingTask::StateTransition(unsigned int from, unsigned int to)
-         && (from != 0x00100000 || to != 0x00080000)
+@@ -81,6 +91,11 @@
  #if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MENU_ENTRY)
          && (from != 0x00080000 || to != 0x00000004)
-+#endif
+ #endif
 +#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING)
 +        && (from != 0x00000004 || to != 0x00200000)
 +        && (from != 0x00200000 || to != 0x00000002)
 +        && !(IsMatchTaskState(from) && IsMatchTaskState(to))
- #endif
++#endif
          )
  #else
+     if (from != 0x00010000 || to != 0x00100000)
 diff --git a/src/Game/main.cpp b/src/Game/main.cpp
 --- a/src/Game/main.cpp
 +++ b/src/Game/main.cpp
-@@ -218,7 +218,7 @@ static PlatPadUpdateTask platPadUpdateTask;
+@@ -218,7 +218,7 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
  static FrontEndTask frontEndTask;
  #endif
@@ -156,7 +156,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
  static WorldUpdateTask worldUpdateTask;
  static GameRenderTask gameRenderTask;
  #endif
-@@ -609,7 +609,7 @@ static void Initialize()
+@@ -609,7 +609,7 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_DOMINATION)
      EnableAllStadiums();
  #endif
@@ -165,7 +165,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
      const char* buildInfo =
          GetTweakString("/General/Build Info/BuildNumber", 0);
      if (buildInfo != 0)
-@@ -672,7 +672,7 @@ static void Initialize()
+@@ -672,7 +672,7 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_FIXED_INPUT))
      StartupAIPads();
  #endif
@@ -174,7 +174,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
      gTransitionTask.Initialize();
  #endif // unrelated config/script/tasks/audio/world prerequisites
  #if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND)
-@@ -809,7 +809,7 @@ static void AddTasks()
+@@ -809,7 +809,7 @@
  #endif // unqualified unrelated task registration remains omitted
      nlTaskManager::AddTask(&beginFrameTask, 4, (u32)-1);
      nlTaskManager::AddTask(&sLoadingTask, 2, 0x01F80000);
@@ -183,7 +183,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
      nlTaskManager::AddTask(gDispatchEventsTask, 0x18, 0xFE07FFFF);
  #endif // unqualified unrelated task registration remains omitted
  #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_PLAT_PAD_TASK))
-@@ -818,10 +818,10 @@ static void AddTasks()
+@@ -818,10 +818,10 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_FIXED_INPUT))
      nlTaskManager::AddTask(GetFixedUpdateTask(), 8, 0xFE07FFDF);
  #endif // original fixed task priority/mask; unrelated task registrations remain held
@@ -196,7 +196,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
      nlTaskManager::AddTask(&gameRenderTask, 11, 0x0002001B);
  #endif // unqualified unrelated task registration remains omitted
  #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) \
-@@ -836,10 +836,10 @@ static void AddTasks()
+@@ -836,10 +836,10 @@
      nlTaskManager::AddTask(&audioUpdateTask, 15, (u32)-1);
  #endif // unqualified unrelated task registration remains omitted
      nlTaskManager::AddTask(&endFrameTask, 16, (u32)-1);
@@ -209,7 +209,7 @@ diff --git a/src/Game/main.cpp b/src/Game/main.cpp
      nlTaskManager::AddTask(&networkUpdateTask, 17, (u32)-1);
  #endif // unqualified unrelated task registration remains omitted
      nlTaskManager::AddTask(&feDPDTask, 13, 5);
-@@ -850,7 +850,7 @@ static void AddTasks()
+@@ -850,7 +850,7 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_BOOT_TO_FE))
      nlTaskManager::AddTask(nlGetFileCache(), 3, (u32)-1);
  #endif // unqualified unrelated task registration remains omitted

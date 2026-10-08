@@ -14,7 +14,7 @@ unchanged.
 diff --git a/include/Game/GL/SkinSoftwareSteps.h b/include/Game/GL/SkinSoftwareSteps.h
 --- a/include/Game/GL/SkinSoftwareSteps.h
 +++ b/include/Game/GL/SkinSoftwareSteps.h
-@@ -20,6 +20,19 @@ inline void SkinSoftwarePosition(nlVector3& output, const nlVector3& input,
+@@ -20,6 +20,19 @@
      }
  }
  
@@ -37,7 +37,7 @@ diff --git a/include/Game/GL/SkinSoftwareSteps.h b/include/Game/GL/SkinSoftwareS
 diff --git a/src/Game/GL/ShaderSkinMesh.cpp b/src/Game/GL/ShaderSkinMesh.cpp
 --- a/src/Game/GL/ShaderSkinMesh.cpp
 +++ b/src/Game/GL/ShaderSkinMesh.cpp
-@@ -384,7 +384,16 @@ void ShaderSkinMesh::SoftwareSkinModel(glModel* model)
+@@ -384,7 +384,16 @@
              if (numActiveMorphs != 0)
              {
  #if defined(MSCHARGED_NATIVE)

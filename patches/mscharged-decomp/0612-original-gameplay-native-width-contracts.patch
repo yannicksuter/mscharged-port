@@ -14,6 +14,8 @@ Game behavior, requests and timing are unchanged.
   on console. Goalie's save-blend word keeps its original index-in-low-bits
   packing with a carrier-width mask.
 - ODE: intP is pointer-sized for the obstack alignment arithmetic.
+- GoalieActions' MWCC asm LobSaveOwnerDiagnostic only branches to its next
+  instruction (retail code layout); natively it is an empty inline function.
 - MWCC's double __fabs(double) intrinsic maps to std::fabs on a double.
 - C++ conformance MWCC accepted: `false` as the null AIContext constant, a
   jump to `default:` past case-local initializations (scoped natively), and a
@@ -50,7 +52,7 @@ diff --git a/include/Game/AI/Fielder.h b/include/Game/AI/Fielder.h
  
  enum ePenaltyType
  {
-@@ -322,7 +323,7 @@ public:
+@@ -322,7 +323,7 @@
      void SetStrafeLeftStopAnimState();
      void SetIdleAnimState();
      void SetIdleWBAnimState();
@@ -62,7 +64,7 @@ diff --git a/include/Game/AI/Fielder.h b/include/Game/AI/Fielder.h
 diff --git a/include/Game/AI/Variant.h b/include/Game/AI/Variant.h
 --- a/include/Game/AI/Variant.h
 +++ b/include/Game/AI/Variant.h
-@@ -216,4 +216,10 @@ public:
+@@ -216,4 +216,10 @@
  
  extern Variant gvNotSet;
  
@@ -84,7 +86,7 @@ diff --git a/include/Game/Character.h b/include/Game/Character.h
  
  class Blinker;
  class BlurHandler;
-@@ -191,10 +192,10 @@ public:
+@@ -191,10 +192,10 @@
      cPN_SAnimController* NewAnimController(int animID, bool bRestartCyclic,
          bool bForceMirrorSwap,
          void (*funcPlaybackSpeedCallback)(
@@ -109,7 +111,7 @@ diff --git a/include/Game/CharacterTemplate.h b/include/Game/CharacterTemplate.h
  
  class AnimRetargetList;
  class CharacterPhysicsData;
-@@ -48,7 +49,7 @@ struct tCharacterTemplateInfo
+@@ -48,7 +49,7 @@
      /* 0x14 */ const char* szTextureFilename;
      /* 0x18 */ const char* szAlternateTextureFilename;
      /* 0x1C */ const char* szTriggerFilename;
@@ -130,7 +132,7 @@ diff --git a/include/Game/CharacterTriggers.h b/include/Game/CharacterTriggers.h
  enum eBallShotEffectType
  {
      BALL_EFFECT_S2S_SUPER_SHOT = 0,
-@@ -27,7 +29,7 @@ class EmissionController;
+@@ -27,7 +29,7 @@
  class cSAnim;
  class EffectsGroup;
  
@@ -142,7 +144,7 @@ diff --git a/include/Game/CharacterTriggers.h b/include/Game/CharacterTriggers.h
 diff --git a/include/Game/FE/fePresentation.h b/include/Game/FE/fePresentation.h
 --- a/include/Game/FE/fePresentation.h
 +++ b/include/Game/FE/fePresentation.h
-@@ -20,4 +20,10 @@ public:
+@@ -20,4 +20,10 @@
  
  TLSlide* GetActiveSlide(FEPresentation* presentation);
  
@@ -156,7 +158,7 @@ diff --git a/include/Game/FE/fePresentation.h b/include/Game/FE/fePresentation.h
 diff --git a/include/Game/FE/tlInstance.h b/include/Game/FE/tlInstance.h
 --- a/include/Game/FE/tlInstance.h
 +++ b/include/Game/FE/tlInstance.h
-@@ -71,4 +71,10 @@ private:
+@@ -71,4 +71,10 @@
  };
  
  
@@ -178,7 +180,7 @@ diff --git a/include/Game/Goalie.h b/include/Game/Goalie.h
  
  class AnimRetargetList;
  class GoalieTweaks;
-@@ -133,7 +134,7 @@ public:
+@@ -133,7 +134,7 @@
  
      void SetGoalieAction(eGoalieActionState newGoalieState, int newSubstate);
      static void SaveBlendCallback(
@@ -187,7 +189,7 @@ diff --git a/include/Game/Goalie.h b/include/Game/Goalie.h
      cPoseNode* SetupBlender(bool bPrimary, const float* fStartPercent,
          int nMainAnimID, int nMilestone);
      void PlayBlendedAnims(
-@@ -292,15 +293,15 @@ public:
+@@ -292,15 +293,15 @@
      void InitActionDazed(bool bParam);
      void InitMegaStrikeUserControl();
      static void MoveDirectionCB(
@@ -211,7 +213,7 @@ diff --git a/include/Game/Goalie.h b/include/Game/Goalie.h
 diff --git a/include/Game/NetworkSession.h b/include/Game/NetworkSession.h
 --- a/include/Game/NetworkSession.h
 +++ b/include/Game/NetworkSession.h
-@@ -512,8 +512,16 @@ public:
+@@ -512,8 +512,16 @@
      /* 0x2458 */ NetworkLobby* mLobby;
      /* 0x245C */ NetworkStatsReporter* mStatsReporter;
      /* 0x2460 */ NetworkRanking* mRankingReporter;
@@ -231,7 +233,7 @@ diff --git a/include/Game/NetworkSession.h b/include/Game/NetworkSession.h
 diff --git a/include/Game/Player.h b/include/Game/Player.h
 --- a/include/Game/Player.h
 +++ b/include/Game/Player.h
-@@ -185,7 +185,7 @@ public:
+@@ -185,7 +185,7 @@
      bool IsCharacterInAir(float fParam) const;
      cPN_SingleAxisBlender* CreateSingleAxisBlender(
          const int* pSABAnims, int nNumSABAnims, int nPrimaryAnim,
@@ -251,7 +253,7 @@ diff --git a/include/Game/SAnim.h b/include/Game/SAnim.h
  
  class cPoseAccumulator;
  class cSAnim;
-@@ -23,8 +24,8 @@ class cSAnimCallback
+@@ -23,8 +24,8 @@
  {
  public:
      float m_fTime;
@@ -262,7 +264,7 @@ diff --git a/include/Game/SAnim.h b/include/Game/SAnim.h
      cSAnimCallback* next;
  };
  
-@@ -94,11 +95,11 @@ public:
+@@ -94,11 +95,11 @@
      void GetRootTrans(float time, nlVector3* rootTranslation) const;
      bool GetChannelWeight(int channel, float time, float* weight) const;
  #ifdef MSCHARGED_DIAGNOSTIC_SKELETON
@@ -289,7 +291,7 @@ diff --git a/include/Game/SAnim/pnFeather.h b/include/Game/SAnim/pnFeather.h
  
  enum eFeatherBlendMode
  {
-@@ -21,8 +22,8 @@ public:
+@@ -21,8 +22,8 @@
      cPN_Feather() { }
      cPN_Feather(
          cSHierarchy* hierarchy,
@@ -300,7 +302,7 @@ diff --git a/include/Game/SAnim/pnFeather.h b/include/Game/SAnim/pnFeather.h
      virtual ~cPN_Feather();
      virtual void Evaluate(
          int nodeIndex, float weight, cPoseAccumulator* accumulator) const;
-@@ -72,8 +73,8 @@ public:
+@@ -72,8 +73,8 @@
  
      float* m_pFeatherWeights;
      float m_fBlendTime;
@@ -322,7 +324,7 @@ diff --git a/include/Game/SAnim/pnSAnimController.h b/include/Game/SAnim/pnSAnim
  #endif
  
  class cPN_SAnimController : public cPoseNode
-@@ -24,8 +25,8 @@ public:
+@@ -24,8 +25,8 @@
      }
      cPN_SAnimController(cSAnim* anim, const AnimRetarget* retarget,
          ePlayMode playMode,
@@ -333,7 +335,7 @@ diff --git a/include/Game/SAnim/pnSAnimController.h b/include/Game/SAnim/pnSAnim
      virtual ~cPN_SAnimController()
      {
      }
-@@ -150,13 +151,13 @@ public:
+@@ -150,13 +151,13 @@
      unsigned int m_bIgnoreTriggers : 1;
      mutable unsigned int m_bNegativeTriggerProcessed : 1;
      unsigned int m_bLooped : 1;
@@ -372,7 +374,7 @@ diff --git a/include/Game/SAnim/pnSingleAxisBlender.h b/include/Game/SAnim/pnSin
      virtual ~cPN_SingleAxisBlender()
      {
      }
-@@ -54,8 +55,8 @@ public:
+@@ -54,8 +55,8 @@
      }
  
      float m_fSmoothedWeight;
@@ -396,7 +398,7 @@ diff --git a/include/Game/TerrainTweakValue.h b/include/Game/TerrainTweakValue.h
  
  class TerrainTweakValueBase : public TweakValueBase
  {
-@@ -14,7 +17,13 @@ public:
+@@ -14,7 +17,13 @@
  
          if (IsTweakRegistryInitialized() == 0)
          {
@@ -421,7 +423,7 @@ diff --git a/include/Game/Triggers/AnimTagScript.h b/include/Game/Triggers/AnimT
  
  class AnimTagScriptInterpreter;
  class BinaryTriggerFile;
-@@ -43,7 +44,7 @@ public:
+@@ -43,7 +44,7 @@
      virtual void DoFunctionCall(unsigned int) = 0;
      virtual void TriggerFired(cSAnim*, unsigned long) { }
  
@@ -449,7 +451,7 @@ diff --git a/include/Game/WorldTriggers.h b/include/Game/WorldTriggers.h
 diff --git a/include/NL/nlMath.h b/include/NL/nlMath.h
 --- a/include/NL/nlMath.h
 +++ b/include/NL/nlMath.h
-@@ -625,4 +625,10 @@ short nlAngleDelta(unsigned short, unsigned short);
+@@ -625,4 +625,10 @@
  unsigned short nlAbsAngle(short);
  int nlAbsInt(int);
  
@@ -463,7 +465,7 @@ diff --git a/include/NL/nlMath.h b/include/NL/nlMath.h
 diff --git a/include/ode/config.h b/include/ode/config.h
 --- a/include/ode/config.h
 +++ b/include/ode/config.h
-@@ -13,7 +13,12 @@ typedef short int16;
+@@ -13,7 +13,12 @@
  typedef unsigned short uint16;
  typedef char int8;
  typedef unsigned char uint8;
@@ -489,7 +491,7 @@ diff --git a/include/ode/error.h b/include/ode/error.h
  typedef struct __va_list_struct
  {
      char gpr;
-@@ -20,6 +23,7 @@ typedef __va_list va_list;
+@@ -20,6 +23,7 @@
  extern void __builtin_va_info(void*);
  #define va_start(ap, fmt) ((void)fmt, __builtin_va_info(&ap))
  #define va_end(ap)        ((void)0)
@@ -531,7 +533,7 @@ diff --git a/src/Game/AI/DesireShoot.cpp b/src/Game/AI/DesireShoot.cpp
 diff --git a/src/Game/AI/Fielder.cpp b/src/Game/AI/Fielder.cpp
 --- a/src/Game/AI/Fielder.cpp
 +++ b/src/Game/AI/Fielder.cpp
-@@ -4704,7 +4704,7 @@ void cFielder::SetIdleWBAnimState()
+@@ -4704,7 +4704,7 @@
          GetRunWBAccel(tweaks), GetRunWBDecel(tweaks));
  }
  
@@ -543,7 +545,7 @@ diff --git a/src/Game/AI/Fielder.cpp b/src/Game/AI/Fielder.cpp
 diff --git a/src/Game/AI/FielderDesireMachine.cpp b/src/Game/AI/FielderDesireMachine.cpp
 --- a/src/Game/AI/FielderDesireMachine.cpp
 +++ b/src/Game/AI/FielderDesireMachine.cpp
-@@ -50,7 +50,11 @@ inline cFielder* FielderDesireMachine::GetFielder() const
+@@ -50,7 +50,11 @@
   * Offset/Address/Size: 0x0 | 0x800D4E2C | size: 0x4C
   */
  FielderDesireMachine::FielderDesireMachine()
@@ -558,7 +560,7 @@ diff --git a/src/Game/AI/FielderDesireMachine.cpp b/src/Game/AI/FielderDesireMac
 diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
 --- a/src/Game/AI/GoalieActions.cpp
 +++ b/src/Game/AI/GoalieActions.cpp
-@@ -1989,7 +1989,7 @@ void Goalie::ActionMegaStrike(float deltaTime)
+@@ -1989,7 +1989,7 @@
  }
  
  void Goalie::MoveDirectionCB(
@@ -567,7 +569,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      float result = 0.0f;
-@@ -2001,7 +2001,7 @@ void Goalie::MoveDirectionCB(
+@@ -2001,7 +2001,7 @@
  }
  
  void Goalie::MoveWeightCB(
@@ -576,7 +578,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      blender->m_fDesiredWeight
-@@ -2009,7 +2009,7 @@ void Goalie::MoveWeightCB(
+@@ -2009,7 +2009,7 @@
  }
  
  void Goalie::StrafeSynchronizedSpeedCallback(
@@ -585,7 +587,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      controller->m_fPlaybackSpeedScale = pGoalie->mfSpeedScale;
-@@ -2393,7 +2393,7 @@ void Goalie::ActionMove(float deltaTime)
+@@ -2393,7 +2393,7 @@
  }
  
  void Goalie::RunWeightCB(
@@ -594,7 +596,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      const Goalie* pGoalie = (Goalie*)nParam;
  
-@@ -2425,7 +2425,7 @@ void Goalie::RunWeightCB(
+@@ -2425,7 +2425,7 @@
  }
  
  void Goalie::RunSynchronizedSpeedCallback(
@@ -603,7 +605,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  {
      Goalie* pGoalie = (Goalie*)nParam;
      GoalieTweaks* pTweaks = (GoalieTweaks*)pGoalie->m_pTweaks;
-@@ -2455,7 +2455,7 @@ void Goalie::StartRunBlend()
+@@ -2455,7 +2455,7 @@
              pCtrlr->m_fSynchronizedWeight = 0.0f;
              pCtrlr->m_pPlaybackSpeedCallback = RunSynchronizedSpeedCallback;
              pCtrlr->m_nPlaybackSpeedCallbackParam
@@ -612,7 +614,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
          }
          else
          {
-@@ -4217,6 +4217,9 @@ void Goalie::ActionPursueDeke(float fDeltaT)
+@@ -4217,6 +4217,9 @@
          {
          case 1:
          case 2:
@@ -622,7 +624,7 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
              if (mpTarget->m_eActionState != (eFielderActionState)1)
              {
                  break;
-@@ -4239,6 +4242,9 @@ void Goalie::ActionPursueDeke(float fDeltaT)
+@@ -4239,6 +4242,9 @@
                  mPursueDekeType = 0;
              }
              break;
@@ -632,10 +634,32 @@ diff --git a/src/Game/AI/GoalieActions.cpp b/src/Game/AI/GoalieActions.cpp
  
          default:
              break;
+@@ -5676,6 +5682,13 @@
+ }
+ 
+ // The ball-path-change check retains an unused owner comparison.
++#if defined(MSCHARGED_NATIVE)
++// The MWCC branch to the next instruction only reproduces retail code layout;
++// it reads and writes no state, so the native function is empty.
++static inline void LobSaveOwnerDiagnostic()
++{
++}
++#else
+ // clang-format off
+ static inline asm void LobSaveOwnerDiagnostic()
+ {
+@@ -5683,6 +5696,7 @@
+  done:
+ }
+ // clang-format on
++#endif
+ 
+ void Goalie::ActionLobSave(float fDeltaT)
+ {
 diff --git a/src/Game/AI/GoalieSave.cpp b/src/Game/AI/GoalieSave.cpp
 --- a/src/Game/AI/GoalieSave.cpp
 +++ b/src/Game/AI/GoalieSave.cpp
-@@ -282,8 +282,15 @@ void GoalieSave::InitData(Goalie* pGoalie)
+@@ -282,8 +282,15 @@
      }
  
      muNumSaveEntries = 0x58;
@@ -651,7 +675,7 @@ diff --git a/src/Game/AI/GoalieSave.cpp b/src/Game/AI/GoalieSave.cpp
  
      muLobCatchIndexStart = 0;
      muLobCatchCount = 0;
-@@ -339,6 +346,9 @@ void GoalieSave::InitData(Goalie* pGoalie)
+@@ -339,6 +346,9 @@
      }
  
      muNumPositionEntries = 6;
@@ -664,7 +688,7 @@ diff --git a/src/Game/AI/GoalieSave.cpp b/src/Game/AI/GoalieSave.cpp
 diff --git a/src/Game/AI/TeamPlayMachine.cpp b/src/Game/AI/TeamPlayMachine.cpp
 --- a/src/Game/AI/TeamPlayMachine.cpp
 +++ b/src/Game/AI/TeamPlayMachine.cpp
-@@ -57,6 +57,10 @@ void TeamPlayMachine::SelectState()
+@@ -57,6 +57,10 @@
  }
  
  TeamPlayMachine::TeamPlayMachine()
@@ -678,7 +702,7 @@ diff --git a/src/Game/AI/TeamPlayMachine.cpp b/src/Game/AI/TeamPlayMachine.cpp
 diff --git a/src/Game/Character.cpp b/src/Game/Character.cpp
 --- a/src/Game/Character.cpp
 +++ b/src/Game/Character.cpp
-@@ -708,7 +708,7 @@ void cCharacter::InitMovementStrafing(float fDirectionSeekSpeed,
+@@ -708,7 +708,7 @@
      mUnidentified024.m_fDecel = fDecel;
  }
  
@@ -687,7 +711,7 @@ diff --git a/src/Game/Character.cpp b/src/Game/Character.cpp
      cPN_SAnimController* pController)
  {
      cCharacter* pChar = (cCharacter*)nParam;
-@@ -723,12 +723,12 @@ void cCharacter::MatchAnimSpeedToCharacterSpeed(unsigned int nParam,
+@@ -723,12 +723,12 @@
      }
  }
  
@@ -706,7 +730,7 @@ diff --git a/src/Game/Character.cpp b/src/Game/Character.cpp
 diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
 --- a/src/Game/CharacterTriggers.cpp
 +++ b/src/Game/CharacterTriggers.cpp
-@@ -156,7 +156,7 @@ EmissionController* EmitGeneric(cCharacter* pCharacter, const char* baseName,
+@@ -156,7 +156,7 @@
      return pControl;
  }
  
@@ -715,7 +739,7 @@ diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
  {
      AnimTriggerCallbackInfo* pAnimTriggerCallbackInfo = (AnimTriggerCallbackInfo*)uParam;
  
-@@ -2077,12 +2077,22 @@ const char* GetCharacterEffectsName(cCharacter* pCharacter)
+@@ -2077,12 +2077,22 @@
  
  void SetCharacterPacketAVisible(cCharacter* pCharacter, bool bValue)
  {
@@ -738,7 +762,7 @@ diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
  }
  
  bool IsCharacterGoalie(cCharacter* pCharacter)
-@@ -2092,12 +2102,22 @@ bool IsCharacterGoalie(cCharacter* pCharacter)
+@@ -2092,12 +2102,22 @@
  
  void SetCharacterLeftPropAnimated(cCharacter* pCharacter, bool bAnimated)
  {
@@ -789,7 +813,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
  
  extern "C" void CleanupMegaStrike(Goalie* pGoalie);
  class FuzzyRuntimeBase;
-@@ -945,7 +949,7 @@ void Goalie::DoNavigation(float fDeltaT, float fIdleDistance, Goalie::eNaviMode
+@@ -945,7 +949,7 @@
      cBall* pBall;
      s16 aGoalie2Ball;
      u16 absBallAngleDiff;
@@ -798,7 +822,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
      int eAnimID;
      int nCurrentAnimID;
      int nFinalAnim;
-@@ -1396,7 +1400,7 @@ void Goalie::DoNavigation(float fDeltaT, float fIdleDistance, Goalie::eNaviMode
+@@ -1396,7 +1400,7 @@
      cPN_SingleAxisBlender* pSAB_R = CreateSingleAxisBlender(nRightAnims, 3, 1, MoveWeightCB, 0.1f, 0, 0.0f);
  
      cPN_SingleAxisBlender* pSAB = pSAB_L;
@@ -807,7 +831,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
      cPN_SAnimController* pPrevCtrlr = 0;
      int j;
  
-@@ -1416,7 +1420,7 @@ void Goalie::DoNavigation(float fDeltaT, float fIdleDistance, Goalie::eNaviMode
+@@ -1416,7 +1420,7 @@
                  if (pPrevCtrlr == 0)
                  {
                      pCtrlr->m_pSynchronizedWeightCallback = StrafeSynchronizedSpeedCallback;
@@ -816,7 +840,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
                      pCtrlr->m_fSynchronizedWeight = 0.0f;
                  }
                  else
-@@ -2916,9 +2920,13 @@ void Goalie::SetGoalieAction(
+@@ -2916,9 +2920,13 @@
  }
  
  void Goalie::SaveBlendCallback(
@@ -831,7 +855,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
      unsigned int saveDataIndex = nParam & 3U;
  
      SaveData* pSaveData = pThis->mBlendInfo.mpSaveData[saveDataIndex];
-@@ -2968,7 +2976,7 @@ cPoseNode* Goalie::SetupBlender(bool bPrimary, const float* fStartPercent,
+@@ -2968,7 +2976,7 @@
          index2 = 3;
      }
      int animID = GetAnimID(mBlendInfo, index1);
@@ -840,7 +864,7 @@ diff --git a/src/Game/Goalie.cpp b/src/Game/Goalie.cpp
      pSaveController1->m_fPlaybackSpeedScale
          = mBlendInfo.mfMilestoneScale[index1][nMilestone];
      if (fStartPercent[index1] > 0.0f)
-@@ -2988,7 +2996,7 @@ cPoseNode* Goalie::SetupBlender(bool bPrimary, const float* fStartPercent,
+@@ -2988,7 +2996,7 @@
      {
          animID = GetAnimID(mBlendInfo, index2);
          cPN_SAnimController* pSaveController2
@@ -867,7 +891,7 @@ diff --git a/src/Game/Physics/PhysicsCharacter.cpp b/src/Game/Physics/PhysicsCha
 diff --git a/src/Game/Physics/PhysicsGoalie.cpp b/src/Game/Physics/PhysicsGoalie.cpp
 --- a/src/Game/Physics/PhysicsGoalie.cpp
 +++ b/src/Game/Physics/PhysicsGoalie.cpp
-@@ -18,7 +18,10 @@ static const f32 CANT_COLLIDE = 3.402823466e+38F;
+@@ -18,7 +18,10 @@
  
  // Retail addresses this runtime-initialised constant through the small
  // read-only data base (r2), so it lives in .sbss2 rather than .sbss.
@@ -882,7 +906,7 @@ diff --git a/src/Game/Physics/PhysicsGoalie.cpp b/src/Game/Physics/PhysicsGoalie
 diff --git a/src/Game/Physics/PhysicsWaluigiWall.cpp b/src/Game/Physics/PhysicsWaluigiWall.cpp
 --- a/src/Game/Physics/PhysicsWaluigiWall.cpp
 +++ b/src/Game/Physics/PhysicsWaluigiWall.cpp
-@@ -406,10 +406,17 @@ WaluigiWallManager::WaluigiWallManager()
+@@ -406,10 +406,17 @@
      , mEmitterStarted(false)
      , mHeightUpdateDelay(0.0f)
  {
@@ -903,7 +927,7 @@ diff --git a/src/Game/Physics/PhysicsWaluigiWall.cpp b/src/Game/Physics/PhysicsW
 diff --git a/src/Game/Physics/PhysicsWorld.cpp b/src/Game/Physics/PhysicsWorld.cpp
 --- a/src/Game/Physics/PhysicsWorld.cpp
 +++ b/src/Game/Physics/PhysicsWorld.cpp
-@@ -209,6 +209,10 @@ void PhysicsWorld::SpaceCollideCallback(void* data, dxGeom* geom1, dxGeom* geom2
+@@ -209,6 +209,10 @@
      }
  
      int i;
@@ -914,7 +938,7 @@ diff --git a/src/Game/Physics/PhysicsWorld.cpp b/src/Game/Physics/PhysicsWorld.c
      contact = &contacts[0];
      i = 0;
      goto checkContact;
-@@ -229,8 +233,13 @@ processContact:
+@@ -229,8 +233,13 @@
          contact->surface.slip2 = contacts[0].surface.slip2;
      }
  
@@ -931,7 +955,7 @@ diff --git a/src/Game/Physics/PhysicsWorld.cpp b/src/Game/Physics/PhysicsWorld.c
 diff --git a/src/Game/Player.cpp b/src/Game/Player.cpp
 --- a/src/Game/Player.cpp
 +++ b/src/Game/Player.cpp
-@@ -1005,7 +1005,7 @@ cPN_SingleAxisBlender* cPlayer::CreateSingleAxisBlender(
+@@ -1005,7 +1005,7 @@
      const int* pSABAnims,
      int nNumSABAnims,
      int nPrimaryAnim,
@@ -940,7 +964,7 @@ diff --git a/src/Game/Player.cpp b/src/Game/Player.cpp
      float fWeightSeek,
      cPN_SAnimController* pSynchingController,
      float fInitialWeight)
-@@ -1014,7 +1014,7 @@ cPN_SingleAxisBlender* cPlayer::CreateSingleAxisBlender(
+@@ -1014,7 +1014,7 @@
      cPN_SAnimController* pNewCurrentAnimController = NULL;
  
      cPN_SingleAxisBlender* pSAB = new cPN_SingleAxisBlender(
@@ -949,7 +973,7 @@ diff --git a/src/Game/Player.cpp b/src/Game/Player.cpp
  
      pAnims = pSABAnims;
      for (int i = 0; i < nNumSABAnims; i++)
-@@ -1037,7 +1037,7 @@ cPN_SingleAxisBlender* cPlayer::CreateSingleAxisBlender(
+@@ -1037,7 +1037,7 @@
  
      SetAnimID(pSABAnims[nPrimaryAnim]);
      m_pCurrentAnimController = pNewCurrentAnimController;
@@ -975,7 +999,7 @@ diff --git a/src/Game/Render/MegaBallIndicators.cpp b/src/Game/Render/MegaBallIn
  #include <math.h>
  
  void SendMegaBallPointerUpdate(u16 angle, u32 textureIndex, u32 status,
-@@ -578,6 +584,9 @@ void UpdateAndRenderMegaBallPointer(float fDeltaT)
+@@ -578,6 +584,9 @@
      unsigned int nClosest;
      PadBackend* pPlatform;
      cGlobalPad* pController = gMegaBallController;
@@ -985,7 +1009,7 @@ diff --git a/src/Game/Render/MegaBallIndicators.cpp b/src/Game/Render/MegaBallIn
      if (pController == 0)
      {
          goto no_controller_data;
-@@ -587,18 +596,32 @@ void UpdateAndRenderMegaBallPointer(float fDeltaT)
+@@ -587,18 +596,32 @@
      {
          goto no_controller_data;
      }
@@ -1021,7 +1045,7 @@ diff --git a/src/Game/Render/MegaBallIndicators.cpp b/src/Game/Render/MegaBallIn
 diff --git a/src/Game/SAnim.cpp b/src/Game/SAnim.cpp
 --- a/src/Game/SAnim.cpp
 +++ b/src/Game/SAnim.cpp
-@@ -283,8 +283,8 @@ bool cSAnim::GetChannelWeight(int channel, float time, float* weight) const
+@@ -283,8 +283,8 @@
  
  
  #ifndef MSCHARGED_NATIVE
@@ -1032,7 +1056,7 @@ diff --git a/src/Game/SAnim.cpp b/src/Game/SAnim.cpp
  {
      cSAnimCallback* pCallback = 0;
      lbl_805840D8.Allocate(pCallback);
-@@ -923,8 +923,8 @@ bool cSAnim::GetChannelWeight(int channel, float time, float* weight) const
+@@ -923,8 +923,8 @@
  }
  
  
@@ -1046,7 +1070,7 @@ diff --git a/src/Game/SAnim.cpp b/src/Game/SAnim.cpp
 diff --git a/src/Game/SAnim/pnFeather.cpp b/src/Game/SAnim/pnFeather.cpp
 --- a/src/Game/SAnim/pnFeather.cpp
 +++ b/src/Game/SAnim/pnFeather.cpp
-@@ -6,8 +6,8 @@ SlotPool<cPN_Feather> cPN_Feather::m_FeatherSlotPool(16, 16);
+@@ -6,8 +6,8 @@
  
  cPN_Feather::cPN_Feather(
      cSHierarchy* hierarchy,
@@ -1060,7 +1084,7 @@ diff --git a/src/Game/SAnim/pnFeather.cpp b/src/Game/SAnim/pnFeather.cpp
 diff --git a/src/Game/SAnim/pnSAnimController.cpp b/src/Game/SAnim/pnSAnimController.cpp
 --- a/src/Game/SAnim/pnSAnimController.cpp
 +++ b/src/Game/SAnim/pnSAnimController.cpp
-@@ -624,8 +624,8 @@ cPoseNode* cPN_SAnimController::Update(float dt)
+@@ -624,8 +624,8 @@
  
  cPN_SAnimController::cPN_SAnimController(cSAnim* anim,
      const AnimRetarget* retarget, ePlayMode playMode,
@@ -1074,7 +1098,7 @@ diff --git a/src/Game/SAnim/pnSAnimController.cpp b/src/Game/SAnim/pnSAnimContro
 diff --git a/src/Game/SAnim/pnSingleAxisBlender.cpp b/src/Game/SAnim/pnSingleAxisBlender.cpp
 --- a/src/Game/SAnim/pnSingleAxisBlender.cpp
 +++ b/src/Game/SAnim/pnSingleAxisBlender.cpp
-@@ -4,8 +4,8 @@ SlotPool<cPN_SingleAxisBlender>
+@@ -4,8 +4,8 @@
      cPN_SingleAxisBlender::m_SingleAxisBlenderSlotPool(16, 16);
  
  cPN_SingleAxisBlender::cPN_SingleAxisBlender(int numChildren,
@@ -1098,7 +1122,7 @@ diff --git a/src/Game/SH/SHPause.cpp b/src/Game/SH/SHPause.cpp
  
  
  static const char* MENU_NAMES[7] = {
-@@ -374,7 +377,11 @@ void PauseMenuScene::InitializePointerButtons()
+@@ -374,7 +377,11 @@
   */
  void PauseMenuScene::OnOptionPointerEnter(unsigned int index, void* context)
  {
@@ -1110,7 +1134,7 @@ diff --git a/src/Game/SH/SHPause.cpp b/src/Game/SH/SHPause.cpp
      ++mHoverCounts[index];
      if (!mOptionButtons[which].HasOtherPointerState(1, index))
      {
-@@ -389,7 +396,11 @@ void PauseMenuScene::OnOptionPointerEnter(unsigned int index, void* context)
+@@ -389,7 +396,11 @@
   */
  void PauseMenuScene::OnOptionPointerLeave(unsigned int index, void* context)
  {
@@ -1122,7 +1146,7 @@ diff --git a/src/Game/SH/SHPause.cpp b/src/Game/SH/SHPause.cpp
      --mHoverCounts[index];
      if (!mOptionButtons[which].HasOtherPointerState(1, index))
          mOptionInstances[which]->SetActiveSlide("off", true, false);
-@@ -405,7 +416,11 @@ void PauseMenuScene::OnOptionPointerPress(unsigned int index, void* context)
+@@ -405,7 +416,11 @@
          return;
      mSelectionMade = true;
      FEAudio::PlayAnimAudioEvent(0xF0AFD586, 0, 0, 1);
@@ -1137,7 +1161,7 @@ diff --git a/src/Game/SH/SHPause.cpp b/src/Game/SH/SHPause.cpp
 diff --git a/src/Game/Team.cpp b/src/Game/Team.cpp
 --- a/src/Game/Team.cpp
 +++ b/src/Game/Team.cpp
-@@ -620,7 +620,13 @@ void cTeam::UpdateTeamAI(float fDeltaT)
+@@ -620,7 +620,13 @@
          mtTeamStyleTimer.SetSeconds(1.0f);
      }
  
@@ -1191,7 +1215,7 @@ diff --git a/src/Game/Triggers/AnimTagScript.cpp b/src/Game/Triggers/AnimTagScri
  
  u8 AnimTagScriptInterpreter::SetupAnimationTriggers(void* pFileData,
      unsigned long FileSize, cInventory<cSAnim>* pAnimInventory)
-@@ -48,7 +52,7 @@ u8 AnimTagScriptInterpreter::SetupAnimationTriggers(BinaryTriggerFile& file,
+@@ -48,7 +52,7 @@
  
                  float fTime = pTriggerRecord->Frame;
                  fTime /= (float)iterator.Current()->m_nNumKeys;
@@ -1200,7 +1224,7 @@ diff --git a/src/Game/Triggers/AnimTagScript.cpp b/src/Game/Triggers/AnimTagScri
                      AnimTagScriptInterpreter::AnimControllerCB);
  
                  file.m_CurrentTrigger++;
-@@ -56,6 +60,21 @@ u8 AnimTagScriptInterpreter::SetupAnimationTriggers(BinaryTriggerFile& file,
+@@ -56,6 +60,21 @@
          }
      }
  
@@ -1222,7 +1246,7 @@ diff --git a/src/Game/Triggers/AnimTagScript.cpp b/src/Game/Triggers/AnimTagScri
      m_ppBytecode[m_BytecodeCount]
          = nlMalloc(file.m_FileSize
                  - ((u32)((u8*)file.m_pFileData
-@@ -68,6 +87,7 @@ u8 AnimTagScriptInterpreter::SetupAnimationTriggers(BinaryTriggerFile& file,
+@@ -68,6 +87,7 @@
              - ((u32)((u8*)file.m_pFileData
                     + file.m_pFileData->BytecodeOffset)
                  - (u32)file.m_pFileData));
@@ -1251,7 +1275,7 @@ diff --git a/src/Game/Triggers/BinaryTriggerFile.cpp b/src/Game/Triggers/BinaryT
 diff --git a/src/Game/Triggers/SebringAnimScript.cpp b/src/Game/Triggers/SebringAnimScript.cpp
 --- a/src/Game/Triggers/SebringAnimScript.cpp
 +++ b/src/Game/Triggers/SebringAnimScript.cpp
-@@ -12,7 +12,7 @@ void SebringAnimTagScriptInterpreter::TriggerFired(
+@@ -12,7 +12,7 @@
          AnimTriggerCallbackInfo data;
          data.m_uEventID = triggerId;
          data.m_fIntensity = 100.0f;
@@ -1275,7 +1299,7 @@ diff --git a/src/Game/WorldTriggers.cpp b/src/Game/WorldTriggers.cpp
 diff --git a/src/ode/collision_kernel.cpp b/src/ode/collision_kernel.cpp
 --- a/src/ode/collision_kernel.cpp
 +++ b/src/ode/collision_kernel.cpp
-@@ -28,7 +28,11 @@ for geometry objects
+@@ -28,7 +28,11 @@
  */
  
  #include <ode/common.h>

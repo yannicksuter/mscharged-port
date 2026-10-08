@@ -19,7 +19,7 @@ revolution/mtx/mtx.h.
 diff --git a/src/Game/Render/depthoffield.cpp b/src/Game/Render/depthoffield.cpp
 --- a/src/Game/Render/depthoffield.cpp
 +++ b/src/Game/Render/depthoffield.cpp
-@@ -21,6 +21,10 @@ extern "C"
+@@ -21,6 +21,10 @@
      void GXProject(float x, float y, float z, const Mtx matrix,
          const float* projection, const float* viewport, float* screenX,
          float* screenY, float* screenZ);
@@ -33,7 +33,7 @@ diff --git a/src/Game/Render/depthoffield.cpp b/src/Game/Render/depthoffield.cpp
 diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
 --- a/src/Game/Task/BeginFrameTask.cpp
 +++ b/src/Game/Task/BeginFrameTask.cpp
-@@ -441,7 +441,7 @@ void BeginFrameTask::Run(float dt)
+@@ -441,7 +441,7 @@
      }
  
  #endif // uninitialized HBM/warble/screenshot endpoints omitted
@@ -42,7 +42,7 @@ diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
      HideLayerView(eCLV_ShadowVolume);
      HideLayerView(eCLV_ShadowVolumeBlend);
  #endif // both3D shadow views are omitted by existing Anark-only setup
-@@ -465,7 +465,7 @@ void BeginFrameTask::Run(float dt)
+@@ -465,7 +465,7 @@
          g_FrameCounter.DisplayFrameTicker();
      }
  
@@ -51,7 +51,7 @@ diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
      if (nlTaskManager::m_pInstance->mCurrentState & 0x2001B)
      {
          GetPresentation()->Update(dt);
-@@ -475,7 +475,7 @@ void BeginFrameTask::Run(float dt)
+@@ -475,7 +475,7 @@
  #endif // normal Presentation/NIS startup omitted
      glBeginFrame();
  
@@ -60,7 +60,7 @@ diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
      for (int i = 0; i < 10; i++)
      {
          if (g_pCharacters[i] != NULL)
-@@ -488,7 +488,7 @@ void BeginFrameTask::Run(float dt)
+@@ -488,7 +488,7 @@
  #if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_CAMERAS)
      cCameraManager::Update(dt);
  #endif
@@ -69,7 +69,7 @@ diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
      if (!(nlTaskManager::m_pInstance->mCurrentState & 0x18))
      {
          DepthOfFieldManager::instance.TurnOff();
-@@ -504,7 +504,7 @@ void BeginFrameTask::Run(float dt)
+@@ -504,7 +504,7 @@
  #endif // full original primary and secondary setup, with the genuine NIS owner
      SetupRenderInfo();
  

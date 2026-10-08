@@ -13,7 +13,7 @@ scripts keeps its existing gate.
 diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
 --- a/src/Game/AsyncLoading.cpp
 +++ b/src/Game/AsyncLoading.cpp
-@@ -287,7 +287,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -287,7 +287,7 @@
  #else
      switch (functionIndex)
      {
@@ -22,7 +22,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 0:
          LoadTrophyTemplates();
          break;
-@@ -317,7 +317,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -317,7 +317,7 @@
          CreateLargeFEResourcePool();
          break;
  #endif
@@ -31,7 +31,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 3:
          CreateFEResourcePool();
          break;
-@@ -333,7 +333,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -333,7 +333,7 @@
          break;
      }
  #endif
@@ -40,7 +40,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 5:
          m_SP++;
          m_SP[-1] = CharacterLoader::sInstance.ShareDuplicateAnimInventory();
-@@ -502,6 +502,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -502,6 +502,8 @@
              fn_80116988, (void*)"FE_GEN_SPLASH");
          FEAudio::SetSoundCategory(0x15);
          break;
@@ -49,7 +49,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 18:
          lbl_806E1058 += gAudioEnabled ? 1 : 0;
          g_pAudioSystem->GetBundleManager()->GetSoundMap()->UnloadBank(0x12);
-@@ -515,15 +517,19 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -515,15 +517,19 @@
          FinishLoadingStepOrUndo(this, AsyncFinalizeCameraLoading());
          break;
  #endif
@@ -70,7 +70,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 22:
          SetLoadingComment("AsyncFinalizeLoadingAI");
          FinishLoadingStepOrUndo(this, ApplyFuzzyByteCode());
-@@ -589,7 +595,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -589,7 +595,7 @@
          }
          break;
  #endif
@@ -79,7 +79,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 29:
          CharacterLoader::sInstance.StartLoadingCaptainAudio();
          break;
-@@ -640,15 +646,19 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -640,15 +646,19 @@
          AsyncStartCameraLoadingForStadiumViewer();
          break;
  #endif
@@ -100,7 +100,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 40:
          SetLoadingComment("AsyncStartLoadingAI");
          LoadFuzzyByteCode(GetFuzzyAIScriptFilename(), true);
-@@ -663,7 +673,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -663,7 +673,7 @@
          FinishLoadingStep(this);
          break;
  #endif
@@ -109,7 +109,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 42:
          SetLoadingComment("AsyncStartLoadingGameFE");
          lbl_806E1060 = 0;
-@@ -690,7 +700,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -690,7 +700,7 @@
          FinishLoadingStepOrUndo(this, FinishLoadFEWorld());
          break;
  #endif
@@ -118,7 +118,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 46:
          StopSound(0x7FC13AA3, this);
          break;
-@@ -711,12 +721,16 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -711,12 +721,16 @@
          }
          break;
  #endif
@@ -136,7 +136,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 50:
          CharacterLoader::sInstance.BuildCharacterList();
          break;
-@@ -746,18 +760,26 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -746,18 +760,26 @@
          FakeBallWorld::Init(g_pBall);
          FinishLoadingStep(this);
          break;
@@ -163,7 +163,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 61:
          --m_SP;
          break;
-@@ -840,7 +862,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -840,7 +862,7 @@
          FinishLoadingStepOrUndo(this, gNPCManager->FinishLoadNPCTemplate());
          break;
  #endif
@@ -172,7 +172,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 77:
          SetLoadingComment("FinalizeLoadingSharedTextures");
          FinishLoadingStepOrUndo(this,
-@@ -914,7 +936,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -914,7 +936,7 @@
          fn_80119528(this);
          break;
  #endif
@@ -181,7 +181,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 87:
          fn_80119EC0(this);
          break;
-@@ -928,6 +950,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -928,6 +950,8 @@
      case 90:
          fn_8011A800(this);
          break;
@@ -190,7 +190,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 91:
          SetLoadingComment("InitializeGameStateFinalizeForStadimViewer");
          BeginFrameTask::s_FramerateLocked = false;
-@@ -936,6 +960,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -936,6 +960,8 @@
          mLoadingState = 1;
          FinishLoadingStep(this);
          break;
@@ -199,7 +199,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 92:
          fn_8011A570(this);
          break;
-@@ -974,6 +1000,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -974,6 +1000,8 @@
          CreatePhysicsWorld();
          FinishLoadingStep(this);
          break;
@@ -208,7 +208,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 98:
          fn_8011B6E8(this);
          break;
-@@ -989,6 +1017,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -989,6 +1017,8 @@
          FinishLoadingStep(this);
          break;
      }
@@ -217,7 +217,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 100:
          SetLoadingComment("InitializeWorldNPCTemplates");
          lbl_806E1050->LoadTemplates("ini/WorldNPCs.ini");
-@@ -1051,6 +1081,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -1051,6 +1081,8 @@
      case 109:
          gNPCManager->CreateDiddyBanana();
          break;
@@ -226,7 +226,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 110:
          gNPCManager->CreateBirdoEgg();
          break;
-@@ -1075,6 +1107,8 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -1075,6 +1107,8 @@
      case 117:
          gNPCManager->CreateYoshiEgg();
          break;
@@ -235,7 +235,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 118:
          fn_80111664();
          break;
-@@ -1094,7 +1128,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -1094,7 +1128,7 @@
          break;
      }
  #endif
@@ -244,7 +244,7 @@ diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
      case 121:
          ReplayManager::Instance()->ResetSnapshots();
          break;
-@@ -1190,7 +1224,7 @@ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+@@ -1190,7 +1224,7 @@
          FinishLoadingStep(this);
          break;
  #endif
