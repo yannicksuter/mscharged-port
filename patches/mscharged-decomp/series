@@ -427,3 +427,5 @@
 0651-native-presentation-vm-string-transport.patch
 0652-native-original-unspecified-return-diagnostics.patch
 0653-decode-native-material-hash-carrier.patch
+0654-preserve-native-audio-contexts.patch
+0659-preserve-native-audio-debug-labels.patch
