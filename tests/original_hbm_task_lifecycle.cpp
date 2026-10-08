@@ -2,13 +2,11 @@
 #include "platform/thread_queues.h"
 #include "revolution/hbm/nw4hbm/snd/TaskManager.h"
 #include "revolution/hbm/nw4hbm/snd/TaskThread.h"
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <dlfcn.h>
 #include <stdexcept>
-#include <thread>
 
 // This observer alone uses -fno-access-control. Original classes and TUs stay
 // unchanged, and no observation supplies or mutates a source owner or field.
@@ -16,7 +14,6 @@ namespace {
 using nw4hbm::snd::detail::TaskManager;
 using nw4hbm::snd::detail::TaskThread;
 using namespace mscharged::platform;
-using namespace std::chrono_literals;
 unsigned checks{};
 
 void Check(bool value, const char* message) {
@@ -30,14 +27,6 @@ public:
 private:
     BOOL previous_;
 };
-template<class F> void Until(F condition) {
-    const auto limit = std::chrono::steady_clock::now() + 2s;
-    while (!condition()) {
-        if (std::chrono::steady_clock::now() >= limit)
-            throw std::runtime_error("Original TaskThread did not reach its actual wait boundary");
-        std::this_thread::yield();
-    }
-}
 bool Blocked(TaskThread& source) {
     Mask mask;
     return source.mThread.state == OS_THREAD_STATE_WAITING
@@ -73,13 +62,13 @@ int main(int argc, char** argv) {
         Check(!destroy(), "Cold original Destroy fabricated a worker");
         u32 initial_blocks{}, initial_block_size{};
         for (unsigned cycle = 0; cycle < 4; ++cycle) {
-            Check(create(12), "Original TaskThread Create failed");
-            // A selected-source observation, not Create-return readiness. No
-            // wait is added to source callers to hide the scheduling boundary.
-            Until([&] { return Blocked(source); });
+            Check(create(3), "Original TaskThread Create failed");
+            // Original Resume preempts this priority-16 caller until the real
+            // priority-3 entry reaches its own blocking receive. No observer wait.
+            Check(Blocked(source), "Original Create returned before its higher-priority receive wait");
             {
                 Mask mask;
-                Check(source.mCreateFlag && source.mThread.suspend == 0 && source.mThread.base == 12,
+                Check(source.mCreateFlag && source.mThread.suspend == 0 && source.mThread.base == 3,
                     "Original Create/Resume did not establish the real source owner");
                 Check(source.mMsgQueue.msgArray == source.mMsgBuffer && source.mMsgQueue.msgCount == 8,
                     "Original worker did not initialize its own message queue");
@@ -87,7 +76,7 @@ int main(int argc, char** argv) {
                     "A source join was invented before Destroy");
             }
             const auto* descriptor = &source.mThread;
-            Check(create(12) && descriptor == &source.mThread && Blocked(source),
+            Check(create(3) && descriptor == &source.mThread && Blocked(source),
                 "Repeated original Create changed its real worker lifetime");
             s32 before{};
             {
@@ -95,11 +84,12 @@ int main(int argc, char** argv) {
                 before = source.mMsgQueue.firstIndex;
             }
             wake();
-            Until([&] {
-                if (!Blocked(source)) return false;
-                Mask mask;
-                return source.mMsgQueue.firstIndex == (before + 1) % 8;
-            });
+            Check(destroy(), "Immediate original Wake/DONE/Destroy did not join its real worker");
+            Check(source.mMsgQueue.firstIndex == (before + 2) % 8,
+                "Original EXECUTE/DONE message consumption order changed");
+            Check(reinterpret_cast<std::uintptr_t>(source.mMsgBuffer[before]) == TaskThread::MSG_EXECUTE
+                && reinterpret_cast<std::uintptr_t>(source.mMsgBuffer[(before + 1) % 8]) == TaskThread::MSG_DONE,
+                "Actual source ring did not retain EXECUTE followed by DONE");
             auto& manager = *static_cast<TaskManager*>(manager_owner());
             {
                 Mask mask;
@@ -118,7 +108,6 @@ int main(int argc, char** argv) {
                 Check(count == initial_blocks && size == initial_block_size,
                     "Empty original worker changed the existing task storage");
             }
-            Check(destroy(), "Original MSG_DONE/Destroy did not join its real worker");
             {
                 Mask mask;
                 Check(!source.mCreateFlag && source.mThread.state == OS_THREAD_STATE_EXITED
@@ -136,8 +125,8 @@ int main(int argc, char** argv) {
         }
         DrainNativeThreadLifetimes();
         Check(dlclose(module) == 0, "Joined source module could not be unloaded");
-        std::printf("Original HBM TaskThread: %u checks, four genuine receive/Execute/DONE/join cycles, "
-            "RTLD_NOW; source unit heap %u blocks of %u bytes. Create-return readiness, full HBM and "
+        std::printf("Original HBM TaskThread: %u checks, four immediate priority-3 Create/Wake/Execute/DONE/join cycles, "
+            "RTLD_NOW; source unit heap %u blocks of %u bytes. Full HBM, task capacity and "
             "active cancellation remain unqualified.\n", checks, initial_blocks, initial_block_size);
         return 0;
     } catch (const std::exception& error) {

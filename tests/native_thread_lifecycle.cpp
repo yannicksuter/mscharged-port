@@ -288,8 +288,10 @@ int main() {
             DrainNativeThreadLifetimes();
         }
         {
+            // This native-only spin fixture tests refusal to kill running C++ frames.
+            // Equal priority avoids original higher-priority Resume preemption.
             Owned storage; RunningJob job; job.result=payload.get();
-            Check(OSCreateThread(&storage.sdk,RunningWorker,&job,storage.Top(),0x4000,10,0),"Running source Create failed");
+            Check(OSCreateThread(&storage.sdk,RunningWorker,&job,storage.Top(),0x4000,OSGetThreadPriority(caller),0),"Running source Create failed");
             Check(OSResumeThread(&storage.sdk)==1,"Running source Resume failed"); Until([&]{return job.entered.load();});
             Reject([&]{OSSuspendThread(&storage.sdk);},"External RUNNING suspension faked native preemption");
             Check(!OSIsThreadSuspended(&storage.sdk)&&storage.sdk.state==OS_THREAD_STATE_RUNNING,
