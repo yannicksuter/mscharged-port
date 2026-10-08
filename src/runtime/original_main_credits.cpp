@@ -6,6 +6,7 @@
 #include <aurora/hardware.h>
 #include "bootstrap/launch_options.h"
 #include "platform/path.h"
+#include "platform/disc.h"
 #include <aurora/event.h>
 #include <aurora/gfx.h>
 #include <aurora/gfx.hpp>
@@ -258,6 +259,13 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         const unsigned aspectWidth=widescreen?16u:4u, aspectHeight=widescreen?9u:3u;
         std::printf("%s\n",mscharged::DescribeLaunch(launch).c_str());
         Check(!disc.empty() && std::filesystem::is_regular_file(launch.disc_path),"Supply your own game ISO/RVZ with --disc FILE or [game] disc in the INI");
+        // Validate native preferences before acquiring any hardware/module owner.
+        // This host profile is USA/NTSC; the original game still owns its region
+        // and localization branches after reading the supplied SC language.
+        const auto systemLanguage = mscharged::ResolveNativeUSASystemLanguage(launch.settings.language);
+        const auto discProfile = mscharged::InspectDisc(launch.disc_path);
+        Check(discProfile.game_id == "R4QE01" && discProfile.revision == 1,
+              "The original native runtime currently supports R4QE01 revision 1 only");
         Check(!resizeCheck || !launch.settings.fullscreen,"--resize-check requires a windowed launch; add --window");
         Check(!priorBoot || !resizeCheck,
               "The prior Boot stage retains original effects/NPC owners; resize teardown is not qualified");
@@ -327,8 +335,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             mscharged::platform::CreateVirginRTCImage());
         __OSInitSram();
         Check(__OSSyncSram(), "Original SRAM initialization did not complete its real EXI read");
-        // Explicit USA diagnostic backing; independent SC and VI settings.
-        const mscharged::NativeSystemSettings settings{1,0,0,std::uint8_t(widescreen),1};
+        // Explicit USA native preference; independent SC and VI settings.
+        const mscharged::NativeSystemSettings settings{systemLanguage,0,0,std::uint8_t(widescreen),1};
         mscharged::ConfigureNativeSystemSettings(settings);
         // No virtual Wii address record has been supplied. Original SC queries
         // retain their unavailable-record result, without inferring a country.
