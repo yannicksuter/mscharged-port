@@ -337,6 +337,111 @@ void CloseBlockedRead() {
           "Literal Wii ABI: active/queued close cancellation changed -3/10");
 }
 
+struct CancelAllProbe {
+    std::array<Overlay,2> providers;
+    std::array<DVDFileInfo,2> files{};
+    std::array<std::array<u8,128>,2> bytes{};
+    std::array<std::atomic<unsigned>,2> command_calls{}, command_order{};
+    std::array<std::atomic<s32>,2> command_results{}, command_states{};
+    std::atomic<unsigned> sequence{}, operation_calls{};
+    unsigned operation_order{};
+    s32 operation_result{};
+    DVDCommandBlock* operation_argument{};
+    bool close_handles{}, operation_after_drain{}, operation_handles_live{}, retired{};
+    s32 operation_drive{};
+    static CancelAllProbe* current;
+    static void Command(s32 result,DVDFileInfo* file) {
+        auto& p=*current;
+        const unsigned index=file==&p.files[0]?0:file==&p.files[1]?1:2;
+        if(index==2) std::terminate();
+        p.command_results[index]=result;
+        p.command_states[index]=DVDGetFileInfoStatus(file);
+        p.command_order[index]=++p.sequence;
+        ++p.command_calls[index];
+    }
+    static void Operation(s32 result,DVDCommandBlock* argument) {
+        auto& p=*current;
+        p.operation_result=result;
+        p.operation_argument=argument; // observed only; active nullptr is a separate hold
+        p.operation_order=++p.sequence;
+        p.operation_drive=DVDGetDriveStatus(); // must be outside the worker latch
+        if(p.close_handles) {
+            p.operation_after_drain=p.providers[0].finished&&p.command_calls[0]==1&&p.command_calls[1]==1;
+            p.operation_handles_live=p.providers[0].handles==1&&p.providers[1].handles==1;
+            p.retired=DVDClose(&p.files[0])&&DVDClose(&p.files[1]);
+        }
+        ++p.operation_calls;
+    }
+};
+CancelAllProbe* CancelAllProbe::current{};
+
+void CheckCancelAllCompletion() {
+    CancelAllProbe empty;
+    CancelAllProbe::current=&empty;
+    const auto empty_admitted=DVDCancelAllAsync(CancelAllProbe::Operation);
+    const auto empty_result=empty.operation_result;
+    const auto empty_calls=empty.operation_calls.load();
+    const auto empty_argument=empty.operation_argument;
+    CancelAllProbe::current=nullptr;
+    Check(empty_admitted&&empty_calls==1&&empty_argument==nullptr,
+          "Empty cancel-all lost its one actual operation callback");
+
+    CancelAllProbe owner;
+    owner.providers[0].blocked=true;
+    owner.close_handles=true;
+    CancelAllProbe::current=&owner;
+    const AuroraOverlayCallbacks functions{Overlay::Open,Overlay::Close,Overlay::Read,Overlay::Seek};
+    aurora_dvd_overlay_callbacks(&functions);
+    const std::array<AuroraOverlayFile,2> files{{
+        {"/cancel-all-active.bin",&owner.providers[0],128},
+        {"/cancel-all-queued.bin",&owner.providers[1],128}}};
+    aurora_dvd_overlay_files(files.data(),files.size(),nullptr);
+    owner.bytes[0].fill(0x71);owner.bytes[1].fill(0x72);
+    Check(DVDOpen(files[0].fileName,&owner.files[0])&&DVDOpen(files[1].fileName,&owner.files[1]),
+          "Cancel-all actual handles did not open");
+    Check(DVDReadAsyncPrio(&owner.files[0],owner.bytes[0].data(),128,0,CancelAllProbe::Command,2),
+          "Cancel-all active read was not admitted");
+    Until([&]{return owner.providers[0].entered.load();});
+    Check(DVDReadAsyncPrio(&owner.files[1],owner.bytes[1].data(),128,0,CancelAllProbe::Command,2)&&
+          DVDGetFileInfoStatus(&owner.files[1])==2,"Cancel-all queued request was not really waiting");
+    bool pending_lifetimes{};
+    std::exception_ptr release_error;
+    std::thread release([&] {
+        try {
+            Until([&]{return owner.command_calls[1].load()==1;});
+            pending_lifetimes=owner.operation_calls==0&&!owner.providers[0].finished&&
+                owner.providers[0].handles==1&&owner.providers[1].handles==1&&
+                owner.providers[1].reads==0&&owner.command_results[1]==-3;
+        } catch(...) {release_error=std::current_exception();}
+        owner.providers[0].gate.Release();
+    });
+    const auto admitted=DVDCancelAllAsync(CancelAllProbe::Operation);
+    release.join();
+    aurora_dvd_overlay_files(nullptr,0,nullptr);
+    CancelAllProbe::current=nullptr;
+    if(release_error) std::rethrow_exception(release_error);
+    // All actual callbacks, worker and caller-owned handles have now retired.
+    std::printf("Native DVD cancel-all: commands=%d/%d operation=%d active_argument=%s\n",
+                owner.command_results[0].load(),owner.command_results[1].load(),
+                owner.operation_result,owner.operation_argument?"non-null":"null (separate pointer hold)");
+    Check(admitted&&pending_lifetimes,"Cancel-all invented completion before actual active worker drain");
+    Check(owner.command_calls[0]==1&&owner.command_calls[1]==1&&owner.operation_calls==1,
+          "Cancel-all duplicated/lost real command or operation callbacks");
+    Check(owner.command_results[0]==-3&&owner.command_results[1]==-3&&
+          owner.command_states[0]==10&&owner.command_states[1]==10,
+          "Literal Wii ABI: cancel-all command callbacks must remain -3/state10");
+    Check(owner.command_order[1]==1&&owner.command_order[0]==2&&owner.operation_order==3,
+          "Cancel-all operation completed before original queued/active command callbacks");
+    Check(owner.operation_after_drain&&owner.operation_handles_live&&owner.retired&&
+          owner.providers[0].handles==0&&owner.providers[1].handles==0,
+          "Cancel-all completion lost actual owner lifetime/reentrant handle retirement");
+    Check(owner.providers[0].reads==1&&owner.providers[1].reads==0&&owner.operation_drive==0,
+          "Cancel-all executed waiting I/O or retained an actual busy drive after drain");
+    for(auto byte:owner.bytes[1]) Check(byte==0x72,"Canceled queued read wrote caller bytes");
+    Check(owner.operation_result==0,"Literal Wii ABI: cancel-all operation completion must be GOOD0");
+    Check(empty_result==0,"Literal Wii ABI: empty cancel-all completion must be GOOD0");
+}
+
 void CheckDriveFault(const char* disc, bool reset_during_error) {
     Overlay fault;
     fault.fail=true;
@@ -545,6 +650,7 @@ int main(int argc,char** argv) {
         Check(__DVDGetCoverStatus()==DVD_COVER_CLOSED,"Mounted native medium lacked truthful cover");
         Check(DVDGetDriveStatus()==DVD_STATE_END,"Mounted idle drive reported a pending transfer");
         CheckNodRead();ResetBlockedRead();ResetStartedCallback();CheckReentrant();
+        CheckCancelAllCompletion();
         CloseBlockedRead();
         Check(__DVDGetCoverStatus()==DVD_COVER_OPENED,"Closed media retained published cover");
         __DVDPrepareReset();
