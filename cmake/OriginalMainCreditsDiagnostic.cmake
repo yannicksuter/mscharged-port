@@ -305,7 +305,7 @@ target_link_libraries(charged_original_main_credits_host PRIVATE
     charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
     charged_native_hardware_owner
     charged_native_video_output_device charged_native_filesystem_boot
-    charged_native_ipc_boot_buffer Threads::Threads ${CMAKE_DL_LIBS})
+    charged_native_ipc_boot_buffer charged_original_rtc Threads::Threads ${CMAKE_DL_LIBS})
 
 function(mscharged_link_original_main_credits target)
     add_dependencies(${target} mscharged_original_main_credits_module)
@@ -324,6 +324,9 @@ function(mscharged_link_original_main_credits target)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_host_exports.map")
     endif()
     mscharged_require_original_host_symbol(${target} PRIVATE SCGetSimpleAddressID)
+    foreach(symbol __OSInitSram __OSSyncSram __OSGetRTCFlags __OSClearRTCFlags)
+        mscharged_require_original_host_symbol(${target} PRIVATE "${symbol}")
+    endforeach()
     set_property(TARGET ${target} PROPERTY LINK_LIBRARY_OVERRIDE
         "WHOLE_ARCHIVE,aurora_gx,aurora_mtx,aurora_os")
 endfunction()

@@ -30,6 +30,7 @@
 #include "platform/ai.h"
 #include "platform/native_ax_module_memory.h"
 #include "platform/system.h"
+#include "platform/rtc_policy.h"
 #include "platform/video_device.h"
 #include "platform/video_output_device.h"
 #include "platform/interrupt_controller.h"
@@ -52,6 +53,9 @@
 #include <string>
 namespace aurora { extern AuroraConfig g_config; }
 extern "C" bool __OSInitSTM();
+// Whole original OSRtc software/cache owner, linked once into the host.
+extern "C" void __OSInitSram();
+extern "C" BOOL __OSSyncSram();
 namespace {
 void Check(bool value, const char* reason) { if (!value) throw std::runtime_error(reason); }
 struct Snapshot : std::enable_shared_from_this<Snapshot> {
@@ -301,12 +305,22 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(!OSGetArenaLo()||!OSGetMEM2ArenaLo())
             throw std::runtime_error("Actual captured SDK arenas unavailable");
         mscharged::platform::InitializeNativeInterruptController();
+        // Native EXI hardware precedes the original SRAM cache initializer.
+        // Preserve an existing image; first run explicitly uses the native
+        // virgin policy, independently of disc/locale/SC preferences.
+        mscharged::platform::InitializeNativeRTC(dataDirectory / "native-rtc.bin",
+            mscharged::platform::CreateVirginRTCImage());
+        __OSInitSram();
+        Check(__OSSyncSram(), "Original SRAM initialization did not complete its real EXI read");
         // Explicit USA diagnostic backing; independent SC and VI settings.
         const mscharged::NativeSystemSettings settings{1,0,0,std::uint8_t(widescreen),1};
         mscharged::ConfigureNativeSystemSettings(settings);
         // No virtual Wii address record has been supplied. Original SC queries
         // retain their unavailable-record result, without inferring a country.
         mscharged::ConfigureNativeSystemSimpleAddress(std::nullopt);
+        // No native IPL.IDL record is supplied. The original shutdown source
+        // owns its zero/default destination and interprets actual absence.
+        mscharged::ConfigureNativeSystemIdleMode(nullptr,0);
         mscharged::platform::ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT,false);
         if(nativeSend) {
             mscharged::platform::ConfigureNativeVideoOutputHardware(settings);
@@ -680,6 +694,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         }
         Check(!mscharged::platform::GetNativeAIStatus().initialized,
               "Original-main movie owner did not drain the actual host audio device");
+        // No source frame/callback follows this terminal diagnostic retirement.
+        // The endpoint refuses borrowed EXI state; it never clears source Scb.
+        mscharged::platform::ShutdownNativeRTC();
         if(resizeCheck) {
             // Retire the actual native hardware/window for the resize gate.
             // Original game tasks/CRT destruction remain explicitly omitted;
