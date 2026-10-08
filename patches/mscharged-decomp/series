@@ -447,3 +447,5 @@
 0671-preserve-native-audio-resource-contexts.patch
 0672-match-native-ode-allocation-handlers.patch
 0673-native-audio-tracking-key-width.patch
+0674-qualify-native-msl-locale-literals.patch
+0675-qualify-native-msl-empty-format-literals.patch
