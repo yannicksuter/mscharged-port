@@ -24,7 +24,39 @@ native branches decode the data.
   CharacterLoader::FinalizeLoadingCharacterPhysicsElements. The native branches
   read the count and expand each record through platform
   ReadCharacterPhysicsWord/ReadCharacterPhysicsElement (names stay byte strings).
+- Game/Drawable/DrawableCharacter.cpp, Game/Render/SkinAnimatedNPC.cpp: the
+  per-character and stadium-NPC shadowLevel colour is packed with a host-order
+  word cast; the original shadow-lighting stage (ColourFromWiiWord) reads a
+  numeric Wii RGBA word, so on little-endian hosts red collapsed to ~1/255 and
+  characters rendered teal/green in stadiums. The native branches pack with the
+  existing ColourToWiiWord, as GameObjectLighting's impostor producer does.
 
+diff --git a/src/Game/Drawable/DrawableCharacter.cpp b/src/Game/Drawable/DrawableCharacter.cpp
+--- a/src/Game/Drawable/DrawableCharacter.cpp
++++ b/src/Game/Drawable/DrawableCharacter.cpp
+@@ -31,6 +31,9 @@
+ #include "NL/nlTask.h"
+ #include "NL/gl/glTexture.h"
+ #include "Game/UnidentifiedStaticStorage.h"
++#if defined(MSCHARGED_NATIVE)
++#include "platform/gx_data_transport.h"
++#endif
+ 
+ static int g_nOnscreenUpdate[3] = { 2, 2, 2 };
+ static int g_nOffscreenUpdate[3] = { 4, 4, 4 };
+@@ -932,7 +935,12 @@
+     shadowColour.c[0] = channel;
+     shadowColour.c[1] = channel;
+     shadowColour.c[2] = channel;
++#if defined(MSCHARGED_NATIVE)
++    // The shadow-lighting stage reads a numeric Wii RGBA word.
++    unsigned long shadowColourValue = mscharged::platform::ColourToWiiWord(shadowColour);
++#else
+     unsigned long shadowColourValue = *(u32*)&shadowColour;
++#endif
+ 
+     pPacket = model->packets;
+     while (pPacket < model->packets + model->numPackets)
 diff --git a/src/Game/NetMeshEdge.cpp b/src/Game/NetMeshEdge.cpp
 --- a/src/Game/NetMeshEdge.cpp
 +++ b/src/Game/NetMeshEdge.cpp
@@ -207,3 +239,29 @@ diff --git a/src/Game/Physics/CharacterPhysicsElement.cpp b/src/Game/Physics/Cha
              }
              break;
          }
+diff --git a/src/Game/Render/SkinAnimatedNPC.cpp b/src/Game/Render/SkinAnimatedNPC.cpp
+--- a/src/Game/Render/SkinAnimatedNPC.cpp
++++ b/src/Game/Render/SkinAnimatedNPC.cpp
+@@ -21,6 +21,9 @@
+ #include "NL/nlMemory.h"
+ #include "NL/nlString.h"
+ #include "Game/UnidentifiedStaticStorage.h"
++#if defined(MSCHARGED_NATIVE)
++#include "platform/gx_data_transport.h"
++#endif
+ 
+ static char ShadowLevelName[] = "shadowLevel";
+ static char AlphaValueName[] = "alphaValue";
+@@ -146,7 +149,12 @@
+             &mWorldMatrix.GetTranslation()),
+         true);
+     glModelPacket* pPacket = pModel->packets;
++#if defined(MSCHARGED_NATIVE)
++    // The shadow-lighting stage reads a numeric Wii RGBA word.
++    u32 shadowColourValue = mscharged::platform::ColourToWiiWord(shadowColour);
++#else
+     u32 shadowColourValue = *reinterpret_cast<u32*>(&shadowColour);
++#endif
+ 
+     while (pPacket < pModel->packets + pModel->numPackets)
+     {
