@@ -320,6 +320,7 @@ target_compile_definitions(charged_original_main_credits_host PRIVATE
 target_compile_options(charged_original_main_credits_host PRIVATE
     -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off)
 target_link_libraries(charged_original_main_credits_host PRIVATE
+    charged_app_icon
     charged_native_module_loader
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
     aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm

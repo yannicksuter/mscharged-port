@@ -1,4 +1,5 @@
 #include "platform/graphics_stats.h"
+#include "platform/app_icon.h"
 #include "runtime/original_main_credits.h"
 #include "platform/graphics_backend.h"
 #include "runtime/original_sh_menu_diagnostic.h"
@@ -316,6 +317,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(!host.window||host.backend!=mscharged::platform::NativeGraphicsBackend)
             throw std::runtime_error(std::string("Actual ")+mscharged::platform::NativeGraphicsBackendName
                 +" foundation unavailable; no fallback acceptance");
+        mscharged::platform::SetApplicationIcon(host.window);
         bool retainedWindowClose=false;
 #if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
         if(frontend && sourceAudio && nativeSend) {

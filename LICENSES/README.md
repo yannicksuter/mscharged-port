@@ -82,12 +82,17 @@ the material actually distributed. A link to a submodule alone does not replace
 required notices in a release package. Include corresponding source or relinking
 materials where a dependency's terms require them.
 
-## Launcher artwork
+## Application artwork
 
 The selected `assets/launcher/header.png` comes from
 [SteamGridDB hero 8926, uploaded by Jiquita](https://www.steamgriddb.com/hero/8926).
 It is third-party artwork outside the CC0 dedication. The source metadata does
-not specify a redistribution license. See [artwork provenance](../assets/launcher/README.md).
+not specify a redistribution license.
+
+The application icon (`assets/launcher/icon.png` and its Windows ICO conversion)
+comes from [SteamGridDB icon 103028, uploaded by roryypc](https://www.steamgriddb.com/icon/103028).
+It is also third-party artwork outside CC0, with no redistribution license
+specified in the source metadata. See [artwork provenance](../assets/launcher/README.md).
 
 The launcher's Roboto Medium font comes from the pinned Dear ImGui font bundle
 and uses Apache 2.0, as recorded in its [font inventory](../extern/imgui/docs/FONTS.md).

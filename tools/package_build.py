@@ -20,7 +20,7 @@ import tomllib
 from pathlib import Path
 
 MODULES = ("mscharged_original_frontend_module", "mscharged_original_main_credits_module")
-ASSETS = ("header.png", "Roboto-Medium.ttf", "README.md", "LICENSE-APACHE")
+ASSETS = ("header.png", "icon.png", "Roboto-Medium.ttf", "README.md", "LICENSE-APACHE")
 PUBLIC_FILES = ("README.md", "LICENSE", "mscharged.ini.example", "docs/BUILDING.md",
                 "docs/BUILDING_MACOS.md", "docs/BUILDING_GITHUB.md", "docs/RUNTIME.md", "LICENSES/README.md",
                 "LICENSES/Apache-2.0.txt", "extern/README.md")

@@ -226,6 +226,7 @@ target_link_libraries(mscharged-bootstrap PRIVATE mscharged_build_info)
 
 if(MSCHARGED_BUILD_LAUNCHER OR MSCHARGED_BUILD_AURORA_HOST)
     include(cmake/SDL.cmake)
+    include(cmake/AppIcon.cmake)
 endif()
 if(MSCHARGED_BUILD_AURORA_HOST)
     include(cmake/AuroraHost.cmake)
