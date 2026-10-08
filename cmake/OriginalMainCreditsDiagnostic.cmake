@@ -32,6 +32,7 @@ if(BUILD_TESTING)
     include(cmake/NativeHBMStorage.cmake)
     mscharged_add_native_hbm_storage_tests()
     include(cmake/NativeHBMText.cmake)
+    include(cmake/OriginalHBMSoundArchive.cmake)
 endif()
 
 add_library(mscharged_original_main_credits_module MODULE
