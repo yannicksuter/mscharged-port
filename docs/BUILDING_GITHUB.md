@@ -11,10 +11,10 @@ archives under **Actions → Build binaries → run → Artifacts**, retained fo
 binary archives. Failed checks may attach configuration logs. These are unsigned
 development builds, not tagged GitHub Releases.
 
-Windows is explicitly skipped in the workflow. Its
-module loading, pointer ABI and host services need implementation before it
+Windows runs host service tests with a pinned LLVM-MinGW compiler. Its full
+module linking, pointer ABI and file storage still need integration before it
 can produce game binaries. The README build badge reports the `stable` workflow;
-it covers Linux and macOS builds. A successful
+it covers Linux/macOS builds and the Windows host tests. A successful
 compile does not establish gameplay or hardware compatibility.
 
 Extract the downloaded `.tar.gz`, keep both runtime modules and `assets/`

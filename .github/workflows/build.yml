@@ -106,10 +106,17 @@ jobs:
           retention-days: 7
 
   windows:
-    name: Windows (runtime not yet supported)
-    if: ${{ false }}
+    name: Windows host services (game build pending)
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+      GIT_CONFIG_COUNT: 1
+      GIT_CONFIG_KEY_0: core.autocrlf
+      GIT_CONFIG_VALUE_0: 'false'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -118,8 +125,34 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      # Enable this job and add build/package steps once PE/COFF module loading,
-      # LLP64 and Windows host services are implemented. Until then it is
-      # explicitly skipped; never publish the launcher as a Windows game build.
-      - name: Check game-runtime platform support
-        run: python tools/setup_dependencies.py --dry-run
+      - name: Install pinned LLVM-MinGW
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/toolchain | Out-Null
+          $archive = 'build/toolchain/llvm-mingw.zip'
+          Invoke-WebRequest 'https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-x86_64.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne '317492c456aa27ee607a5919f1d2d38dcdc1112516a24d0bf4b00d078f52d17a') {
+            throw 'LLVM-MinGW archive checksum mismatch'
+          }
+          Expand-Archive $archive -DestinationPath build/toolchain
+          (Resolve-Path 'build/toolchain/llvm-mingw-20261006-ucrt-x86_64/bin').Path >> $env:GITHUB_PATH
+      - name: Initialize host-test source pins
+        run: git submodule update --init --checkout -- extern/mscharged-decomp extern/aurora
+      - name: Prepare original SDK headers and message source
+        run: python tools/prepare_sources.py --build-dir build/host-sources --clang-format off
+      - name: Prepare host SDK headers
+        run: python tools/prepare_sources.py --dependency aurora --build-dir build/host-sources
+      - name: Configure host service tests
+        run: >-
+          cmake -S tests/host-platform -B build/host-checks -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang
+          -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++
+          -DMSCHARGED_PREPARED_BUILD_DIR="${{ github.workspace }}/build/host-sources"
+          -DMSCHARGED_PREPARED_CLANG_FORMAT=off
+      - name: Build host service tests
+        run: cmake --build build/host-checks
+      - name: Run host service tests
+        run: ctest --test-dir build/host-checks --output-on-failure
+      # These tests qualify individual host services, not Windows game startup.
+      # The runtime gate remains until DLL linking, ABI and storage are ready.
