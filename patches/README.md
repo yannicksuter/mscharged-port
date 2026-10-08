@@ -79,6 +79,12 @@ Patch 0630 admits the original Hall of Fame player cards (scene 65), opened by
 the Cup page's card buttons, under the Hall of Fame diagnostic. Profile (58),
 which no retail code pushes, and the earned trophy histories (66–74) stay gated.
 
+Patch 0640 admits the original Road to Striker Cup setup (scenes 6–8), cup news
+(39), hub (31), group schedule (32) and standings/award pages (36–38), plus the
+three FE presentation natives the cup transitions call, under the cup
+diagnostic. Cup cheat, game results, knockout/final round pages and the
+award/forfeit natives stay gated.
+
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
 A GCC option scoped to the disposal manager preserves its cross-TU virtual
