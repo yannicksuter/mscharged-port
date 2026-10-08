@@ -16,6 +16,12 @@ depthoffield.cpp declares PSMTXIdentity itself, outside the SDK header, so its
 native build applies the same PSMTXIdentity -> C_MTXIdentity alias as
 revolution/mtx/mtx.h.
 
+FrontEndTask's DrawFrontEndElements also admits its original FrontEnd::Update
+call (states 0x1b, not during HOME). It owns the in-game frontend state: the
+OverlayManager countdown that slides the HUD in after each presentation, the
+pause menu on Plus, controller loss and the end-of-game transition. Without it
+the HUD stayed on its "out" slide for the whole match.
+
 diff --git a/src/Game/Render/depthoffield.cpp b/src/Game/Render/depthoffield.cpp
 --- a/src/Game/Render/depthoffield.cpp
 +++ b/src/Game/Render/depthoffield.cpp
@@ -78,3 +84,16 @@ diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
      if (!g_bProjectedShadows)
      {
          DrawCoPlanarReference();
+diff --git a/src/Game/Task/FrontEndTask.cpp b/src/Game/Task/FrontEndTask.cpp
+--- a/src/Game/Task/FrontEndTask.cpp
++++ b/src/Game/Task/FrontEndTask.cpp
+@@ -55,7 +55,8 @@
+     UpdateGameObjectLighting();
+ #endif // source lighting initialization remains unqualified
+ 
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TASK_CADENCE) \
++    || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING))
+     if ((nlTaskManager::m_pInstance->mCurrentState & 0x1b)
+         && !IsHBMActive())
+     {
