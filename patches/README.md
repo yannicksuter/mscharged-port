@@ -575,6 +575,13 @@ interrupt contexts and overlapping media operations; reads remain rejected
 after close until a successful remount. Synthetic-disc tests cover these
 lifetimes. This does not complete original game shutdown or optical timing.
 
+`0065-reject-polygons-under-gx-cull-all.patch` implements GX_CULL_ALL, which
+the original game selects through its packet raster culling field. The Wii
+discards every polygon in that mode while still drawing points and lines;
+polygon draws now consume their data without encoding a draw. Previously the
+pipeline build aborted when a match restarted play after a goal, and the
+persisted configuration repeated the abort at the next start.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.
