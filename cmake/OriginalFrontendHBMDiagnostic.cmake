@@ -23,6 +23,7 @@ function(mscharged_select_original_frontend_hbm target)
     if(NOT _hbm_source IN_LIST _existing)
         target_sources("${target}" PRIVATE "${_hbm_source}")
     endif()
+    mscharged_select_original_hbm_text_transport("${target}")
     # The sequence's original SaveLoad/Wii16/TPL transport already supplies the
     # actual qualified palette binder. HBMManager source remains unmodified.
 endfunction()
