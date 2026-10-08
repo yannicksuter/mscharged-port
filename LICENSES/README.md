@@ -64,8 +64,11 @@ Portions of this software are copyright © 2026 The FreeType Project
 retain their own notices. Dawn's nested shader tools, Vulkan headers/utilities,
 Abseil, and build-time Jinja/MarkupSafe retain the license texts at their recorded
 checkouts; see the [selected source inventory](../extern/README.md#dawns-selected-linux-graphics-sources).
-No release package has been prepared; packaging must collect the actual linked
-components' notices and any required accompanying material.
+The [CI build archives](../docs/BUILDING_GITHUB.md) collect standalone notices
+from the prepared sources and checksum-verified, locked Rust dependencies.
+Their manifest records source pins and included files. Tagged releases remain
+separate; review any additional distribution obligations when changing the
+linked components.
 
 ## Adding dependencies and preparing releases
 
