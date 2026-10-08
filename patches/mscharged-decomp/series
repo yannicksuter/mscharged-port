@@ -388,3 +388,4 @@
 0529-native-original-hbm-sound-compiler-headers.patch
 0530-native-original-hbm-ui-compiler-boundaries.patch
 0528-native-original-hbm-ax-types.patch
+0531-native-hbm-live-task-and-stream-context.patch

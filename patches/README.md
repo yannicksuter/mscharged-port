@@ -19,6 +19,10 @@ previous tree intact, but the build's validation rejects that stale tree.
 
 ## Charged series
 
+Patch 0531 carries original live HBM task and stream/sequence owner identities
+at native pointer width. Serialized resource IDs and original cancellation
+and queue decisions remain unchanged.
+
 Patch 0528 retains native-width original HBM voice callbacks and checked SDK
 physical addresses while preserving the original voice and sample calculations.
 
