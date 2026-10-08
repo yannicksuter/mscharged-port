@@ -378,3 +378,4 @@
 0517-native-os-record-byte-transport.patch
 0520-native-stm-terminal-wait.patch
 0519-original-reset-task-admission.patch
+0521-original-dvd-message-registration-admission.patch

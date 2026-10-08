@@ -31,6 +31,10 @@ Patch 0519 admits the original ResetTask at its existing construction and
 registration points. The frontend runtime routes window close through that
 source task and its SDK shutdown sequence. Host restart remains unsupported.
 
+Patch 0521 restores the three original DVD-message callback registrations in
+the frontend module, using the complete original `LidOpenMessage.cpp`.
+Native read-error waits and error-screen rendering remain separate integration work.
+
 Patch 0518 retains the complete original SRAM cache, checksum and retry owner.
 The native EXI device supplies explicit persistent SRAM/RTC register storage;
 16-bit SRAM fields retain their Wii byte order. Device construction does not

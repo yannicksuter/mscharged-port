@@ -32,6 +32,7 @@ include(cmake/OriginalFrontendMainMenuDiagnostic.cmake)
 include(cmake/OriginalFrontendHallOfFameDiagnostic.cmake)
 include(cmake/OriginalFrontendDominationDiagnostic.cmake)
 include(cmake/OriginalFrontendCreditsDiagnostic.cmake)
+include(cmake/OriginalFrontendDVDMessagesDiagnostic.cmake)
 include(cmake/NativeAXModuleMemory.cmake)
 include(cmake/OriginalOSShutdownRecords.cmake)
 
@@ -85,6 +86,7 @@ function(mscharged_add_original_frontend_diagnostic)
     mscharged_select_original_frontend_hall_of_fame(mscharged_original_frontend_module)
     mscharged_select_original_frontend_domination(mscharged_original_frontend_module)
     mscharged_select_original_frontend_reset(mscharged_original_frontend_module)
+    mscharged_select_original_frontend_dvd_messages(mscharged_original_frontend_module)
     # Last selection: copies the module's final settings for the original CreditScene.
     mscharged_select_original_frontend_credits(mscharged_original_frontend_module)
     # dynamic_lookup defers unfinished methods, but missing game vtable/VTT
