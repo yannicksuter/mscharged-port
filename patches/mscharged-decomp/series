@@ -430,4 +430,6 @@
 0654-preserve-native-audio-contexts.patch
 0655-preserve-native-emission-owner-keys.patch
 0656-recognize-native-win64-replay-words.patch
+0657-retain-native-sdk-declarations.patch
+0658-declare-native-template-static-owners.patch
 0659-preserve-native-audio-debug-labels.patch
