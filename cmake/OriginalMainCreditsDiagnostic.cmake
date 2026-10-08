@@ -351,6 +351,8 @@ function(mscharged_link_original_main_credits target)
     foreach(symbol __OSInitSram __OSSyncSram __OSGetRTCFlags __OSClearRTCFlags)
         mscharged_require_original_host_symbol(${target} PRIVATE "${symbol}")
     endforeach()
+    # Original nlPrint in the module formats Wii16 strings through the host.
+    mscharged_require_original_host_symbol(${target} PRIVATE mscharged_format_wii16)
     set_property(TARGET ${target} PROPERTY LINK_LIBRARY_OVERRIDE
         "WHOLE_ARCHIVE,aurora_gx,aurora_mtx,aurora_os")
 endfunction()
