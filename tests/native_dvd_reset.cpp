@@ -60,7 +60,7 @@ struct Overlay {
     Gate gate;
     bool blocked{};
     bool fail{};
-    std::atomic<unsigned> handles{}, reads{};
+    std::atomic<unsigned> handles{}, reads{}, seeks{};
     std::atomic<bool> entered{}, finished{};
     struct Handle { Overlay* owner; std::int64_t position{}; };
     static void* Open(void* user) {
@@ -76,6 +76,7 @@ struct Overlay {
     }
     static std::int64_t Seek(void* user, std::int64_t offset, std::int32_t origin) {
         auto& handle=*static_cast<Handle*>(user);
+        ++handle.owner->seeks;
         if (origin || offset<0 || offset>128) return -1;
         return handle.position=offset;
     }
@@ -343,7 +344,7 @@ void CheckDriveFault(const char* disc, bool reset_during_error) {
     const auto command_state=DVDGetFileInfoStatus(&info);
     const auto command_callback=info.cb.callback;
     const auto transferred=DVDGetTransferredSize(&info);
-    // Actual DVDClose retires a completed block as CANCELED. Observe the real
+    // Actual DVDClose retires a completed block as END. Observe the real
     // completion before that existing close behavior, then drain the owner.
     Check(DVDClose(&info)&&fault.handles==0,"Error handle/worker did not really retire");
     Check(fault.entered&&fault.finished&&fault.reads==1,"Failed I/O was not actually performed");
@@ -367,6 +368,143 @@ void CheckDriveFault(const char* disc, bool reset_during_error) {
     aurora_dvd_overlay_files(nullptr,0,nullptr);
     Check(aurora_dvd_open(disc)&&DVDGetDriveStatus()==DVD_STATE_END,
           "A genuine new media owner retained its predecessor's drive fault");
+    CheckNodRead();
+}
+
+struct FatalDispatch {
+    static constexpr unsigned count=5;
+    std::array<Overlay,count> providers;
+    std::array<DVDFileInfo,count> files{};
+    std::array<std::array<u8,128>,count> bytes{};
+    std::array<std::atomic<unsigned>,count> completions{};
+    std::array<std::atomic<s32>,count> results{}, states{}, drives{};
+    std::atomic<bool> reentrant_admitted{}, first_entered{}, first_returned{};
+    Gate first_callback;
+    static FatalDispatch* current;
+
+    static void Callback(s32 result, DVDFileInfo* file) {
+        auto& owner=*current;
+        unsigned index{};
+        while (index<count && file!=&owner.files[index]) ++index;
+        if (index==count) std::terminate();
+        owner.results[index]=result;
+        owner.states[index]=DVDGetFileInfoStatus(file);
+        owner.drives[index]=DVDGetDriveStatus();
+        ++owner.completions[index];
+        if (index==0) {
+            // Actual callback reentry admits a new original async request;
+            // neither the fixture nor the worker publishes its completion.
+            owner.reentrant_admitted=DVDReadAsyncPrio(&owner.files[3],owner.bytes[3].data(),128,0,Callback,2);
+            owner.first_entered=true;
+            owner.first_callback.Wait();
+            owner.first_returned=true;
+        }
+    }
+};
+FatalDispatch* FatalDispatch::current{};
+
+void CheckFatalDispatch(const char* disc, bool reset_during_callback) {
+    FatalDispatch owner;
+    FatalDispatch::current=&owner;
+    owner.providers[0].fail=true;
+    owner.providers[0].blocked=true;
+    const AuroraOverlayCallbacks functions{Overlay::Open,Overlay::Close,Overlay::Read,Overlay::Seek};
+    aurora_dvd_overlay_callbacks(&functions);
+    const std::array<AuroraOverlayFile,FatalDispatch::count> overlay{{
+        {"/dispatch-fault.bin",&owner.providers[0],128},
+        {"/dispatch-waiting-read.bin",&owner.providers[1],128},
+        {"/dispatch-waiting-seek.bin",&owner.providers[2],128},
+        {"/dispatch-reentrant.bin",&owner.providers[3],128},
+        {"/dispatch-after-latch.bin",&owner.providers[4],128}}};
+    aurora_dvd_overlay_files(overlay.data(),overlay.size(),nullptr);
+    for (unsigned i=0;i<owner.count;++i) {
+        owner.bytes[i].fill(static_cast<u8>(0x60+i));
+        Check(DVDOpen(overlay[i].fileName,&owner.files[i]),"Fatal dispatch handle did not open");
+    }
+    Check(DVDReadAsyncPrio(&owner.files[0],owner.bytes[0].data(),128,0,FatalDispatch::Callback,2),
+          "Real initial faulty I/O was not admitted");
+    Until([&]{return owner.providers[0].entered.load();});
+    const auto read_admitted=DVDReadAsyncPrio(&owner.files[1],owner.bytes[1].data(),128,0,FatalDispatch::Callback,2);
+    const auto seek_admitted=DVDSeekAsyncPrio(&owner.files[2],0,FatalDispatch::Callback,2);
+    const auto read_waiting=DVDGetFileInfoStatus(&owner.files[1]);
+    const auto seek_waiting=DVDGetFileInfoStatus(&owner.files[2]);
+    owner.providers[0].gate.Release();
+    Until([&]{return owner.first_entered.load();});
+    const auto latched_drive=DVDGetDriveStatus();
+    const auto late_admitted=DVDReadAsyncPrio(&owner.files[4],owner.bytes[4].data(),128,0,FatalDispatch::Callback,2);
+    const auto late_waiting=DVDGetFileInfoStatus(&owner.files[4]);
+    const auto reentrant_waiting=DVDGetFileInfoStatus(&owner.files[3]);
+    if (reset_during_callback) {
+        std::thread release([&] {
+            Until([]{return __DVDGetCoverStatus()==DVD_COVER_BUSY;});
+            owner.first_callback.Release();
+        });
+        __DVDPrepareReset();
+        release.join();
+    } else {
+        owner.first_callback.Release();
+        Until([&] {
+            unsigned calls{};
+            for (auto& count:owner.completions) calls+=count.load();
+            return calls==owner.count;
+        });
+    }
+
+    std::array<s32,FatalDispatch::count> final_states{};
+    std::array<u32,FatalDispatch::count> transferred{};
+    std::array<DVDCBCallback,FatalDispatch::count> callbacks_at_drain{};
+    bool all_closed=true;
+    for (unsigned i=0;i<owner.count;++i) {
+        final_states[i]=DVDGetFileInfoStatus(&owner.files[i]);
+        transferred[i]=DVDGetTransferredSize(&owner.files[i]);
+        callbacks_at_drain[i]=owner.files[i].cb.callback;
+        all_closed=DVDClose(&owner.files[i])&&all_closed;
+    }
+    const auto final_drive=DVDGetDriveStatus();
+    __DVDPrepareReset();
+    const auto reset_drive=DVDGetDriveStatus();
+    aurora_dvd_close();
+    const auto retired_drive=DVDGetDriveStatus();
+    aurora_dvd_overlay_files(nullptr,0,nullptr);
+    FatalDispatch::current=nullptr;
+
+    // Every borrowed worker/callback/handle is truly drained before checking
+    // a negative predecessor; no failing assertion frees a live overlay.
+    Check(all_closed&&owner.first_returned,"Fatal callback/handle did not really drain");
+    Check(read_admitted&&seek_admitted&&late_admitted&&owner.reentrant_admitted,
+          "Original queued/subsequent/reentrant request admission changed");
+    Check(read_waiting==DVD_STATE_WAITING&&seek_waiting==DVD_STATE_WAITING&&
+          reentrant_waiting==DVD_STATE_WAITING&&late_waiting==DVD_STATE_WAITING,
+          "The actual waiting request boundary was bypassed");
+    Check(owner.providers[0].reads==1&&owner.providers[0].seeks==1,
+          "Initial physical fault was not established by real I/O");
+    Check(owner.completions[0]==1&&owner.results[0]==DVD_RESULT_FATAL_ERROR&&
+          owner.states[0]==DVD_STATE_FATAL_ERROR&&owner.drives[0]==DVD_STATE_FATAL_ERROR,
+          "Initial real fault callback/status changed");
+    for (unsigned i=1;i<owner.count;++i) {
+        Check(owner.providers[i].reads==0&&owner.providers[i].seeks==0,
+              "Latched fatal drive executed queued/subsequent media I/O");
+        if (reset_during_callback) {
+            Check(owner.completions[i]==0&&callbacks_at_drain[i]!=nullptr&&final_states[i]==DVD_STATE_WAITING,
+                  "Real reset's silent waiting-queue unlink changed source fields");
+        } else {
+            Check(owner.completions[i]==1&&owner.results[i]==DVD_RESULT_FATAL_ERROR&&
+                  owner.states[i]==DVD_STATE_FATAL_ERROR&&owner.drives[i]==DVD_STATE_FATAL_ERROR&&
+                  final_states[i]==DVD_STATE_FATAL_ERROR,
+                  "Original post-fatal command callback/status was not delivered");
+        }
+    }
+    for (unsigned i=0;i<owner.count;++i) {
+        Check(owner.providers[i].handles==0,"Fatal dispatch retained a retired provider handle");
+        Check(transferred[i]==0,"Fatal/canceled dispatch fabricated transferred bytes");
+        for (auto byte:owner.bytes[i]) Check(byte==static_cast<u8>(0x60+i),
+                                            "Fatal/canceled dispatch changed a real destination");
+    }
+    Check(latched_drive==DVD_STATE_FATAL_ERROR&&final_drive==DVD_STATE_FATAL_ERROR&&
+          reset_drive==DVD_STATE_FATAL_ERROR&&retired_drive==DVD_STATE_NO_DISK,
+          "Post-fatal dispatch/reset/retirement changed the actual media fault");
+    Check(aurora_dvd_open(disc)&&DVDGetDriveStatus()==DVD_STATE_END,
+          "Genuine new media owner failed to admit a fresh physical request");
     CheckNodRead();
 }
 } // namespace
@@ -395,6 +533,8 @@ int main(int argc,char** argv) {
         CheckNodRead();
         CheckDriveFault(argv[1],false);
         CheckDriveFault(argv[1],true);
+        CheckFatalDispatch(argv[1],false);
+        CheckFatalDispatch(argv[1],true);
         aurora_dvd_close();
         Check(__DVDGetCoverStatus()==DVD_COVER_OPENED,"Remounted media failed to retire");
         std::printf("Native DVD reset: %u checks; real Nod/blocked reads/callback drain/handle lifetime passed\n",checks);
