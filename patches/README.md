@@ -17,6 +17,16 @@ Only a completely prepared tree becomes available to CMake. Cache reuse checks
 both the inputs and generated contents. A failed new preparation leaves any
 previous tree intact, but the build's validation rejects that stale tree.
 
+The decomp is prepared into two trees under `build/<preset>/prepared/mscharged-decomp/`:
+`patched/` is the exact export plus the series, and `source/` is the copy that
+is compiled. With clang-format 16+, `source/` is formatted with
+[`tools/formatting/prepared-sources.clang-format`](../tools/formatting/prepared-sources.clang-format).
+Formatting changes whitespace only, and every formatted file is compared with
+its input as preprocessing tokens. Files whose program depends on their layout
+(`__LINE__` positions, stringified macro arguments, `#line`) stay exactly as
+patched; `manifest.json` lists them under `kept_unformatted`. Patches are always
+written against the exact upstream text, never against the formatted copy.
+
 ## Charged series
 
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
@@ -521,8 +531,11 @@ selection requests all of Dawn's recorded nested sources and changes the inputs.
 The examples below use `build/`. Use `build/release` or `build/debug` instead
 when working with a preset, and add `--dependency nod` for nod's patch series.
 
-1. Configure once to create a clean prepared tree.
-2. Edit the relevant files under `build/prepared/mscharged-decomp/source/`.
+1. Configure once, or run `python3 tools/prepare_sources.py --build-dir build`,
+   to create a clean prepared tree.
+2. Edit the relevant files under `build/prepared/mscharged-decomp/patched/`
+   (`source/` for nod). Do not run a formatter there, and do not edit the
+   compiled `source/` copy of the decomp; the tool rejects such edits.
 3. Export those edits relative to the currently applied series:
 
    ```sh
