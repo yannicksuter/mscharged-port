@@ -629,6 +629,12 @@ Original game code is unchanged. Near/far-clipped, behind-eye or degenerate
 references, frozen lines/points and viewport changes while frozen remain
 explicitly unsupported. This does not fix the separate stadium shadow-mask issue.
 
+`0068-keep-coplanar-plane-across-clipped-references.patch` takes the retained
+co-planar plane from homogeneous clip coordinates, so reference triangles with
+vertices behind the eye or beyond near/far still define it, and keeps the last
+plane when a primitive defines none. A freeze without any usable plane logs once
+and draws with the polygon's own depth instead of stopping the match.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.

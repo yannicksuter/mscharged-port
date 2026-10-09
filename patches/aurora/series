@@ -61,3 +61,4 @@
 0065-reject-polygons-under-gx-cull-all.patch
 0066-preserve-position-invariance-between-gx-shaders.patch
 0067-native-coplanar-reference-depth.patch
+0068-keep-coplanar-plane-across-clipped-references.patch
