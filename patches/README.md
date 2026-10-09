@@ -83,6 +83,10 @@ sound sources' pool entries from the native list layout. 0614 admits the
 gameplay options' cheat-category list (28), reached from VS options' second page
 on a fresh save, and narrows its pointer-button contexts natively.
 
+Patch 0609 reads the captain chant's bus clock through the host: the original
+converts OSGetTime to milliseconds through the Wii OS global at 0x800000F8,
+which is unmapped in a native process.
+
 Patches 0620–0621 admit original Strikers 101 lesson and Striker Challenge play
 under the explicit challenge-play diagnostic. 0620 opens the 101 pause menu (84),
 the lesson movie player (87) and the Challenge preview (103), and queues the 101
