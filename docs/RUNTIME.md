@@ -58,6 +58,13 @@ repeat during host scheduling delays. Enter/Space is A, Escape/Backspace is B,
 arrows are D-pad, and Z/X are 1/2. A advances to COPYRIGHTS; the following menu
 transition is unfinished. Host focus and menu input remain under validation.
 
+## Performance log
+
+`MSCHARGED_FRAME_LOG=frames.csv` writes one row per original game frame (frame
+time, game-thread and process CPU, VI fields, presents, draws, pipeline creations)
+and, on exit, `frames.csv.summary.txt` with the frame-time distribution and the
+longest frames.
+
 ## Run options
 
 Both tests accept `--config FILE`, `--disc FILE` (also `--disk`), `--window`,

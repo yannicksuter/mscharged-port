@@ -45,6 +45,7 @@
 #include <revolution/ipc.h>
 #include "credits_movie_hardware.h"
 #include "runtime/frame_rate_title.h"
+#include "runtime/frame_timing_log.h"
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
 #include "original_game_audio_hardware.h"
 #endif
@@ -101,6 +102,27 @@ struct Snapshot : std::enable_shared_from_this<Snapshot> {
         });
     }
 };
+// Counters for the opt-in frame timing log. Aurora's render worker updates the
+// statistics; aligned relaxed loads suffice for this diagnostic.
+mscharged::runtime::FrameTimingCounters ReadFrameTimingCounters() {
+    mscharged::runtime::FrameTimingCounters counters{};
+    AuroraVIHardwareState vi{};
+    if(aurora_get_video_hardware_state(&vi)) counters.retraces=vi.retrace_count;
+    // Native source send presents through the VI scanout path.
+    AuroraVIPresentedState presented{};
+    if(aurora_get_presented_video_output_state(&presented)) counters.presents=presented.presentation_sequence;
+    if(const AuroraStats* stats=aurora_get_stats()) {
+        const auto load=[](const std::uint32_t& value) {
+            return std::atomic_ref<std::uint32_t>(const_cast<std::uint32_t&>(value)).load(std::memory_order_relaxed);
+        };
+        counters.draws=load(stats->drawCallCount);
+        counters.pipelines_created=load(stats->createdPipelines);
+        counters.pipelines_queued=load(stats->queuedPipelines);
+        counters.texture_upload_bytes=load(stats->lastTextureUploadSize);
+    }
+    return counters;
+}
+
 // Read the completed resource selected by original VI. This diagnostic reads
 // source copy output; it submits no game draw or diagnostic frame boundary.
 void ReadSelectedXFB(const AuroraVIPresentedState& presented,
@@ -479,7 +501,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
 #if defined(MSCHARGED_HAS_ORIGINAL_FRONTEND_RESET)
         if(frontend && sourceAudio && nativeSend) {
             terminalVerifier.emplace(*gameAudioHardware,*axModuleMemory,host.window);
-            mscharged::platform::ConfigureNativeSTMPowerRemoval(terminalVerifier->Policy());
+            auto removal=terminalVerifier->Policy();
+            // The opt-in frame timing log completes before the process ends.
+            removal.before_removal=[](void*){mscharged::runtime::FrameTimingLog::FinishForProcessExit();};
+            mscharged::platform::ConfigureNativeSTMPowerRemoval(removal);
             // The actual source entry/audio predicates and terminal policy now
             // exist. Only this host-window intent was deferred; service/tasks
             // deliver it through unchanged original OSStateTM/ResetTask.
@@ -568,6 +593,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // Original game frames per second in the title; always shown until a
         // command-line/launcher toggle exists.
         mscharged::runtime::FrameRateTitle frameRateTitle(windowTitle);
+        // Opt-in MSCHARGED_FRAME_LOG: per-frame timing for performance reports.
+        const auto frameTiming=mscharged::runtime::FrameTimingLog::FromEnvironment();
         wgpu::Texture retainedEFB;
         Check(!resizeCheck || nativeSend, "Resize qualification requires source-native send");
         while(!exit && (interactive || !snapshot)) {
@@ -607,7 +634,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 const auto receipt=AuroraGXBeginDrawReceipt();
                 Check(receipt,"Native source draw receipt unavailable");
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
+                if(frameTiming)frameTiming->BeginFrame();
                 frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt(); ++frames;
+                if(frameTiming)frameTiming->EndFrame(ReadFrameTimingCounters());
                 // Nothing else drains once no host observation is due: without
                 // this the buffer grows every frame until Aurora aborts on its
                 // 4 GiB size limit. Draining waits only for the queued backlog.
@@ -811,6 +840,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         }
         if(priorBoot)
             std::puts("Prior Boot diagnostic retains original effects/NPC resources and game arenas at terminal exit; full source cleanup remains pending.");
+        mscharged::runtime::FrameTimingLog::FinishForProcessExit();
         std::fflush(nullptr);std::_Exit(0);
         } catch(const std::exception& e) {
             std::fprintf(stderr,"Actual source diagnostic stopped with live owners: %s\n",e.what());
