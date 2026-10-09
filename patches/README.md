@@ -93,6 +93,14 @@ prototype. Patch 0607 keeps the original AI transition-context overlay at
 native widths: retail reads a state machine's parameters through a
 FuzzyRuntimeContext view of the machine, and the Wii pad word moved the view's
 parameters one pointer past the machine's natively.
+Patch 0601 binds the original stadium shadow volumes through their actual byte
+domains. The volume models come from the original loader with Wii big-endian
+floats, but GXShadowVolume still declared its arrays native-endian in the game
+module, so volume positions decoded to values near 1e37. The broken volumes left
+non-zero alpha counts that the blend pass turned into large, flickering dark
+polygons on the field. GLShadowBlendMeshWriter now publishes its native streams
+like the other mesh writers; formats, counts and the blend arithmetic are
+unchanged.
 
 Patches 0620–0621 admit original Strikers 101 lesson and Striker Challenge play
 under the explicit challenge-play diagnostic. 0620 opens the 101 pause menu (84),
