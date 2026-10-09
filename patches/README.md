@@ -621,6 +621,14 @@ equal-depth blending and different-depth rejection. Position math and original
 material decisions remain unchanged; this is not a confirmed fix for the
 reported falling-player transparency artifact.
 
+`0067-native-coplanar-reference-depth.patch` implements GX's retained depth plane
+for co-planar polygons, including hidden GX_CULL_ALL setup and reference vertices
+outside the screen edges. Each queued draw owns its plane coefficients. Vulkan
+fixtures cover overlapping polygons, perspective transforms and depth gradients.
+Original game code is unchanged. Near/far-clipped, behind-eye or degenerate
+references, frozen lines/points and viewport changes while frozen remain
+explicitly unsupported. This does not fix the separate stadium shadow-mask issue.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.

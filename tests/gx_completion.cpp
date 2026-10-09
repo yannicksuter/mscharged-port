@@ -156,6 +156,119 @@ void Pixel(const wgpu::Texture &texture, wgpu::TextureFormat format, unsigned x,
   }
   ++checks;
 }
+// Generated hardware qualification of retained GX depth-plane setup.
+// No source scene/manager/readiness implementation.
+void IndexedRect(float left, float right, float depth, GXColor color) {
+  const std::array<u16, 6> indices{2, 0, 1, 2, 3, 0};
+  GXBeginIndexed(GX_VTXFMT0, 4, indices.data(), indices.size());
+  for (auto p : std::array<std::array<float, 2>, 4>{
+           {{left, -.75f}, {right, -.75f}, {right, .75f}, {left, .75f}}}) {
+    GXPosition3f32(p[0], p[1], -depth);
+    GXColor4u8(color.r, color.g, color.b, color.a);
+  }
+  GXEnd();
+}
+void ReferenceRect(float leftDepth, float rightDepth) {
+  GXSetCoPlanar(GX_FALSE);
+  GXSetCullMode(GX_CULL_ALL);
+  GXSetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
+  // Colour remains enabled deliberately: hidden reference must not rasterize.
+  GXSetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+  GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+  for (auto p : std::array<std::array<float, 3>, 4>{
+           {{-.875f, -.75f, -leftDepth}, {.875f, -.75f, -rightDepth},
+            {.875f, .75f, -rightDepth}, {-.875f, .75f, -leftDepth}}}) {
+    GXPosition3f32(p[0], p[1], p[2]);
+    GXColor4u8(0, 255, 0, 255);
+  }
+  GXEnd();
+  GXSetCullMode(GX_CULL_NONE);
+  GXSetZMode(GX_TRUE, GX_LESS, GX_TRUE);
+}
+enum class CoPlanarCase { Control, Shared, Sloped, Queued };
+void CoPlanarCaseProbe(CoPlanarCase mode, bool readback) {
+  using namespace aurora::webgpu;
+  Require(aurora::gfx::create_pass(64, 64), "co-planar offscreen target failed");
+  SetState(64, 64);
+  GXSetPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+  GXSetDither(GX_FALSE);
+  GXSetCoPlanar(GX_FALSE);
+  const bool overlap = mode == CoPlanarCase::Control || mode == CoPlanarCase::Shared;
+  Rect(-.9375f, .9375f, overlap ? .75f : .5f, {255, 255, 255, 255});
+  if (overlap) {
+    ReferenceRect(.5f, .5f);
+    if (readback) {
+      GXDrawDone();
+      // The active offscreen framebuffer is private to gfx recording. Resolve
+      // only at the final boundary; its no-raster result is checked there in
+      // an interior cell outside both black consumers.
+    }
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+    GXSetCoPlanar(mode == CoPlanarCase::Shared ? GX_TRUE : GX_FALSE);
+    IndexedRect(-.8125f, .3125f, .375f, {0, 0, 0, 127});
+    IndexedRect(-.3125f, .8125f, .25f, {0, 0, 0, 127});
+  } else if (mode == CoPlanarCase::Sloped) {
+    ReferenceRect(.25f, .75f);
+    GXSetCoPlanar(GX_TRUE);
+    IndexedRect(-.8125f, .8125f, .125f, {255, 0, 0, 255});
+  } else {
+    ReferenceRect(.375f, .375f);
+    GXSetCoPlanar(GX_TRUE);
+    IndexedRect(-.8125f, -.125f, .125f, {255, 0, 0, 255});
+    // Both reference/consumer pairs are queued before a completion boundary.
+    ReferenceRect(.625f, .625f);
+    GXSetCoPlanar(GX_TRUE);
+    IndexedRect(.125f, .8125f, .125f, {255, 0, 0, 255});
+  }
+  GXSetCoPlanar(GX_FALSE);
+  GXDrawDone();
+  aurora::gfx::ResolvedTargets snapshot;
+  Require(aurora::gfx::resolve_pass({true, true, false}, snapshot),
+          "co-planar target resolve failed");
+  GXDrawDone();
+  if (readback && overlap) {
+    Pixel(snapshot.colorTexture, snapshot.colorFormat, 8, 32, {128, 128, 128},
+          "co-planar alpha/depth singly covered control");
+    const u8 shared = mode == CoPlanarCase::Shared ? 128 : 64;
+    Pixel(snapshot.colorTexture, snapshot.colorFormat, 32, 32, {shared, shared, shared},
+          "co-planar shared reference depth must prevent double blend");
+    Pixel(snapshot.colorTexture, snapshot.colorFormat, 59, 32, {255, 255, 255},
+          "CULL_ALL reference changed background colour");
+  } else if (readback) {
+    Pixel(snapshot.colorTexture, snapshot.colorFormat, 16, 32, {255, 0, 0},
+          "co-planar near reference plane missing");
+    Pixel(snapshot.colorTexture, snapshot.colorFormat, 48, 32, {255, 255, 255},
+          "co-planar far reference plane or queued value ownership incorrect");
+  }
+}
+void CoPlanarProbe() {
+  const auto initialChecks = checks;
+  // Resolve the real asynchronous shader variants before strict colour gates.
+  for (unsigned warm = 0; warm < 12; ++warm) {
+    aurora_update();
+    if (!aurora_begin_frame()) {
+      --warm;
+      SDL_Delay(1);
+      continue;
+    }
+    for (auto mode : {CoPlanarCase::Control, CoPlanarCase::Shared,
+                      CoPlanarCase::Sloped, CoPlanarCase::Queued})
+      CoPlanarCaseProbe(mode, false);
+    aurora_end_frame();
+  }
+  Require(aurora_begin_frame(), "co-planar proof frame unavailable");
+  for (auto mode : {CoPlanarCase::Control, CoPlanarCase::Shared,
+                    CoPlanarCase::Sloped, CoPlanarCase::Queued})
+    CoPlanarCaseProbe(mode, true);
+  aurora_end_frame();
+  aurora::gfx::synchronize();
+  std::cout << "Co-planar generated hardware probe passed: " << checks - initialChecks
+            << " checks; real CULL_ALL bounds, indexed consumers, strict depth, "
+               "sloped plane and queued value ownership\n";
+}
+
+#include "coplanar_perspective_cases.inc"
+
 struct Payload {
   aurora::gfx::Range vertices, indices;
 };
@@ -380,6 +493,14 @@ int main(int argc, char **argv) {
     Require(!foreign && callbacks.load() == 0, "foreign thread serviced PE");
     OSRestoreInterrupts(masked);
     SpinForCallback(1);
+    if (argc > 1 && std::string_view(argv[1]) == "--coplanar-no-reference") {
+      Require(aurora_begin_frame(), "no-reference proof frame unavailable");
+      SetState(640, 480);
+      GXSetCoPlanar(GX_TRUE);
+      IndexedRect(-.5f, .5f, .25f, {255, 0, 0, 255});
+      GXDrawDone();
+      throw std::runtime_error("co-planar endpoint accepted an absent reference");
+    }
     NativeDraw native{MakePipeline()};
     auto type = aurora::gfx::register_draw_type(
         {"unaligned prefix proof", EncodeDraw, &native});
@@ -478,6 +599,11 @@ int main(int argc, char **argv) {
     Require(aurora::gfx::current_frame() == frame + 1,
             "source frame end did not advance once");
     snapshot = {};
+    if (argc > 1 && std::string_view(argv[1]) == "--coplanar") CoPlanarProbe();
+    if (argc > 1 && std::string_view(argv[1]) == "--coplanar-perspective")
+      PerspectiveCoPlanarProbe();
+    if (argc > 1 && std::string_view(argv[1]) == "--coplanar-offscreen")
+      PerspectiveCoPlanarProbe(true);
     aurora::gfx::synchronize();
     aurora::gfx::unregister_encoder_task_type(task);
     aurora::gfx::unregister_draw_type(type);
