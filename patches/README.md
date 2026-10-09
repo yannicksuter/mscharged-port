@@ -79,7 +79,9 @@ nonzero-morph software skin positions. 0617 decodes Wii data that match loading
 reads directly. 0618 keeps GL resource-pool storage valid after an original
 pool rewind until the pool reuses it, as original writers rely on. 0619 keeps
 the original bit positions of the 3D sound owner flags and finds released
-sound sources' pool entries from the native list layout.
+sound sources' pool entries from the native list layout. 0614 admits the
+gameplay options' cheat-category list (28), reached from VS options' second page
+on a fresh save, and narrows its pointer-button contexts natively.
 
 Patches 0620–0621 admit original Strikers 101 lesson and Striker Challenge play
 under the explicit challenge-play diagnostic. 0620 opens the 101 pause menu (84),
