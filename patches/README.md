@@ -81,6 +81,13 @@ pool rewind until the pool reuses it, as original writers rely on. 0619 keeps
 the original bit positions of the 3D sound owner flags and finds released
 sound sources' pool entries from the native list layout.
 
+Patches 0620–0621 admit original Strikers 101 lesson and Striker Challenge play
+under the explicit challenge-play diagnostic. 0620 opens the 101 pause menu (84),
+the lesson movie player (87) and the Challenge preview (103), and queues the 101
+in-game ticker without a handler as retail does. 0621 lets the Challenge
+preview and the button component see header inline bodies that retail emits
+out of line elsewhere, so the module imports no undefined symbols for them.
+
 Patch 0630 admits the original Hall of Fame player cards (scene 65), opened by
 the Cup page's card buttons, under the Hall of Fame diagnostic. Profile (58),
 which no retail code pushes, and the earned trophy histories (66–74) stay gated.

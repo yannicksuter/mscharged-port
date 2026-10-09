@@ -463,5 +463,7 @@
 0617-original-match-native-data-reads.patch
 0618-keep-rewound-pool-storage-for-original-writers.patch
 0619-native-sound-owner-layout.patch
+0620-original-lesson-and-challenge-play.patch
+0621-original-challenge-play-native-contracts.patch
 0630-original-hall-of-fame-player-cards.patch
 0640-original-striker-cup-frontend.patch
