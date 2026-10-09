@@ -20,6 +20,15 @@
 namespace {
 using Clock = std::chrono::steady_clock;
 constexpr auto ReportPeriod = std::chrono::milliseconds(10);
+// A keyboard shake is one flick: +2.5 g then -2.5 g along X for six reports
+// each (60 ms at the report period), then rest. The original cAIPad smooths the
+// accelerometer history and compares five-sample deltas with 1.33 g (Remote)
+// and 2.5 g (Nunchuk); the flick clears both, within the sensors' 10-bit
+// ranges. The game decides what a shake does.
+constexpr int ShakeHalfReports = 6;
+constexpr float ShakeG = 2.5f;
+constexpr float kGravityMs2 = 9.80665f;
+enum Shake { RemoteShake, NunchukShake, ShakeCount };
 constexpr std::array<SDL_GamepadButton, 11> DesktopButtons{
     SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST,
     SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH,
@@ -36,6 +45,8 @@ struct Device {
     Clock::time_point next_report{};
     mscharged::platform::NativeDpdSource dpd_source{};
     mscharged::platform::NativeNunchukSource nunchuk_source{};
+    std::array<int, ShakeCount> shake_reports{};
+    std::array<bool, ShakeCount> shaking{};
 };
 struct State {
     std::mutex mutex;
@@ -43,6 +54,9 @@ struct State {
     SDL_WindowID window{};
     mscharged::platform::DesktopWpadSettings settings{};
     std::array<bool, SDL_SCANCODE_COUNT> keys{};
+    // Shake presses latched until the next service, so a quick tap still
+    // produces one complete flick.
+    std::array<unsigned, ShakeCount> shake_requests{};
     std::map<SDL_KeyboardID, std::bitset<SDL_SCANCODE_COUNT>> keyboard_keys;
     std::map<SDL_MouseID, Uint32> mouse_button_sources;
     SDL_MouseID mouse_position_source{};
@@ -189,6 +203,8 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
             if (event->type == SDL_EVENT_KEY_DOWN && state.focused) {
                 state.keyboard_keys.try_emplace(event->key.which).first->second.set(scancode);
                 state.keys[scancode] = true;
+                if (!event->key.repeat && event->key.scancode == SDL_SCANCODE_E) ++state.shake_requests[RemoteShake];
+                if (!event->key.repeat && event->key.scancode == SDL_SCANCODE_Q) ++state.shake_requests[NunchukShake];
             } else {
                 auto source = state.keyboard_keys.find(event->key.which);
                 if (source != state.keyboard_keys.end()) {
@@ -272,18 +288,32 @@ mscharged::platform::NativeNunchukObservation KeyboardNunchuk(const std::array<b
     result.acc_z = mscharged::platform::kNativeNunchukGravity;
     return result;
 }
+// Flick acceleration (in g) for this report of a shake on the device.
+float NextShake(Device& device, Shake shake) {
+    if (!device.shaking[shake]) return 0.0f;
+    const int report = device.shake_reports[shake]++;
+    if (report < ShakeHalfReports) return ShakeG;
+    if (report < 2 * ShakeHalfReports) return -ShakeG;
+    device.shaking[shake] = false;
+    return 0.0f;
+}
 void Report(Device& device, const std::array<bool, 11>& buttons, Clock::time_point now,
             const mscharged::platform::NativeDpdObservation* observation = nullptr,
             const mscharged::platform::NativeNunchukObservation* nunchuk = nullptr) {
     if (now < device.next_report) return;
     device.next_report = now + ReportPeriod;
+    const float remote_shake_g = NextShake(device, RemoteShake);
+    const float nunchuk_shake_g = NextShake(device, NunchukShake);
     if (device.dpd_source.generation) {
         if (!observation) throw std::logic_error("Mouse camera report lacks its raw observation");
         mscharged::platform::SubmitNativeWpadDpdObservation(device.dpd_source, *observation);
     }
     if (device.nunchuk_source.generation) {
         if (!nunchuk) throw std::logic_error("Nunchuk report lacks its raw observation");
-        mscharged::platform::SubmitNativeWpadNunchukObservation(device.nunchuk_source, *nunchuk);
+        auto reported = *nunchuk;
+        reported.acc_x = static_cast<std::int16_t>(
+            std::lround(nunchuk_shake_g * mscharged::platform::kNativeNunchukGravity));
+        mscharged::platform::SubmitNativeWpadNunchukObservation(device.nunchuk_source, reported);
     }
     for (int n = 0; n < int(buttons.size()); ++n)
         Require(SDL_SetJoystickVirtualButton(device.virtual_joystick,
@@ -292,8 +322,8 @@ void Report(Device& device, const std::array<bool, 11>& buttons, Clock::time_poi
     if (device.sensors_enabled) {
         // Explicit neutral core-Wii gravity in the existing SDL driver's SI
         // coordinate convention. Mouse IR words come from the separately
-        // declared raw camera; this gravity does not invent physical motion.
-        const float gravity[3]{0.0f, 9.80665f, 0.0f};
+        // declared raw camera; only a requested shake key adds an X flick.
+        const float gravity[3]{remote_shake_g * kGravityMs2, kGravityMs2, 0.0f};
         Require(SDL_SendJoystickVirtualSensorData(device.virtual_joystick,
             SDL_SENSOR_ACCEL, SDL_GetTicksNS(), gravity, 3), "Publish desktop core-Wii raw report");
     }
@@ -391,12 +421,15 @@ void ServiceDesktopWpad() {
     float mouse_x, mouse_y;
     Uint32 mouse_buttons;
     std::array<bool, SDL_SCANCODE_COUNT> keys;
+    std::array<unsigned, ShakeCount> shake_requests;
     {
         std::lock_guard lock(state.mutex);
         if (state.event_memory_failed)
             throw std::runtime_error("Desktop input instance metadata allocation failed");
         focused = state.focused;
         keys = state.keys;
+        shake_requests = state.shake_requests;
+        state.shake_requests = {};
         mouse_known = state.mouse_known;
         mouse_inside = state.mouse_inside;
         mouse_x = state.mouse_x;
@@ -433,8 +466,17 @@ void ServiceDesktopWpad() {
         // An unfocused Nunchuk is released and level, like the buttons above.
         mscharged::platform::NativeNunchukObservation nunchuk{};
         nunchuk.acc_z = mscharged::platform::kNativeNunchukGravity;
-        if (focused && state.settings.keyboard) nunchuk = KeyboardNunchuk(keys);
-        Report(*state.keyboard, buttons, now, state.settings.mouse ? &observation : nullptr, &nunchuk);
+        auto& keyboard = *state.keyboard;
+        const bool keyboard_input = focused && state.settings.keyboard;
+        for (int shake = 0; shake != ShakeCount; ++shake) {
+            // E shakes the Remote, Q the Nunchuk (keyboard profile only).
+            if (keyboard_input && shake_requests[shake]) {
+                keyboard.shake_reports[shake] = 0;
+                keyboard.shaking[shake] = true;
+            } else if (!keyboard_input) keyboard.shaking[shake] = false;
+        }
+        if (keyboard_input) nunchuk = KeyboardNunchuk(keys);
+        Report(keyboard, buttons, now, state.settings.mouse ? &observation : nullptr, &nunchuk);
     }
     for (auto& pad : state.pads) if (pad) {
         std::array<bool, 11> buttons{};
