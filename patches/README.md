@@ -648,6 +648,13 @@ and draws with the polygon's own depth instead of stopping the match.
 hardware: the next successfully presented frame is copied exactly as drawn into
 the window viewport and written as a PNG off the presentation path.
 
+`0070-skip-idle-draw-done-mask.patch` checks the latched GX finish before the
+interrupt-exclusion round trip that every SDK clock query made (retail code polls
+the clock while it waits for draw-done); delivery is unchanged.
+`0071-spirv-validation-follows-debug-layers.patch` turns off Dawn's spirv-val of
+Tint output when the backend debug layers are off (`graphics_validation=false`),
+removing that cost from every pipeline creation; validated runs keep it.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.
