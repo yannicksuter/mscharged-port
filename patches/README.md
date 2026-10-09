@@ -614,6 +614,13 @@ polygon draws now consume their data without encoding a draw. Previously the
 pipeline build aborted when a match restarted play after a goal, and the
 persisted configuration repeated the abort at the next start.
 
+`0066-preserve-position-invariance-between-gx-shaders.patch` requests consistent
+vertex positions across TEV shader variants, as needed by original materials
+that draw depth first and then use GX_EQUAL. The Vulkan fixture checks actual
+equal-depth blending and different-depth rejection. Position math and original
+material decisions remain unchanged; this is not a confirmed fix for the
+reported falling-player transparency artifact.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.
