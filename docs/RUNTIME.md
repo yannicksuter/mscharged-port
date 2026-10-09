@@ -67,11 +67,13 @@ under the Remote's battery cover); players follow the bar's slot order. A Remote
 paired directly over Bluetooth uses the same driver but is not verified yet. The
 Remote speaker, MotionPlus and other extensions are not supported.
 
-The launcher's Controls page lists connected Remotes with their battery level.
-In `mscharged.ini`, `controls.sensor_bar` is `bottom` or `top` of the screen,
-`controls.input` picks who plays (`auto`: Wii Remotes, then keyboard & mouse;
-`controller`: Wii Remotes, keyboard & mouse only while none is connected;
-`keyboard`: keyboard & mouse only) and `controls.rumble` switches rumble.
+Choose who plays on the launcher's Controls page: each of players 1-4 is
+keyboard & mouse, a Wii Remote connected to the bar, or off (`controls.player1`
+to `player4`: `keyboard`, `remote1`-`remote4`, `off`). Players fill in order;
+without a DolphinBar, keyboard & mouse is player 1 alone. The page also shows
+each Remote's battery level. `controls.sensor_bar` is `bottom` or `top` of the
+screen, and `controls.rumble` switches rumble. The bar must be in view of the
+Remote's camera: sit about 1 m or more away when it is on top of the screen.
 
 If no Remote is found, allow your user to open Wii Remotes once, then reconnect
 the bar or Remote:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <string>
 #include <set>
@@ -20,7 +21,9 @@ struct Settings
     int music_volume = 100;
     int effects_volume = 100;
     bool mute = false;
-    std::string input = "auto";
+    // controls.player1-4: keyboard, remote1-remote4 (Wii Remote in that
+    // DolphinBar slot) or off. Players fill in order; each device plays once.
+    std::array<std::string, 4> players{"keyboard", "off", "off", "off"};
     int deadzone = 15;
     bool rumble = true;
     std::string sensor_bar = "bottom"; // controls.sensor_bar: bottom | top (sensor bar / DolphinBar position)

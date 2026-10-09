@@ -30,10 +30,13 @@ effects_volume = 100
 mute = false
 
 [controls]
-# Who plays: auto = Wii Remotes first, then keyboard & mouse; controller = Wii
-# Remotes (keyboard & mouse only while none is connected); keyboard = keyboard
-# & mouse only.
-input = auto
+# Who plays: keyboard (keyboard & mouse), remote1-remote4 (the Wii Remote in
+# that DolphinBar slot) or off. Players fill in order and each device plays
+# once. Without a DolphinBar, keyboard & mouse is player 1 and plays alone.
+player1 = keyboard
+player2 = off
+player3 = off
+player4 = off
 deadzone = 15
 rumble = true
 # Where the sensor bar or DolphinBar sits: bottom or top of the screen.

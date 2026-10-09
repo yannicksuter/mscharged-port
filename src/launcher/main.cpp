@@ -1235,83 +1235,104 @@ private:
             wii_probe_.Start(250);
     }
 
-    void WiiRemotesCard()
+    // controls.player1-4: keyboard & mouse, a Wii Remote in a DolphinBar slot
+    // or off. Players fill in order and each device plays once. Without a
+    // DolphinBar the game makes keyboard & mouse player 1, alone.
+    void PlayersCard()
     {
         PollWiimotes();
         const auto& status = wii_status_;
-        const bool found = status.dolphinbar || !status.remotes.empty();
-        const bool remotes_used = draft_.input != "keyboard";
-        const bool keyboard_yields = draft_.input == "controller";
-        const char* subtitle = !wii_known_ ? "Looking for Wii Remotes..."
-            : !status.remotes.empty() ? "Players follow the DolphinBar slot order. Changes apply when the game starts."
-            : status.dolphinbar ? "DolphinBar found. Pair a Wii Remote: press SYNC on the bar, then on the remote."
+        const bool bar = status.dolphinbar;
+        auto& players = draft_.players;
+        const char* subtitle = !wii_known_ ? "Looking for a DolphinBar..."
+            : bar ? "Players fill in order and each controller plays once. Changes apply when the game starts."
             : status.dolphinbar_other_mode ? "The DolphinBar is in a mouse or gamepad mode. Press its MODE button until light 4 is on."
-                                : "Connect a Mayflash DolphinBar in mode 4, or pair a Wii Remote over Bluetooth (experimental).";
-        BeginCard("##wiimotes", "Wii Remotes", subtitle, Icon::Gamepad);
-        if (status.dolphinbar)
+            : "Keyboard & mouse is player 1. Connect a Mayflash DolphinBar in mode 4 to play with Wii Remotes and friends.";
+        BeginCard("##players", "Players", subtitle, Icon::Gamepad);
+        if (bar)
             Chip("DolphinBar", color::accent, Icon::Check);
         else if (status.dolphinbar_other_mode)
             Chip("DolphinBar: switch to mode 4", color::warning, Icon::Warning);
-        if (found || draft_.input != "auto")
+
+        const auto connected = [&](int slot) -> const platform::WiimoteHidRemote* {
+            for (const auto& remote : status.remotes)
+                if (remote.slot == slot) return &remote;
+            return nullptr;
+        };
+        const auto name = [&](const std::string& device) {
+            if (device == "keyboard") return std::string("Keyboard & mouse");
+            if (device == "off") return std::string("Off");
+            const int slot = device.back() - '1';
+            const auto* remote = connected(slot);
+            return "Wii Remote " + std::to_string(slot + 1)
+                + (!remote ? "  (not connected)" : remote->nunchuk ? " + Nunchuk" : "");
+        };
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 5));
+        if (ImGui::BeginTable("##player_slots", 3))
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 4));
-            if (ImGui::BeginTable("##wii_players", 3))
+            ImGui::TableSetupColumn("player", ImGuiTableColumnFlags_WidthFixed, Dp(110));
+            ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("battery", ImGuiTableColumnFlags_WidthFixed, Dp(100));
+            for (int n = 0; n < 4; ++n)
             {
-                ImGui::TableSetupColumn("player", ImGuiTableColumnFlags_WidthFixed, Dp(110));
-                ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("battery", ImGuiTableColumnFlags_WidthFixed, Dp(90));
-                int player = 1;
-                auto player_row = [&](bool plays, const std::string& device, const char* note) {
-                    ImGui::TableNextRow(ImGuiTableRowFlags_None, Dp(30));
-                    ImGui::TableSetColumnIndex(0);
-                    TextColored(CurrentFonts().label, plays ? color::text : color::dim,
-                                plays ? ("Player " + std::to_string(player++)).c_str() : "Not playing");
-                    ImGui::TableSetColumnIndex(1);
-                    TextColored(CurrentFonts().body, plays ? color::muted : color::dim,
-                                (note ? device + "   " + note : device).c_str());
-                    ImGui::TableSetColumnIndex(2);
-                };
-                for (const auto& remote : status.remotes)
+                ImGui::PushID(n);
+                ImGui::TableNextRow(ImGuiTableRowFlags_None, Dp(36));
+                ImGui::TableSetColumnIndex(0);
+                const std::string shown = bar ? players[n] : n == 0 ? "keyboard" : "off";
+                const bool enabled = bar && (n == 0 || players[n - 1] != "off");
+                ImGui::AlignTextToFramePadding();
+                TextColored(CurrentFonts().label, enabled || n == 0 ? color::text : color::dim,
+                            ("Player " + std::to_string(n + 1)).c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::BeginDisabled(!enabled);
+                ImGui::SetNextItemWidth(-Dp(12));
+                if (ImGui::BeginCombo("##device", name(shown).c_str()))
                 {
-                    const std::string device = std::string("Wii Remote") + (remote.nunchuk ? " + Nunchuk" : "")
-                        + (remote.slot >= 0 ? "   DolphinBar slot " + std::to_string(remote.slot + 1) : "   Bluetooth");
-                    player_row(remotes_used, device, nullptr);
-                    BatteryIcon(remote.battery);
+                    const auto option = [&](const std::string& device) {
+                        int other = -1;
+                        for (int m = 0; m < 4; ++m)
+                            if (m != n && device != "off" && players[m] == device) other = m;
+                        // Choosing another player's device swaps the two; an
+                        // empty player cannot take one (that would leave a gap).
+                        if (other >= 0 && players[n] == "off") return;
+                        const auto label = name(device)
+                            + (other >= 0 ? "  (swap with player " + std::to_string(other + 1) + ")" : "");
+                        if (ImGui::Selectable(label.c_str(), players[n] == device))
+                        {
+                            if (other >= 0) players[other] = players[n];
+                            players[n] = device;
+                            if (device == "off")
+                                for (int m = n + 1; m < 4; ++m) players[m] = "off";
+                            dirty_ = true;
+                        }
+                    };
+                    option("keyboard");
+                    for (int slot = 0; slot < 4; ++slot)
+                    {
+                        const auto device = "remote" + std::to_string(slot + 1);
+                        if (connected(slot) || players[n] == device) option(device);
+                    }
+                    if (n > 0) option("off");
+                    ImGui::EndCombo();
                 }
-                const bool keyboard_plays = !keyboard_yields || status.remotes.empty();
-                player_row(keyboard_plays, "Keyboard & mouse",
-                           keyboard_yields ? "(only while no Wii Remote is connected)" : nullptr);
-                ImGui::EndTable();
+                ImGui::EndDisabled();
+                ImGui::TableSetColumnIndex(2);
+                if (shown.rfind("remote", 0) == 0)
+                    if (const auto* remote = connected(shown.back() - '1')) BatteryIcon(remote->battery);
+                ImGui::PopID();
             }
-            ImGui::PopStyleVar();
+            ImGui::EndTable();
         }
-        if (BeginRows("##wii_rows"))
+        ImGui::PopStyleVar();
+        if ((bar || draft_.sensor_bar != "bottom") && BeginRows("##sensor_rows"))
         {
-            if (found || draft_.input != "auto")
+            Row("Sensor bar", "Where your DolphinBar sits. The game aims the Wii Remote pointer from it.");
+            int position = draft_.sensor_bar == "top" ? 0 : 1;
+            if (Segmented("##sensor_bar", &position, {"Above the screen", "Below the screen"},
+                          ImGui::GetContentRegionAvail().x))
             {
-                Row("Players", draft_.input == "controller" ? "Keyboard & mouse joins only while no Wii Remote is connected."
-                    : draft_.input == "keyboard" ? "Wii Remotes are not used; keyboard & mouse is player 1."
-                    : "Wii Remotes take the first players, then keyboard & mouse.");
-                const char* values[] = {"auto", "controller", "keyboard"};
-                int choice = 0;
-                for (int i = 0; i < 3; ++i) if (draft_.input == values[i]) choice = i;
-                if (Segmented("##players", &choice, {"Both", "Remotes only", "Keyboard only"},
-                              ImGui::GetContentRegionAvail().x))
-                {
-                    draft_.input = values[choice];
-                    dirty_ = true;
-                }
-            }
-            if ((found && remotes_used) || draft_.sensor_bar != "bottom")
-            {
-                Row("Sensor bar", "Where your DolphinBar or sensor bar sits. The game aims the pointer from it.");
-                int position = draft_.sensor_bar == "top" ? 0 : 1;
-                if (Segmented("##sensor_bar", &position, {"Above the screen", "Below the screen"},
-                              ImGui::GetContentRegionAvail().x))
-                {
-                    draft_.sensor_bar = position == 0 ? "top" : "bottom";
-                    dirty_ = true;
-                }
+                draft_.sensor_bar = position == 0 ? "top" : "bottom";
+                dirty_ = true;
             }
             EndRows();
         }
@@ -1321,7 +1342,7 @@ private:
     void ControlsPage()
     {
         PageHeader("Controls", "Play with keyboard and mouse, or a Wii Remote with Nunchuk (experimental). Keep the game window focused.");
-        WiiRemotesCard();
+        PlayersCard();
         BeginCard("##keys", "Keyboard & mouse",
                   "Keys press Wii Remote and Nunchuk buttons or shake them; the mouse is the pointer.", Icon::Keyboard);
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));

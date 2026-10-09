@@ -169,8 +169,28 @@ bool SDLCALL VirtualSensors(void* userdata, bool enabled) {
     return true;
 }
 
+// The fixed WPAD channel of this remote's player, -1 for none, or -2 when
+// the remote is not a player.
+int PlayerChannel(const Remote& remote) {
+    const auto& settings = State().settings;
+    if (!settings.fixed_players) return -1;
+    if (!remote.adapter || remote.slot < 0 || remote.slot >= 4) return -2;
+    const int channel = settings.slot_channels[remote.slot];
+    return channel >= 0 ? channel : -2;
+}
+
 void AttachVirtual(Remote& remote) {
     if (remote.virtual_id) return;
+    const int channel = PlayerChannel(remote);
+    if (channel == -2) {
+        // Connected but not a player: LEDs off.
+        if (remote.led_channel != -3) {
+            remote.led_channel = -3;
+            Send(remote, {0x11, 0x00});
+            SDL_Log("Wii Remote in DolphinBar slot %d is not assigned to a player", remote.slot + 1);
+        }
+        return;
+    }
     const SDL_VirtualJoystickSensorDesc sensor{SDL_SENSOR_ACCEL, 100.0f};
     SDL_VirtualJoystickDesc descriptor;
     SDL_INIT_INTERFACE(&descriptor);
@@ -199,11 +219,13 @@ void AttachVirtual(Remote& remote) {
         remote.virtual_id = 0;
         return;
     }
+    if (channel >= 0) mscharged::platform::SetNativeWpadFixedChannel(remote.virtual_id, channel);
     remote.dpd = mscharged::platform::AttachNativeWpadDpdSource(remote.virtual_id);
     if (remote.nunchuk)
         remote.nunchuk_source = mscharged::platform::AttachNativeWpadNunchukSource(remote.virtual_id);
-    SDL_Log("Wii Remote connected%s%s%s", remote.adapter ? " via DolphinBar slot " : "",
-            remote.adapter ? std::to_string(remote.slot + 1).c_str() : "", remote.nunchuk ? " with Nunchuk" : "");
+    SDL_Log("Wii Remote connected%s%s%s%s", remote.adapter ? " via DolphinBar slot " : "",
+            remote.adapter ? std::to_string(remote.slot + 1).c_str() : "", remote.nunchuk ? " with Nunchuk" : "",
+            channel >= 0 ? (" as player " + std::to_string(channel + 1)).c_str() : "");
 }
 
 void DetachVirtual(Remote& remote) {
@@ -213,6 +235,7 @@ void DetachVirtual(Remote& remote) {
     remote.dpd = {};
     if (remote.joystick) SDL_CloseJoystick(remote.joystick);
     remote.joystick = nullptr;
+    if (remote.virtual_id) mscharged::platform::SetNativeWpadFixedChannel(remote.virtual_id, -1);
     if (remote.virtual_id) SDL_DetachVirtualJoystick(remote.virtual_id);
     remote.virtual_id = 0;
     remote.led_channel = -2;
@@ -621,6 +644,11 @@ NativeDpdObservation DecodeWiimoteBasicIr(const std::uint8_t* ir) {
         }
     }
     return dots;
+}
+
+bool WiimoteHidHasDevices() {
+    const auto& driver = State();
+    return driver.initialized && !driver.remotes.empty();
 }
 
 WiimoteHidStatus GetWiimoteHidStatus() {

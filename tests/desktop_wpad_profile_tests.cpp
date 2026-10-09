@@ -112,46 +112,52 @@ struct WiiRemote {
         if (id) SDL_DetachVirtualJoystick(id);
     }
 };
-// controls.input = controller: keyboard & mouse plays only while no Wii Remote is connected.
-void YieldCycle() {
+// controls.player1-4: devices connect only on their own player channel, and
+// devices without one skip the channels reserved for configured players.
+void FixedPlayersCycle() {
     using mscharged::platform::GetNativeWpadChannel;
+    using mscharged::platform::SetNativeWpadFixedChannel;
     using mscharged::platform::WpadSDLConnectedChannels;
     mscharged::platform::ConfigureWpadSDL({0,3,false,false});
     mscharged::platform::DesktopWpadSettings settings{};
-    settings.keyboard_yields_to_remotes = true;
+    settings.keyboard = true;
+    settings.keyboard_channel = 4;
     bool rejected = false;
     try { mscharged::platform::InitializeDesktopWpad(window, settings); }
     catch (const std::invalid_argument&) { rejected = true; }
-    Check(rejected, "A remote without keyboard or mouse was allowed to yield");
-    settings.keyboard = true;
-    auto remote = std::make_unique<WiiRemote>();
+    Check(rejected, "Keyboard & mouse was given a player outside the Wii ports");
+
+    // Players: 1 = a Wii Remote that is still off, 2 = keyboard & mouse.
+    mscharged::platform::SetNativeWpadReservedChannels(0b11);
+    settings.keyboard_channel = 1;
     mscharged::platform::InitializeDesktopWpad(window, settings);
     WPADInit();
     Event(SDL_EVENT_WINDOW_FOCUS_GAINED);
-    Until([&] { return GetNativeWpadChannel(remote->id) == 0; }, "Connected Wii Remote did not keep player 1");
-    for (int n = 0; n != 5; ++n) { Service(); SDL_Delay(2); }
-    Check(WpadSDLConnectedChannels() == 1, "Keyboard & mouse took a player beside the Wii Remote");
-
-    // The remote leaves: keyboard & mouse returns as player 1 after the delay.
-    remote.reset();
-    Until([&] { return WpadSDLConnectedChannels() == 0; }, "Disconnected Wii Remote kept its player");
-    const auto gone = std::chrono::steady_clock::now();
-    Until([&] { return WpadSDLConnectedChannels() == 1; }, "Keyboard & mouse did not return", 6);
-    Check(std::chrono::steady_clock::now() - gone >= std::chrono::milliseconds(2900),
-          "Keyboard & mouse returned before the link-drop delay");
+    WPADDeviceType type{};
+    Until([&] { return WPADProbe(1, &type) == WPAD_ERR_OK; }, "Keyboard & mouse did not become player 2");
+    Check(WPADProbe(0, &type) == WPAD_ERR_NO_CONTROLLER, "Keyboard & mouse took player 1's reserved port");
     Event(SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RETURN);
-    Until([&] { return Report().err == WPAD_ERR_OK && Report().button == WPAD_BUTTON_A; },
-          "Returned keyboard & mouse is not player 1");
+    Until([&] { return Report(1).button == WPAD_BUTTON_A; }, "Keyboard input did not reach player 2");
     Event(SDL_EVENT_KEY_UP, SDL_SCANCODE_RETURN);
-    Until([&] { return Report().button == 0; }, "Returned keyboard kept a press");
+    Until([&] { return Report(1).button == 0; }, "Keyboard kept a press");
 
-    // A remote connects again: it takes player 1, keyboard & mouse steps aside.
-    remote = std::make_unique<WiiRemote>();
-    Until([&] { return GetNativeWpadChannel(remote->id) == 0 && WpadSDLConnectedChannels() == 1; },
-          "Reconnected Wii Remote did not take player 1 from keyboard & mouse");
+    // A remote without a player skips the reserved port 1; player 1's remote
+    // then connects on its own port; a remote whose port is busy waits.
+    WiiRemote spare;
+    Until([&] { return GetNativeWpadChannel(spare.id) == 2; }, "Unassigned remote did not skip reserved ports");
+    WiiRemote first;
+    SetNativeWpadFixedChannel(first.id, 0);
+    Until([&] { return GetNativeWpadChannel(first.id) == 0; }, "Player 1's remote did not get port 1");
+    WiiRemote waiting;
+    SetNativeWpadFixedChannel(waiting.id, 1);
+    for (int n = 0; n != 5; ++n) { Service(); SDL_Delay(2); }
+    Check(GetNativeWpadChannel(waiting.id) == -1, "A remote took a busy player's port");
+    Check(WpadSDLConnectedChannels() == 3, "Fixed players changed the connected ports");
+    SetNativeWpadFixedChannel(waiting.id, -1);
+    SetNativeWpadFixedChannel(first.id, -1);
     mscharged::platform::ShutdownDesktopWpad();
     WPADShutdown();
-    remote.reset();
+    mscharged::platform::SetNativeWpadReservedChannels(0);
 }
 void Cycle(bool gamepads, bool physical) {
     connects = samples = 0;
@@ -324,11 +330,11 @@ int main() {
             Cycle(false,false);
             Cycle(true,true);
             NunchukCycle();
-            YieldCycle();
+            FixedPlayersCycle();
         }
         SDL_DestroyWindow(window); window = nullptr;
         SDL_Quit();
-        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, keyboard yielding to a Wii Remote and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
+        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
         return 0;
     } catch (const std::exception& e) {
         try { mscharged::platform::ShutdownDesktopWpad(); } catch (...) {}

@@ -2,6 +2,7 @@
 
 #include "platform/desktop_dpd.h"
 
+#include <array>
 #include <cstdint>
 
 struct SDL_hid_device_info;
@@ -20,6 +21,10 @@ struct WiimoteHidSettings {
     // Original IR sensitivity preference (1-5), mapped to the console's
     // camera register blocks.
     std::uint8_t ir_sensitivity = 3;
+    // Players by DolphinBar slot 1-4: WPAD channel (player - 1), -1 = not a
+    // player. Without fixed players every remote plays, in slot order.
+    bool fixed_players = false;
+    std::array<int, 4> slot_channels{-1, -1, -1, -1};
 };
 
 struct WiimoteHidRemote {
@@ -45,6 +50,8 @@ void InitializeWiimoteHid(WiimoteHidSettings settings);
 void ServiceWiimoteHid();
 void ShutdownWiimoteHid();
 WiimoteHidStatus GetWiimoteHidStatus();
+// The driver runs and has opened at least one Wii Remote HID device.
+bool WiimoteHidHasDevices();
 // Camera objects of a basic-mode IR block (10 bytes of report 0x37), in the
 // coordinates original WPAD gives KPAD.
 NativeDpdObservation DecodeWiimoteBasicIr(const std::uint8_t* ir);

@@ -36,7 +36,9 @@ Values Encode(const Settings& s)
             {"audio.master_volume", std::to_string(s.master_volume)},
             {"audio.music_volume", std::to_string(s.music_volume)},
             {"audio.effects_volume", std::to_string(s.effects_volume)},
-            {"audio.mute", s.mute ? "true" : "false"}, {"controls.input", s.input},
+            {"audio.mute", s.mute ? "true" : "false"},
+            {"controls.player1", s.players[0]}, {"controls.player2", s.players[1]},
+            {"controls.player3", s.players[2]}, {"controls.player4", s.players[3]},
             {"controls.deadzone", std::to_string(s.deadzone)},
             {"controls.rumble", s.rumble ? "true" : "false"},
             {"controls.sensor_bar", s.sensor_bar},
@@ -89,7 +91,24 @@ Settings Decode(const Values& values)
     number("audio.music_volume", s.music_volume, 0, 100);
     number("audio.effects_volume", s.effects_volume, 0, 100);
     boolean("audio.mute", s.mute);
-    choice("controls.input", s.input, {"auto", "keyboard", "controller"});
+    for (int n = 0; n < 4; ++n)
+    {
+        const auto key = "controls.player" + std::to_string(n + 1);
+        choice(key.c_str(), s.players[n], {"keyboard", "remote1", "remote2", "remote3", "remote4", "off"});
+    }
+    // Players fill in order from player 1, and each device plays once.
+    if (s.players[0] == "off")
+        throw std::runtime_error("Invalid configuration: controls.player1 must be keyboard or a Wii Remote");
+    for (int n = 1; n < 4; ++n)
+    {
+        if (s.players[n] == "off") continue;
+        if (s.players[n - 1] == "off")
+            throw std::runtime_error("Invalid configuration: players must be filled in order (controls.player"
+                + std::to_string(n + 1) + ")");
+        for (int m = 0; m < n; ++m)
+            if (s.players[n] == s.players[m])
+                throw std::runtime_error("Invalid configuration: " + s.players[n] + " is assigned to two players");
+    }
     number("controls.deadzone", s.deadzone, 0, 50);
     boolean("controls.rumble", s.rumble);
     choice("controls.sensor_bar", s.sensor_bar, {"bottom", "top"});

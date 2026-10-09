@@ -1,5 +1,6 @@
 #include "bootstrap/config.h"
 
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -38,14 +39,14 @@ int main()
         settings.height = 1080;
         settings.fullscreen = true;
         settings.master_volume = 65;
-        settings.input = "controller";
+        settings.players = {"remote2", "keyboard", "remote1", "off"};
         settings.deadzone = 20;
         settings.rumble = false;
         SaveConfig(file, settings);
         const auto reloaded = LoadConfig(path);
         Require(reloaded.settings.width == 1920 && reloaded.settings.height == 1080
             && reloaded.settings.fullscreen && reloaded.settings.master_volume == 65
-            && reloaded.settings.input == "controller" && reloaded.settings.deadzone == 20
+            && reloaded.settings.players == settings.players && reloaded.settings.deadzone == 20
             && !reloaded.settings.rumble, "Settings round trip");
         Require(reloaded.contents.find("; keep my comment\r\n") != std::string::npos
             && reloaded.contents.find("option = keep me\r\n") != std::string::npos
@@ -70,6 +71,20 @@ int main()
         std::ofstream(path) << "[game]\ndisc = a.iso\ndisc = b.iso\n";
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[display]\nvsync = maybe\n";
+        Reject([&] { LoadConfig(path); });
+        // Players fill in order from player 1 and each device plays once;
+        // an old controls.input line is ignored.
+        Require(Settings{}.players == std::array<std::string, 4>{"keyboard", "off", "off", "off"},
+                "Keyboard & mouse alone is the default player");
+        std::ofstream(path) << "[controls]\ninput = controller\nplayer1 = remote1\nplayer2 = keyboard\n";
+        Require(LoadConfig(path).settings.players[1] == "keyboard", "Ordered players load");
+        std::ofstream(path) << "[controls]\nplayer1 = off\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[controls]\nplayer1 = keyboard\nplayer3 = remote1\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[controls]\nplayer1 = remote1\nplayer2 = remote1\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[controls]\nplayer2 = gamepad\n";
         Reject([&] { LoadConfig(path); });
 
         // Host presentation/diagnostic settings: defaults keep the previous

@@ -34,6 +34,12 @@ void ServiceWpadSDL();
 int GetNativeWpadChannel(std::uint32_t joystick_id);
 // Whether original WPAD has the camera (DPD) of that joystick's channel enabled.
 bool GetNativeWpadCameraEnabled(std::uint32_t joystick_id);
+// Player assignment for native providers (controls.player1-4). A joystick
+// with a fixed channel connects only to that WPAD channel (player - 1) and
+// waits while it is busy; -1 removes the assignment. Joysticks without one
+// take the lowest free channel outside the reserved mask.
+void SetNativeWpadFixedChannel(std::uint32_t joystick_id, int channel);
+void SetNativeWpadReservedChannels(std::uint32_t mask);
 std::size_t WpadSDLConnectedChannels();
 
 // Lend the desktop mouse camera to connected remotes without their own camera
