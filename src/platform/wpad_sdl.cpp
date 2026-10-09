@@ -496,6 +496,14 @@ int GetNativeWpadChannel(std::uint32_t joystick_id) {
     return -1;
 }
 
+bool GetNativeWpadCameraEnabled(std::uint32_t joystick_id) {
+    auto& state = State();
+    std::lock_guard lock(state.reports);
+    for (const auto& channel : state.channels)
+        if (channel.pad && channel.id == joystick_id) return channel.dpd_command != WPAD_DPD_DISABLE;
+    return false;
+}
+
 void ServiceWpadSDL() {
     auto& state = State();
     RequireOwner();

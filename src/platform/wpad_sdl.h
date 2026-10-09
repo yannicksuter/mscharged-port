@@ -32,6 +32,8 @@ void ConfigureWpadSDL(WpadSDLSettings settings);
 void ServiceWpadSDL();
 // WPAD channel (player - 1) of an SDL joystick, or -1 while it has none.
 int GetNativeWpadChannel(std::uint32_t joystick_id);
+// Whether original WPAD has the camera (DPD) of that joystick's channel enabled.
+bool GetNativeWpadCameraEnabled(std::uint32_t joystick_id);
 std::size_t WpadSDLConnectedChannels();
 
 // Lend the desktop mouse camera to connected remotes without their own camera

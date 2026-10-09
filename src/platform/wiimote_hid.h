@@ -30,6 +30,7 @@ struct WiimoteHidRemote {
 };
 struct WiimoteHidStatus {
     bool dolphinbar = false; // a Mayflash adapter in mode 4 is present
+    bool dolphinbar_other_mode = false; // a DolphinBar in a mouse/gamepad mode (1-3)
     int adapter_slots = 0;
     std::vector<WiimoteHidRemote> remotes;
 };
@@ -71,4 +72,6 @@ private:
 WiimoteHidStatus ScanWiimoteHid(int timeout_ms = 400);
 bool IsWiimoteHid(const SDL_hid_device_info* info);
 bool IsDolphinBarHid(const SDL_hid_device_info* info);
+// A DolphinBar in modes 1-3 lists one Mayflash device instead of four remotes.
+bool DolphinBarInOtherMode();
 } // namespace mscharged::platform

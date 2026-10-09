@@ -1245,10 +1245,13 @@ private:
         const char* subtitle = !wii_known_ ? "Looking for Wii Remotes..."
             : !status.remotes.empty() ? "Players follow the DolphinBar slot order. Changes apply when the game starts."
             : status.dolphinbar ? "DolphinBar found. Pair a Wii Remote: press SYNC on the bar, then on the remote."
+            : status.dolphinbar_other_mode ? "The DolphinBar is in a mouse or gamepad mode. Press its MODE button until light 4 is on."
                                 : "Connect a Mayflash DolphinBar in mode 4, or pair a Wii Remote over Bluetooth (experimental).";
         BeginCard("##wiimotes", "Wii Remotes", subtitle, Icon::Gamepad);
         if (status.dolphinbar)
             Chip("DolphinBar", color::accent, Icon::Check);
+        else if (status.dolphinbar_other_mode)
+            Chip("DolphinBar: switch to mode 4", color::warning, Icon::Warning);
         if (found || draft_.input != "auto")
         {
             ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 4));

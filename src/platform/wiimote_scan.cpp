@@ -74,6 +74,7 @@ void WiimoteHidProbe::Start(int timeout_ms) {
         devices_.push_back(new Device{info->path, hid, slot});
     }
     SDL_hid_free_enumeration(list);
+    status.dolphinbar_other_mode = !status.dolphinbar && DolphinBarInOtherMode();
     result_ = status;
     deadline_ns_ = SDL_GetTicksNS() + std::uint64_t(timeout_ms) * 1000000u;
     active_ = true;
@@ -105,6 +106,14 @@ bool WiimoteHidProbe::Poll() {
     Close();
     result_ = status;
     return true;
+}
+
+bool DolphinBarInOtherMode() {
+    bool found = false;
+    SDL_hid_device_info* list = SDL_hid_enumerate(0x0079, 0x1803);
+    for (auto* info = list; info; info = info->next) found |= IsDolphinBarHid(info);
+    SDL_hid_free_enumeration(list);
+    return found;
 }
 
 WiimoteHidStatus ScanWiimoteHid(int timeout_ms) {

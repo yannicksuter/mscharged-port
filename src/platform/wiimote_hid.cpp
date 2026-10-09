@@ -25,6 +25,10 @@ constexpr std::uint16_t kNintendo = 0x057e, kRemote = 0x0306, kRemotePlus = 0x03
 constexpr float kGravity = 9.80665f;
 constexpr std::chrono::milliseconds kProbeWait{600}, kProbeInterval{2000}, kEnumerateInterval{2000};
 constexpr std::chrono::milliseconds kSilentLimit{1500}, kCommandWait{250};
+// A DolphinBar slot can reject a write while its Bluetooth link is busy; only
+// repeated failures mean the remote is gone.
+constexpr std::chrono::milliseconds kWriteRetry{20};
+constexpr int kWriteAttempts = 10;
 
 // Console IR camera sensitivity blocks (registers 0xb00000 and 0xb0001a),
 // levels 1-5 as selected by the Wii's sensor-bar sensitivity setting.
@@ -61,6 +65,9 @@ struct Remote {
     int nunchuk_zero[3]{512, 512, 512}, nunchuk_one[3]{712, 712, 712}, nunchuk_centre[2]{128, 128};
     std::uint8_t battery = 0;
     bool ir_visible = false;
+    int write_failures = 0;
+    Clock::time_point retry_at{};
+    Clock::time_point next_debug_log{};
     int led_channel = -2;
     bool sensors = false;
     SDL_JoystickID virtual_id = 0;
@@ -83,6 +90,7 @@ struct Driver {
     mscharged::platform::WiimoteHidSettings settings;
     std::vector<std::unique_ptr<Remote>> remotes;
     Clock::time_point next_enumerate{};
+    bool reported_other_mode = false;
 };
 Driver& State() { static Driver driver; return driver; }
 
@@ -215,6 +223,8 @@ void Lost(Remote& remote, const char* why) {
     DetachVirtual(remote);
     remote.present = remote.ready = remote.probing = remote.waiting = false;
     remote.queue.clear();
+    remote.write_failures = 0;
+    remote.retry_at = {};
     remote.extension = remote.nunchuk = false;
     remote.rumble = false;
     remote.next_probe = Clock::now() + 1s;
@@ -290,6 +300,34 @@ void Publish(Remote& remote, const std::uint8_t* report) {
     }
     remote.ir_visible = visible;
     if (remote.dpd.generation) mscharged::platform::SubmitNativeWpadDpdObservation(remote.dpd, dots);
+    if (Verbose() && Clock::now() >= remote.next_debug_log) {
+        // Once a second: raw IR bytes, decoded camera objects, calibrated tilt
+        // (100 = 1 g) and whether original WPAD enabled this player's camera.
+        remote.next_debug_log = Clock::now() + 1s;
+        char raw_ir[10 * 3 + 1]{}, objects[96]{};
+        for (int n = 0; n < 10; ++n) std::snprintf(raw_ir + 3 * n, 4, "%02x ", report[6 + n]);
+        int length = 0, count = 0;
+        const mscharged::platform::NativeDpdObject* pair[2]{};
+        for (const auto& dot : dots) {
+            if (!dot.size) continue;
+            if (count < 2) pair[count] = &dot;
+            ++count;
+            length += std::snprintf(objects + length, sizeof(objects) - length, " (%d,%d)", dot.x, dot.y);
+        }
+        // KPAD pairs two objects 90-510 camera pixels apart (sensor bar
+        // 0.5-3 m away) whose line matches the remote's roll.
+        if (count >= 2)
+            length += std::snprintf(objects + length, sizeof(objects) - length, " spacing %d",
+                int(std::lround(std::hypot(pair[1]->x - pair[0]->x, pair[1]->y - pair[0]->y))));
+        const int raw[3]{(report[3] << 2) | ((b0 >> 5) & 3), (report[4] << 2) | ((b1 >> 4) & 2),
+                         (report[5] << 2) | ((b1 >> 5) & 2)};
+        SDL_Log("Wii Remote IR: player %d camera %s, objects%s, tilt x %d y %d z %d, raw %s",
+                mscharged::platform::GetNativeWpadChannel(remote.virtual_id) + 1,
+                mscharged::platform::GetNativeWpadCameraEnabled(remote.virtual_id) ? "on" : "off",
+                length ? objects : " none", Calibrated(raw[0], remote.zero[0], remote.one[0], 100),
+                Calibrated(raw[1], remote.zero[1], remote.one[1], 100),
+                Calibrated(raw[2], remote.zero[2], remote.one[2], 100), raw_ir);
+    }
     if (remote.nunchuk && remote.nunchuk_source.generation) {
         const std::uint8_t* ext = report + 16;
         mscharged::platform::NativeNunchukObservation nunchuk{};
@@ -380,6 +418,7 @@ void HandleReport(Remote& remote, const std::uint8_t* report, int size, Clock::t
 }
 
 void Pump(Remote& remote, Clock::time_point now) {
+    if (now < remote.retry_at) return;
     if (remote.waiting && now < remote.wait_deadline) return;
     if (remote.waiting && Verbose())
         SDL_Log("Wii Remote %s: no reply to %02x", remote.path.c_str(), remote.current.report[0]);
@@ -390,7 +429,13 @@ void Pump(Remote& remote, Clock::time_point now) {
         if (Verbose())
             SDL_Log("Wii Remote %s: send %02x %02x (%zu bytes)", remote.path.c_str(), remote.current.report[0],
                     remote.current.report.size() > 1 ? remote.current.report[1] : 0, remote.current.report.size());
-        if (!Send(remote, remote.current.report)) { Lost(remote, "write failed"); return; }
+        if (!Send(remote, remote.current.report)) {
+            if (++remote.write_failures >= kWriteAttempts) { Lost(remote, "write failed"); return; }
+            remote.queue.push_front(std::move(remote.current));
+            remote.retry_at = now + kWriteRetry;
+            return;
+        }
+        remote.write_failures = 0;
         if (remote.current.wait != Wait::None) {
             remote.waiting = true;
             remote.wait_deadline = now + kCommandWait;
@@ -462,6 +507,10 @@ void Enumerate(Driver& driver) {
         driver.remotes.push_back(std::move(remote));
     }
     SDL_hid_free_enumeration(devices);
+    const bool other_mode = !adapter_index && mscharged::platform::DolphinBarInOtherMode();
+    if (other_mode && !driver.reported_other_mode)
+        SDL_Log("The DolphinBar is in a mouse or gamepad mode; press its MODE button until light 4 is on");
+    driver.reported_other_mode = other_mode;
     // Retire paths that disappeared (adapter unplugged, Bluetooth link gone).
     for (auto it = driver.remotes.begin(); it != driver.remotes.end();) {
         if (std::find(seen.begin(), seen.end(), (*it)->path) != seen.end()) { ++it; continue; }
@@ -525,7 +574,7 @@ void InitializeWiimoteHid(WiimoteHidSettings settings) {
     driver.next_enumerate = Clock::now() + kEnumerateInterval;
     // Remotes that are already on answer within a few milliseconds and take
     // the first players before the keyboard device is created.
-    const auto deadline = Clock::now() + 800ms;
+    const auto deadline = Clock::now() + 1500ms;
     while (Clock::now() < deadline) {
         const auto now = Clock::now();
         bool pending = false;
