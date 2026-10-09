@@ -109,11 +109,14 @@ debug providers. Native services supply address checks, stack unwinding and
 terminal halt behavior; original assertion expressions and initialization side
 effects remain enabled. Full HOME-menu startup is still separate work.
 
-The current pin is `9cdfc1e9`, which additionally source-links `StatsTracker.cpp`,
-`DesireStatusEffects.cpp`, and `ImpostorCluster.cpp`. The patch series follows
-upstream's statistics owners, scene names, CupManager singleton and corrected
-character enum values. Source selection remains explicit: an upstream match
-alone does not establish native gameplay readiness.
+The selected revision is recorded in [base](mscharged-decomp/base) and the
+decomp submodule gitlink. Source selection remains explicit: a completed
+console reconstruction does not establish native gameplay readiness.
+
+Patches 0681, 0683 and 0684 preserve signed 32-bit values in upstream enums
+used by serialized audio, effects and game settings or integer tweak input.
+Patch 0682 preserves the numeric widths and pointer layout of newly typed world
+object headers. These adaptations retain original data and game decisions.
 
 Patch 0595 uses the native allocation size type in functor and animation
 controller declarations, including Windows' 64-bit pointer/32-bit `long` ABI.
