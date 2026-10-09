@@ -30,6 +30,8 @@ void ConfigureWpadSDL(WpadSDLSettings settings);
 // Original connect/sampling callbacks run on this owner through the shared IRQ
 // boundary. No callbacks are executed by an SDL watcher or device worker.
 void ServiceWpadSDL();
+// WPAD channel (player - 1) of an SDL joystick, or -1 while it has none.
+int GetNativeWpadChannel(std::uint32_t joystick_id);
 std::size_t WpadSDLConnectedChannels();
 
 // Lend the desktop mouse camera to connected remotes without their own camera

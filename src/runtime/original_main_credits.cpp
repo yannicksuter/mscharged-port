@@ -344,11 +344,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             logLevel=="error"?LOG_ERROR:LOG_INFO;
         config.enableBackendValidation=launch.settings.graphics_validation;
         config.vsync=launch.settings.vsync;
-        // SDL's Wii HID driver must own physical Wii Remotes from Aurora's first
-        // joystick scan. Enabled only at WPADInit it misses SDL's three-second
-        // idle window and drops a Remote that was connected before the start.
-        // SDL_JOYSTICK_HIDAPI_WII=0 in the environment still takes precedence.
-        SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_WII,"1",SDL_HINT_DEFAULT);
+        // The native Wii Remote driver (platform/wiimote_hid) owns physical
+        // remotes, including DolphinBar mode 4 and its IR sensor bar; SDL's
+        // own Wii HID driver must not open the same devices.
+        SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_WII,"0",SDL_HINT_DEFAULT);
         const auto host=aurora_initialize(argc,argv,&config);
         if(!host.window||host.backend!=mscharged::platform::NativeGraphicsBackend)
             throw std::runtime_error(std::string("Actual ")+mscharged::platform::NativeGraphicsBackendName
