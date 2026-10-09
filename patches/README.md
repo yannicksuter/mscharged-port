@@ -85,7 +85,11 @@ on a fresh save, and narrows its pointer-button contexts natively.
 
 Patch 0609 reads the captain chant's bus clock through the host: the original
 converts OSGetTime to milliseconds through the Wii OS global at 0x800000F8,
-which is unmapped in a native process.
+which is unmapped in a native process. Patch 0608 spells four original
+constructs in host-valid C++ with the same values and linkage: the Waluigi
+direction tables' narrowing (a Clang error), a one-line extern "C" definition,
+ODE's M_SQRT1_2 beside host <math.h> and depth of field's 32-bit memcpy
+prototype.
 
 Patches 0620–0621 admit original Strikers 101 lesson and Striker Challenge play
 under the explicit challenge-play diagnostic. 0620 opens the 101 pause menu (84),
