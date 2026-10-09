@@ -56,6 +56,18 @@ Game behavior, requests and timing are unchanged.
   value-returning function is undefined in host C++, and GCC removed the
   function exit so execution fell back into the parse loop, allocating pose
   accumulators until MEM1 was exhausted. Natively it returns `this`.
+- GoalieSave::TriggerCallback matches the save-contact event 0xCF83E7CD as
+  (uEventID + 0x307C0000) == 0xE7CD, relying on the 32-bit unsigned long
+  wrapping. Natively unsigned long is 64 bits and the test never matched, so
+  every save kept milestone 2 and its duration at zero, all saves collapsed to
+  the start pose and the goalie's fail-save search returned null, crashing
+  Goalie::InitActionSave. Natively the sum is kept to 32 bits.
+- BitPacker::Pack sizes a field with (1 << i) & range for i up to 63. PowerPC
+  slw gives 0 for counts 32..63; an x86 int shift masks the count, so the size
+  exceeded 32 bits, nothing was packed and every key was 0. The joint-position
+  cache behind cCharacter::GetJointPositionFuture then returned its first entry
+  for every animation and time, and every goalie save shared one height.
+  Natively the test uses a 64-bit shift (range is below 2^31).
 
 diff --git a/include/Game/AI/Desire.h b/include/Game/AI/Desire.h
 --- a/include/Game/AI/Desire.h
@@ -119,6 +131,23 @@ diff --git a/include/Game/AI/Variant.h b/include/Game/AI/Variant.h
 +#endif
 +
  #endif // _VARIANT_H_
+diff --git a/include/Game/BitPacker.h b/include/Game/BitPacker.h
+--- a/include/Game/BitPacker.h
++++ b/include/Game/BitPacker.h
+@@ -23,7 +23,13 @@
+         unsigned int bits = 0;
+         for (i = 0; i < 64; ++i)
+         {
++#if defined(MSCHARGED_NATIVE)
++            // PowerPC slw gives 0 for shift counts 32..63; an x86 int shift
++            // masks the count, so bit i - 32 would be tested again.
++            if ((1ull << i) & range)
++#else
+             if ((1 << i) & range)
++#endif
+                 bits = i + 1;
+         }
+         if (bits + mUnidentified00 < 32)
 diff --git a/include/Game/Character.h b/include/Game/Character.h
 --- a/include/Game/Character.h
 +++ b/include/Game/Character.h
@@ -796,6 +825,20 @@ diff --git a/src/Game/AI/GoalieSave.cpp b/src/Game/AI/GoalieSave.cpp
      mpPositionTable = (SavePositionData*)__construct_new_array(
          nlMalloc(0x70, 8, false), 0, 0, 0x10, 6);
  
+@@ -1219,7 +1229,13 @@
+ {
+     SaveData* pSaveData = (SaveData*)pUserData;
+ 
++#if defined(MSCHARGED_NATIVE)
++    // This test relies on the 32-bit Wii unsigned long wrapping (event
++    // 0xCF83E7CD); natively the sum is kept to 32 bits.
++    if ((u32)(uEventID + 0x307C0000) == 0xE7CD)
++#else
+     if ((uEventID + 0x307C0000) == 0xE7CD)
++#endif
+     {
+         pSaveData->mfMilestonePercent[2] = fTime;
+         pSaveData->mfDuration = fDuration;
 diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
 --- a/src/Game/AI/Powerups.cpp
 +++ b/src/Game/AI/Powerups.cpp
