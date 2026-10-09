@@ -439,12 +439,21 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // Borrow input into the existing AI/SDK hardware owner; source KPAD
         // and FE methods retain their original mappings and decisions. The
         // keyboard remote carries a virtual Nunchuk, which original matches
-        // require of every playing controller. Physical Wii Remotes (with a
-        // Nunchuk) point with the mouse: SDL reports no Wii Remote IR data.
-        // controls.rumble is the system rumble setting original Options reads.
-        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,true,launch.settings.rumble},
+        // require of every playing controller; the mouse is its pointer.
+        // Physical Wii Remotes (platform/wiimote_hid) bring their own IR
+        // camera and Nunchuk. controls.rumble is the system rumble setting
+        // original Options reads; controls.sensor_bar the sensor-bar position
+        // (bottom/top) original KPAD aims the pointer from. controls.input
+        // picks who plays: auto = Wii Remotes, then keyboard & mouse;
+        // controller = Wii Remotes, keyboard & mouse only while none is
+        // connected; keyboard = keyboard & mouse only.
+        const bool keyboard_only = launch.settings.input == "keyboard";
+        const bool keyboard_yields = launch.settings.input == "controller";
+        mscharged::platform::InitializeNativeHardwareInput(host.window,
+            {static_cast<std::uint8_t>(launch.settings.sensor_bar=="top"?1:0),3,!keyboard_only,
+             launch.settings.rumble},
             mscharged::platform::GetNativeSTMInput(),
-            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true});
+            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true,keyboard_yields});
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)
             mscharged::diagnostic::InitializeOriginalGameAudioHardware(
