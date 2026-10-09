@@ -281,23 +281,9 @@ void Publish(Remote& remote, const std::uint8_t* report) {
     const bool buttons[11]{(b1 & 0x08) != 0, (b1 & 0x04) != 0, (b1 & 0x02) != 0, (b1 & 0x01) != 0,
                            (b0 & 0x10) != 0, (b1 & 0x10) != 0, (b1 & 0x80) != 0, (b0 & 0x08) != 0,
                            (b0 & 0x04) != 0, (b0 & 0x01) != 0, (b0 & 0x02) != 0};
-    // Basic IR: two 5-byte groups of two objects with 10-bit coordinates.
-    mscharged::platform::NativeDpdObservation dots{};
+    const auto dots = mscharged::platform::DecodeWiimoteBasicIr(report + 6);
     bool visible = false;
-    for (int group = 0; group < 2; ++group) {
-        const std::uint8_t* ir = report + 6 + group * 5;
-        const int x[2]{ir[0] | ((ir[2] >> 4) & 3) << 8, ir[3] | (ir[2] & 3) << 8};
-        const int y[2]{ir[1] | ((ir[2] >> 6) & 3) << 8, ir[4] | ((ir[2] >> 2) & 3) << 8};
-        for (int n = 0; n < 2; ++n) {
-            auto& object = dots[group * 2 + n];
-            object.trace_id = static_cast<std::uint8_t>(group * 2 + n);
-            if (x[n] >= 1023 || y[n] >= 767) continue; // 0x3ff marks no object
-            object.x = static_cast<std::int16_t>(x[n]);
-            object.y = static_cast<std::int16_t>(y[n]);
-            object.size = 12; // basic WPAD DPD convention for a present object
-            visible = true;
-        }
-    }
+    for (const auto& dot : dots) visible |= dot.size != 0;
     remote.ir_visible = visible;
     if (remote.dpd.generation) mscharged::platform::SubmitNativeWpadDpdObservation(remote.dpd, dots);
     if (Verbose() && Clock::now() >= remote.next_debug_log) {
@@ -613,6 +599,28 @@ void ShutdownWiimoteHid() {
     driver.initialized = false;
     driver.owner = {};
     SDL_hid_exit();
+}
+
+NativeDpdObservation DecodeWiimoteBasicIr(const std::uint8_t* ir) {
+    // Two 5-byte groups of two objects with 10-bit coordinates, converted like
+    // original WPADHIDParser (WPAD_DPD_BASIC): x as sent, y = 767 - sent y;
+    // x 1023 or y 767 means no object (0, 767, size 0), a present one has size 12.
+    NativeDpdObservation dots{};
+    for (int group = 0; group < 2; ++group) {
+        const std::uint8_t* bytes = ir + group * 5;
+        const int x[2]{bytes[0] | ((bytes[2] >> 4) & 3) << 8, bytes[3] | (bytes[2] & 3) << 8};
+        const int y[2]{bytes[1] | ((bytes[2] >> 6) & 3) << 8, bytes[4] | ((bytes[2] >> 2) & 3) << 8};
+        for (int n = 0; n < 2; ++n) {
+            auto& object = dots[group * 2 + n];
+            object.trace_id = static_cast<std::uint8_t>(group * 2 + n);
+            const int flipped = 767 - y[n];
+            const bool absent = x[n] == 1023 || flipped == 767;
+            object.x = static_cast<std::int16_t>(absent ? 0 : x[n]);
+            object.y = static_cast<std::int16_t>(absent ? 767 : flipped);
+            object.size = absent ? 0 : 12;
+        }
+    }
+    return dots;
 }
 
 WiimoteHidStatus GetWiimoteHidStatus() {

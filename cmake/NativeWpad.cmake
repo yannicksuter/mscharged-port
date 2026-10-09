@@ -28,4 +28,13 @@ if(BUILD_TESTING)
     add_test(NAME native_wpad_speaker_volume COMMAND native_wpad_speaker_volume_tests)
     set_tests_properties(native_wpad_speaker_volume PROPERTIES TIMEOUT 10
         ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
+
+    add_executable(wiimote_hid_tests tests/wiimote_hid_tests.cpp)
+    target_compile_features(wiimote_hid_tests PRIVATE cxx_std_20)
+    target_compile_definitions(wiimote_hid_tests PRIVATE MSCHARGED_NATIVE=1 TARGET_PC=1)
+    target_include_directories(wiimote_hid_tests PRIVATE
+        "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
+    target_link_libraries(wiimote_hid_tests PRIVATE charged_native_wpad)
+    add_test(NAME wiimote_hid COMMAND wiimote_hid_tests)
+    set_tests_properties(wiimote_hid PROPERTIES TIMEOUT 10)
 endif()

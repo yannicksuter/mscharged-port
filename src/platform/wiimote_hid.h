@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/desktop_dpd.h"
+
 #include <cstdint>
 
 struct SDL_hid_device_info;
@@ -43,6 +45,9 @@ void InitializeWiimoteHid(WiimoteHidSettings settings);
 void ServiceWiimoteHid();
 void ShutdownWiimoteHid();
 WiimoteHidStatus GetWiimoteHidStatus();
+// Camera objects of a basic-mode IR block (10 bytes of report 0x37), in the
+// coordinates original WPAD gives KPAD.
+NativeDpdObservation DecodeWiimoteBasicIr(const std::uint8_t* ir);
 
 // Standalone detection for the launcher (no game input owner): opens each Wii
 // Remote HID path, asks for a status report and closes it again. Start() and
