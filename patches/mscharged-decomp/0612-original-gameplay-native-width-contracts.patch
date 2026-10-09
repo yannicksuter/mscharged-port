@@ -1,6 +1,6 @@
 From: mscharged-port
 Subject: Compile the original gameplay providers with native width contracts
-Upstream-base: efa6fc84680e48bfdca7e6ac245d8abf333ae617
+Upstream-base: 2c5c51e483b652d178ef06a44b83b07a0f97d2a6
 
 Temporary E13 compiler/ABI adaptations for the original match providers.
 Game behavior, requests and timing are unchanged.
@@ -23,7 +23,7 @@ Game behavior, requests and timing are unchanged.
   Likewise the Desire units that call CallFielderFuzzyFunction include the
   original inline FuzzyRuntimeCall.h natively.
 - PowerupBase::AwardPowerup reads the captain power-up through Wii offsets
-  0x11C/0x14; natively these are cCharacter::mUnidentified11C and
+  0x11C/0x14; natively these are cCharacter::m_pCharacterInfo and
   CharacterInfo::unknown_0x14.
 - GoalieActions instantiates a queued-event Function<bool> through header
   inlines; natively it includes the original nlFunction.inl template bodies.
@@ -60,7 +60,7 @@ Game behavior, requests and timing are unchanged.
 diff --git a/include/Game/AI/Desire.h b/include/Game/AI/Desire.h
 --- a/include/Game/AI/Desire.h
 +++ b/include/Game/AI/Desire.h
-@@ -510,4 +510,10 @@
+@@ -509,4 +509,10 @@
  float GetRunInDirectionMaxDistance(const DesireRunInDirection*);
  float GetRunInDirectionDistanceTravelled(const DesireRunInDirection*);
  
@@ -814,9 +814,9 @@ diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
              && pTeam->GetCaptain()->IsShattered() != 1)
          {
 +#if defined(MSCHARGED_NATIVE)
-+            // Wii 0x11C is cCharacter::mUnidentified11C and its Wii 0x14 is
++            // Wii 0x11C is cCharacter::m_pCharacterInfo and its Wii 0x14 is
 +            // CharacterInfo::unknown_0x14 (the captain's power-up).
-+            powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++            powerUpType = (ePowerUpType)pTeam->GetCaptain()->m_pCharacterInfo->unknown_0x14;
 +#else
              powerUpType = *(ePowerUpType*)(
                  *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
@@ -829,7 +829,7 @@ diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
      else if (nChance < nChanceForCaptainPowerup)
      {
 +#if defined(MSCHARGED_NATIVE)
-+        powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++        powerUpType = (ePowerUpType)pTeam->GetCaptain()->m_pCharacterInfo->unknown_0x14;
 +#else
          powerUpType = *(ePowerUpType*)(
              *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
@@ -842,7 +842,7 @@ diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
      if (GameInfoManager::Instance()->GetRule0x0() == 9)
      {
 +#if defined(MSCHARGED_NATIVE)
-+        if (powerUpType != (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14)
++        if (powerUpType != (ePowerUpType)pTeam->GetCaptain()->m_pCharacterInfo->unknown_0x14)
 +#else
          if (powerUpType
              != *(ePowerUpType*)(
@@ -856,7 +856,7 @@ diff --git a/src/Game/AI/Powerups.cpp b/src/Game/AI/Powerups.cpp
              && pTeam->GetCaptain()->IsShattered() == 0)
          {
 +#if defined(MSCHARGED_NATIVE)
-+            powerUpType = (ePowerUpType)pTeam->GetCaptain()->mUnidentified11C->unknown_0x14;
++            powerUpType = (ePowerUpType)pTeam->GetCaptain()->m_pCharacterInfo->unknown_0x14;
 +#else
              powerUpType = *(ePowerUpType*)(
                  *(u8**)((u8*)pTeam->GetCaptain() + 0x11C) + 0x14);
@@ -882,7 +882,7 @@ diff --git a/src/Game/Character.cpp b/src/Game/Character.cpp
 --- a/src/Game/Character.cpp
 +++ b/src/Game/Character.cpp
 @@ -708,7 +708,7 @@
-     mUnidentified024.m_fDecel = fDecel;
+     m_DetChar.m_fDecel = fDecel;
  }
  
 -void cCharacter::MatchAnimSpeedToCharacterSpeed(unsigned int nParam,
@@ -923,8 +923,8 @@ diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
  void SetCharacterPacketAVisible(cCharacter* pCharacter, bool bValue)
  {
 +#if defined(MSCHARGED_NATIVE)
-+    // Wii offset 0x181 is cCharacter::mUnidentified181.
-+    pCharacter->mUnidentified181 = bValue;
++    // Wii offset 0x181 is cCharacter::m_bPacketAVisible.
++    pCharacter->m_bPacketAVisible = bValue;
 +#else
      *(bool*)((char*)pCharacter + 0x181) = bValue;
 +#endif
@@ -933,8 +933,8 @@ diff --git a/src/Game/CharacterTriggers.cpp b/src/Game/CharacterTriggers.cpp
  void SetCharacterPacketBVisible(cCharacter* pCharacter, bool bValue)
  {
 +#if defined(MSCHARGED_NATIVE)
-+    // Wii offset 0x182 is cCharacter::mUnidentified182.
-+    pCharacter->mUnidentified182 = bValue;
++    // Wii offset 0x182 is cCharacter::m_bPacketBVisible.
++    pCharacter->m_bPacketBVisible = bValue;
 +#else
      *(bool*)((char*)pCharacter + 0x182) = bValue;
 +#endif
