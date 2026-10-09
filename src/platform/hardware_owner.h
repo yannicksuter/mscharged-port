@@ -3,8 +3,10 @@
 #include "platform/wpad_sdl.h"
 #include "platform/desktop_wpad.h"
 #include "platform/stm_device.h"
+#include "platform/wiimote_calibration.h"
 
 #include <array>
+#include <optional>
 
 struct SDL_Window;
 
@@ -36,6 +38,8 @@ struct NativePlayers {
     bool fixed = false; // false: remotes, then keyboard & mouse, as they connect
     int keyboard = 0;
     std::array<int, 4> remotes{-1, -1, -1, -1};
+    // Pointer calibration of the Wii Remote in each DolphinBar slot.
+    std::array<std::optional<WiimoteCalibration>, 4> calibrations{};
 };
 void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
     StmInput borrowed_stm, DesktopWpadSettings desktop = {}, NativePlayers players = {});

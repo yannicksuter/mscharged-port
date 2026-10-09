@@ -206,6 +206,8 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
     WiimoteHidSettings hid{settings.dpd_sensitivity};
     hid.fixed_players = players.fixed;
     hid.slot_channels = players.remotes;
+    hid.calibrations = players.calibrations;
+    hid.sensor_bar_position = settings.sensor_bar_position;
     const bool remotes_play = !players.fixed ||
         std::any_of(players.remotes.begin(), players.remotes.end(), [](int channel) { return channel >= 0; });
     if (settings.physical_wii_remotes && remotes_play) InitializeWiimoteHid(hid);

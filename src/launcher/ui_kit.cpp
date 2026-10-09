@@ -141,6 +141,14 @@ void DrawIcon(ImDrawList* draw, Icon icon, ImVec2 c, float s, ImU32 color)
     switch (icon)
     {
     case Icon::None: break;
+    case Icon::Target:
+        draw->AddCircle(c, 0.30f * s, color, 0, t);
+        draw->AddLine(p(0.0f, -0.50f), p(0.0f, -0.16f), color, t);
+        draw->AddLine(p(0.0f, 0.16f), p(0.0f, 0.50f), color, t);
+        draw->AddLine(p(-0.50f, 0.0f), p(-0.16f, 0.0f), color, t);
+        draw->AddLine(p(0.16f, 0.0f), p(0.50f, 0.0f), color, t);
+        draw->AddCircleFilled(c, 0.07f * s, color);
+        break;
     case Icon::Play:
         draw->AddTriangleFilled(p(-0.30f, -0.42f), p(-0.30f, 0.42f), p(0.44f, 0.0f), color);
         break;
@@ -397,7 +405,7 @@ bool SecondaryButton(const char* id, const char* label, ImVec2 size, bool enable
     const auto& fonts = CurrentFonts();
     const ImVec2 text = TextSize(fonts.body, label);
     const float icon_size = icon == Icon::None ? 0.0f : Dp(16);
-    const float gap = icon == Icon::None ? 0.0f : Dp(8);
+    const float gap = icon == Icon::None || !*label ? 0.0f : Dp(8);
     const float left = pos.x + (size.x - (text.x + icon_size + gap)) * 0.5f;
     const ImU32 ink = Col(enabled ? Mix(color::muted, color::text, 0.6f + 0.4f * hover) : color::dim);
     if (icon != Icon::None) DrawIcon(draw, icon, {left + icon_size * 0.5f, pos.y + size.y * 0.5f}, icon_size, ink);

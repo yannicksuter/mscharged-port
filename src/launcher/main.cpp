@@ -168,6 +168,7 @@ public:
     ~Launcher()
     {
         wii_probe_.Close();
+        live_.Close();
         if (renderer_ui_ready_) ImGui_ImplSDLRenderer3_Shutdown();
         if (window_ui_ready_) ImGui_ImplSDL3_Shutdown();
         if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
@@ -554,6 +555,11 @@ private:
     // ------------------------------------------------------------- layout
     void Draw(bool& quit)
     {
+        if (calibration_.active)
+        {
+            DrawCalibration();
+            return;
+        }
         auto& io = ImGui::GetIO();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false) && config_ok_ && dirty_) Save();
         const ImVec2 size = io.DisplaySize;
@@ -1235,6 +1241,152 @@ private:
             wii_probe_.Start(250);
     }
 
+    struct CalibrationTarget
+    {
+        const char* name;
+        float x, y; // 0..1 across the game picture
+    };
+    static constexpr CalibrationTarget kCalibrationTargets[5] = {
+        {"the centre", 0.5f, 0.5f}, {"the top-left corner", 0.1f, 0.1f}, {"the top-right corner", 0.9f, 0.1f},
+        {"the bottom-right corner", 0.9f, 0.9f}, {"the bottom-left corner", 0.1f, 0.9f}};
+
+    void StartCalibration(int slot)
+    {
+        wii_probe_.Close();
+        if (!live_.Open(slot))
+        {
+            Notice("Wii Remote " + std::to_string(slot + 1) + " did not answer. Press a button on it and try again.",
+                   NoticeKind::Warning);
+            return;
+        }
+        calibration_ = {};
+        calibration_.active = true;
+        calibration_.slot = slot;
+        // Calibrate on the display the game starts on, filled like the game's
+        // fullscreen picture.
+        int count = 0;
+        SDL_DisplayID* ids = SDL_GetDisplays(&count);
+        if (ids && draft_.monitor > 0 && draft_.monitor <= count)
+        {
+            const int position = int(SDL_WINDOWPOS_CENTERED_DISPLAY(ids[draft_.monitor - 1]));
+            SDL_SetWindowPosition(window_, position, position);
+        }
+        SDL_free(ids);
+        SDL_SetWindowFullscreen(window_, true);
+    }
+
+    void EndCalibration()
+    {
+        live_.Close();
+        calibration_.active = false;
+        SDL_SetWindowFullscreen(window_, false);
+        wii_next_probe_ns_ = 0;
+    }
+
+    void DrawCalibration()
+    {
+        auto& c = calibration_;
+        live_.Poll();
+        const auto& io = ImGui::GetIO();
+        const ImVec2 size = io.DisplaySize;
+        ImGui::SetNextWindowPos({0, 0});
+        ImGui::SetNextWindowSize(size);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+        ImGui::Begin("##calibration", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar();
+        auto* draw = ImGui::GetWindowDrawList();
+        draw->AddRectFilled({0, 0}, size, Col(color::window));
+        // The game picture fills the screen at the game's aspect ratio.
+        const float aspect = draft_.aspect == "4:3" ? 4.0f / 3.0f
+            : draft_.aspect == "16:9" ? 16.0f / 9.0f : size.x / std::max(1.0f, size.y);
+        float width = size.x, height = size.x / aspect;
+        if (height > size.y) { height = size.y; width = size.y * aspect; }
+        const ImVec2 origin{(size.x - width) * 0.5f, (size.y - height) * 0.5f};
+        draw->AddRect(origin, {origin.x + width, origin.y + height}, Col(color::border), 0, 0, Dp(1));
+        for (std::size_t n = 0; n < 5; ++n)
+        {
+            const auto& target = kCalibrationTargets[n];
+            const ImVec2 at{origin.x + target.x * width, origin.y + target.y * height};
+            if (n < c.step)
+                DrawIcon(draw, Icon::Check, at, Dp(26), Col(color::accent));
+            else if (n == c.step)
+            {
+                const float pulse = 0.5f + 0.5f * std::sin(float(SDL_GetTicks()) * 0.006f);
+                draw->AddCircle(at, Dp(34) + Dp(8) * pulse, Col(color::accent, 0.45f), 0, Dp(2));
+                DrawIcon(draw, Icon::Target, at, Dp(48), Col(color::accent));
+            }
+            else
+                DrawIcon(draw, Icon::Target, at, Dp(24), Col(color::dim));
+        }
+
+        // Where the remote's camera sees the DolphinBar.
+        int visible = 0;
+        for (const auto& object : live_.Dots()) visible += object.size != 0;
+        const auto pair = platform::TrackWiimotePair(c.pair, live_.Dots());
+        const bool in_view = pair.has_value() && visible >= 2;
+        const auto& target = kCalibrationTargets[std::min<std::size_t>(c.step, 4)];
+        const auto& fonts = CurrentFonts();
+        const auto centred = [&](ImFont* font, float y, ImU32 ink, const std::string& text) {
+            const ImVec2 extent = TextSize(font, text.c_str());
+            DrawLabel(draw, font, {(size.x - extent.x) * 0.5f, y}, ink, text.c_str());
+        };
+        const float text_y = origin.y + height * 0.62f;
+        centred(fonts.title, text_y, Col(color::text),
+                "Wii Remote " + std::to_string(c.slot + 1) + ": aim at " + target.name + " and press A");
+        centred(fonts.label, text_y + Dp(48), Col(in_view ? color::accent : color::warning),
+                in_view ? "DolphinBar in view" : "The Wii Remote can't see the DolphinBar");
+        if (!c.message.empty()) centred(fonts.body, text_y + Dp(80), Col(color::warning), c.message);
+        centred(fonts.caption, origin.y + height - Dp(40), Col(color::muted),
+                "Target " + std::to_string(c.step + 1) + " of 5   -   hold the remote as you play   -   B or Esc cancels");
+        ImGui::End();
+
+        const std::uint16_t buttons = live_.Buttons();
+        const std::uint16_t pressed = buttons & ~c.buttons;
+        c.buttons = buttons;
+        const int slot = c.slot;
+        if ((pressed & 0x0004) || ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+        {
+            EndCalibration();
+            Notice("Calibration cancelled; Wii Remote " + std::to_string(slot + 1) + " keeps its previous setting.",
+                   NoticeKind::Info);
+            return;
+        }
+        if (!live_.Connected())
+        {
+            if (!c.lost_since_ns) c.lost_since_ns = SDL_GetTicksNS();
+            else if (SDL_GetTicksNS() - c.lost_since_ns > 3000000000ull)
+            {
+                EndCalibration();
+                Notice("Wii Remote " + std::to_string(slot + 1) + " stopped answering; calibration cancelled.",
+                       NoticeKind::Warning);
+            }
+            return;
+        }
+        c.lost_since_ns = 0;
+        if (!(pressed & 0x0008)) return;
+        if (!in_view)
+        {
+            c.message = "Move back a little or aim closer to the screen, then press A again.";
+            return;
+        }
+        c.samples.push_back({(*pair)[0], (*pair)[1], target.x, target.y});
+        c.message.clear();
+        if (++c.step < 5) return;
+        const auto fit = platform::FitWiimoteCalibration(c.samples);
+        if (!fit)
+        {
+            c.samples.clear();
+            c.step = 0;
+            c.message = "Those aims did not line up. Let's start again from the centre.";
+            return;
+        }
+        draft_.remote_calibration[slot] = platform::FormatWiimoteCalibration(*fit);
+        dirty_ = true;
+        EndCalibration();
+        Notice("Wii Remote " + std::to_string(slot + 1) + " calibrated. Save to keep it.", NoticeKind::Success);
+    }
+
     // controls.player1-4: keyboard & mouse, a Wii Remote in a DolphinBar slot
     // or off. Players fill in order and each device plays once. Without a
     // DolphinBar the game makes keyboard & mouse player 1, alone.
@@ -1268,11 +1420,12 @@ private:
                 + (!remote ? "  (not connected)" : remote->nunchuk ? " + Nunchuk" : "");
         };
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 5));
-        if (ImGui::BeginTable("##player_slots", 3))
+        if (ImGui::BeginTable("##player_slots", 4))
         {
             ImGui::TableSetupColumn("player", ImGuiTableColumnFlags_WidthFixed, Dp(110));
             ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("battery", ImGuiTableColumnFlags_WidthFixed, Dp(100));
+            ImGui::TableSetupColumn("battery", ImGuiTableColumnFlags_WidthFixed, Dp(84));
+            ImGui::TableSetupColumn("calibration", ImGuiTableColumnFlags_WidthFixed, Dp(84));
             for (int n = 0; n < 4; ++n)
             {
                 ImGui::PushID(n);
@@ -1317,8 +1470,28 @@ private:
                 }
                 ImGui::EndDisabled();
                 ImGui::TableSetColumnIndex(2);
-                if (shown.rfind("remote", 0) == 0)
-                    if (const auto* remote = connected(shown.back() - '1')) BatteryIcon(remote->battery);
+                const int slot = shown.rfind("remote", 0) == 0 ? shown.back() - '1' : -1;
+                const auto* remote = slot >= 0 ? connected(slot) : nullptr;
+                if (remote) BatteryIcon(remote->battery);
+                ImGui::TableSetColumnIndex(3);
+                if (remote)
+                {
+                    const bool calibrated = draft_.remote_calibration[slot] != "none";
+                    if (SecondaryButton("##calibrate", "", Dp(36, 30), true, Icon::Target)) StartCalibration(slot);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip(calibrated ? "Pointer calibrated. Click to calibrate again."
+                                                     : "Calibrate the pointer: aim at five targets");
+                    if (calibrated)
+                    {
+                        ImGui::SameLine(0, Dp(6));
+                        if (SecondaryButton("##clear", "", Dp(36, 30), true, Icon::Error))
+                        {
+                            draft_.remote_calibration[slot] = "none";
+                            dirty_ = true;
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clear the pointer calibration");
+                    }
+                }
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -1573,6 +1746,20 @@ private:
     // Wii Remote / DolphinBar detection for the Controls page (non-blocking).
     platform::WiimoteHidProbe wii_probe_;
     platform::WiimoteHidStatus wii_status_{};
+    // Wii Remote pointer calibration: fullscreen targets aimed at with the
+    // remote, A to set each one, B to cancel.
+    struct Calibration
+    {
+        bool active = false;
+        int slot = -1;
+        std::size_t step = 0;
+        std::vector<platform::WiimoteCalibrationSample> samples;
+        platform::WiimotePairTracker pair;
+        std::uint16_t buttons = 0;
+        std::string message;
+        Uint64 lost_since_ns = 0;
+    } calibration_;
+    platform::WiimoteHidLive live_;
     bool wii_known_ = false;
     Uint64 wii_next_probe_ns_ = 0;
     float header_width_ = 1920;

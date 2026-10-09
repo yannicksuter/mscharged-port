@@ -3,7 +3,9 @@
 
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <fstream>
+#include <locale>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -39,6 +41,10 @@ Values Encode(const Settings& s)
             {"audio.mute", s.mute ? "true" : "false"},
             {"controls.player1", s.players[0]}, {"controls.player2", s.players[1]},
             {"controls.player3", s.players[2]}, {"controls.player4", s.players[3]},
+            {"controls.remote1_calibration", s.remote_calibration[0]},
+            {"controls.remote2_calibration", s.remote_calibration[1]},
+            {"controls.remote3_calibration", s.remote_calibration[2]},
+            {"controls.remote4_calibration", s.remote_calibration[3]},
             {"controls.deadzone", std::to_string(s.deadzone)},
             {"controls.rumble", s.rumble ? "true" : "false"},
             {"controls.sensor_bar", s.sensor_bar},
@@ -95,6 +101,23 @@ Settings Decode(const Values& values)
     {
         const auto key = "controls.player" + std::to_string(n + 1);
         choice(key.c_str(), s.players[n], {"keyboard", "remote1", "remote2", "remote3", "remote4", "off"});
+    }
+    for (int n = 0; n < 4; ++n)
+    {
+        const auto key = "controls.remote" + std::to_string(n + 1) + "_calibration";
+        const auto it = values.find(key);
+        if (it == values.end()) continue;
+        if (it->second != "none")
+        {
+            std::istringstream input(it->second);
+            input.imbue(std::locale::classic());
+            double value = 0;
+            int count = 0;
+            while (input >> value && std::isfinite(value)) ++count;
+            if (count != 6 || !input.eof())
+                throw std::runtime_error("Invalid configuration: " + key + " must be none or six numbers");
+        }
+        s.remote_calibration[n] = it->second;
     }
     // Players fill in order from player 1, and each device plays once.
     if (s.players[0] == "off")

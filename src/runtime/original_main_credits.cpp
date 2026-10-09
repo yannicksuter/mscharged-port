@@ -453,6 +453,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if (device == "keyboard") players.keyboard = player;
             else if (device != "off") players.remotes[device.back() - '1'] = player;
         }
+        // controls.remoteN_calibration: launcher pointer calibration by DolphinBar slot.
+        for (int slot = 0; slot < 4; ++slot)
+            if (launch.settings.remote_calibration[slot] != "none")
+                players.calibrations[slot] =
+                    mscharged::platform::ParseWiimoteCalibration(launch.settings.remote_calibration[slot]);
         mscharged::platform::InitializeNativeHardwareInput(host.window,
             {static_cast<std::uint8_t>(launch.settings.sensor_bar=="top"?1:0),3,true,launch.settings.rumble},
             mscharged::platform::GetNativeSTMInput(),

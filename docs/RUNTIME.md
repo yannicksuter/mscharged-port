@@ -74,6 +74,8 @@ without a DolphinBar, keyboard & mouse is player 1 alone. The page also shows
 each Remote's battery level. `controls.sensor_bar` is `bottom` or `top` of the
 screen, and `controls.rumble` switches rumble. The bar must be in view of the
 Remote's camera: sit about 1 m or more away when it is on top of the screen.
+To make the pointer land where you aim, press the target button next to a
+Remote and aim at the five targets that follow, pressing A at each (B cancels).
 
 If no Remote is found, allow your user to open Wii Remotes once, then reconnect
 the bar or Remote:

@@ -86,6 +86,15 @@ int main()
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[controls]\nplayer2 = gamepad\n";
         Reject([&] { LoadConfig(path); });
+        // Pointer calibration: none or six numbers from the launcher.
+        Require(Settings{}.remote_calibration[2] == "none", "Remotes start uncalibrated");
+        std::ofstream(path) << "[controls]\nremote2_calibration = -0.0024 1e-05 1.68 0 -0.0026 1.58\n";
+        Require(LoadConfig(path).settings.remote_calibration[1] == "-0.0024 1e-05 1.68 0 -0.0026 1.58",
+                "A calibration loads");
+        std::ofstream(path) << "[controls]\nremote1_calibration = 1 2 3\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[controls]\nremote1_calibration = 1 2 3 4 5 6 x\n";
+        Reject([&] { LoadConfig(path); });
 
         // Host presentation/diagnostic settings: defaults keep the previous
         // behaviour, values round trip and out-of-range input is rejected.

@@ -37,6 +37,12 @@ player1 = keyboard
 player2 = off
 player3 = off
 player4 = off
+# Pointer calibration of the Wii Remote in each DolphinBar slot, made on the
+# launcher's Controls page (none = uncalibrated).
+remote1_calibration = none
+remote2_calibration = none
+remote3_calibration = none
+remote4_calibration = none
 deadzone = 15
 rumble = true
 # Where the sensor bar or DolphinBar sits: bottom or top of the screen.

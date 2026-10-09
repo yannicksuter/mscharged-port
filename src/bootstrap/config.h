@@ -24,6 +24,9 @@ struct Settings
     // controls.player1-4: keyboard, remote1-remote4 (Wii Remote in that
     // DolphinBar slot) or off. Players fill in order; each device plays once.
     std::array<std::string, 4> players{"keyboard", "off", "off", "off"};
+    // controls.remote1-4_calibration: pointer calibration of the Wii Remote
+    // in that DolphinBar slot (six numbers from the launcher) or none.
+    std::array<std::string, 4> remote_calibration{"none", "none", "none", "none"};
     int deadzone = 15;
     bool rumble = true;
     std::string sensor_bar = "bottom"; // controls.sensor_bar: bottom | top (sensor bar / DolphinBar position)
