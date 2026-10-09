@@ -1128,6 +1128,14 @@ private:
             if (Segmented("##sharpness", &picture, {"Soft (TV)", "Clean", "Sharp"}, ImGui::GetContentRegionAvail().x))
             { draft_.picture = pictures[picture]; dirty_ = true; }
 
+            Row("Antialiasing", "Smooths the jagged edges of 3D shapes (4x multisampling). Costs some GPU time.");
+            bool antialiasing = draft_.antialiasing == "4x";
+            if (Toggle("##antialiasing", &antialiasing))
+            {
+                draft_.antialiasing = antialiasing ? "4x" : "off";
+                dirty_ = true;
+            }
+
             Row("VSync", "Synchronizes frames with your display to prevent tearing.");
             if (Toggle("##vsync", &draft_.vsync)) dirty_ = true;
 

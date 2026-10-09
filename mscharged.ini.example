@@ -19,6 +19,8 @@ aspect = 16:9
 # Picture: soft (the original TV signal), clean (drawn straight into the window
 # without the TV flicker filter) or sharp (clean with square pixels).
 picture = clean
+# Antialiasing of the game's 3D edges: off or 4x (more GPU time).
+antialiasing = off
 # Frames per second in the game window title.
 show_fps = true
 # Display the game window opens on: 0 = default, 1 = first display, 2 = second...

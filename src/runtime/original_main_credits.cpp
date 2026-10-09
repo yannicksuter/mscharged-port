@@ -344,6 +344,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             logLevel=="error"?LOG_ERROR:LOG_INFO;
         config.enableBackendValidation=launch.settings.graphics_validation;
         config.vsync=launch.settings.vsync;
+        // display.antialiasing: Aurora multisampling of the original frame.
+        config.msaa=launch.settings.antialiasing=="4x"?4:1;
         // The native Wii Remote driver (platform/wiimote_hid) owns physical
         // remotes, including DolphinBar mode 4 and its IR sensor bar; SDL's
         // own Wii HID driver must not open the same devices.

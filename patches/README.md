@@ -669,6 +669,10 @@ choice `AuroraVIOutputConfig::desktop_picture`. The default keeps the VI signal
 stretched into the window; smooth and sharp pictures are drawn from the XFB at
 the window viewport's size in one pass (sharp keeps source pixels flat) and skip
 the display copy's vertical flicker filter. The physical VI signal is unchanged.
+`0075-multisampled-pe-aperture.patch` lets 0034's PE color aperture write into a
+multisampled EFB (`display.antialiasing = 4x`): a poke is a pixel-aligned clear
+rectangle drawn with the render target's own sample count, covering every
+sample of the pixel. Scaled EFBs remain unsupported.
 
 ## Dawn series
 
