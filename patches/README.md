@@ -92,7 +92,9 @@ out of line elsewhere, so the module imports no undefined symbols for them.
 
 Patch 0630 admits the original Hall of Fame player cards (scene 65), opened by
 the Cup page's card buttons, under the Hall of Fame diagnostic. Profile (58),
-which no retail code pushes, and the earned trophy histories (66–74) stay gated.
+which no retail code pushes, stays gated. Patch 0631 admits the earned trophy
+histories (66–74), which the same pages open once a cup or award trophy is
+recorded, and gives the history TU the header-inline CharacterInfo::GetName.
 
 Patch 0640 admits the original Road to Striker Cup setup (scenes 6–8), cup news
 (39), hub (31), group schedule (32) and standings/award pages (36–38), plus the
