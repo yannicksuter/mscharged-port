@@ -1,6 +1,7 @@
 #include "platform/desktop_wpad.h"
 #include "platform/desktop_dpd.h"
 #include "platform/desktop_nunchuk.h"
+#include "platform/wpad_sdl.h"
 #include <revolution/wpad/WPAD.h>
 #include <SDL3/SDL.h>
 
@@ -308,6 +309,8 @@ void InitializeDesktopWpad(SDL_Window* window, DesktopWpadSettings settings) {
         throw std::invalid_argument("Mouse camera requires a successful-Present content projection");
     if (settings.nunchuk && !settings.keyboard)
         throw std::invalid_argument("The desktop Nunchuk requires the keyboard profile");
+    if (settings.share_mouse_with_remotes && !settings.mouse)
+        throw std::invalid_argument("Sharing the mouse camera requires the mouse profile");
     {
         std::lock_guard lock(state.mutex);
         if (state.ready) throw std::logic_error("Desktop WPAD transport is already initialized");
@@ -416,6 +419,7 @@ void ServiceDesktopWpad() {
         const float x = visible ? (mouse_x - projection.left) / projection.width : 0;
         const float y = visible ? (mouse_y - projection.top) / projection.height : 0;
         observation = MakeDesktopDpdObservation(x, y, WPADGetSensorBarPosition(), visible);
+        if (state.settings.share_mouse_with_remotes) SetNativeWpadSharedPointer(&observation);
     }
     const auto now = Clock::now();
     if (state.keyboard) {
@@ -450,6 +454,7 @@ void ShutdownDesktopWpad() {
         ClearMouse(state);
     }
     SDL_RemoveEventWatch(Watch, nullptr);
+    if (state.settings.share_mouse_with_remotes) SetNativeWpadSharedPointer(nullptr);
     Retire(state.keyboard);
     for (auto& pad : state.pads) Retire(pad);
     RestoreBackgroundHint();
