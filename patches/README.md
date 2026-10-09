@@ -97,8 +97,10 @@ which no retail code pushes, and the earned trophy histories (66–74) stay gate
 Patch 0640 admits the original Road to Striker Cup setup (scenes 6–8), cup news
 (39), hub (31), group schedule (32) and standings/award pages (36–38), plus the
 three FE presentation natives the cup transitions call, under the cup
-diagnostic. Cup cheat, game results, knockout/final round pages and the
-award/forfeit natives stay gated.
+diagnostic. Patch 0641 adds the played-matchup game results (33), the knockout
+and final-round pages (34/35) and the cup award/trophy natives (4, 7, 36, 37,
+38, 40), narrowing the round pages' callback contexts natively. The debug-tweak
+cup cheat (9) and the online tournament natives stay gated.
 
 Patch 0539 supplies compiler declarations, native pointer arithmetic and the
 MWCC absolute-value intrinsic for original HOME sound-player and heap sources.
