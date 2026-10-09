@@ -664,6 +664,11 @@ after publishing its own token waits until the processor has parsed every
 command before it. A late empty-frame finish no longer releases glx
 WaitDrawDone early, and the game's next frame no longer rewrites vertex data,
 textures or palettes the processor has not read yet (garbage effect polygons).
+`0074-desktop-picture-straight-from-xfb.patch` adds the host desktop picture
+choice `AuroraVIOutputConfig::desktop_picture`. The default keeps the VI signal
+stretched into the window; smooth and sharp pictures are drawn from the XFB at
+the window viewport's size in one pass (sharp keeps source pixels flat) and skip
+the display copy's vertical flicker filter. The physical VI signal is unchanged.
 
 ## Dawn series
 

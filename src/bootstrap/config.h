@@ -17,6 +17,9 @@ struct Settings
     bool vsync = true;
     std::string backend = "auto";
     std::string aspect = "16:9";
+    // display.picture: soft (the TV signal, as on a Wii), clean (one smooth
+    // pass to the window, no TV flicker filter) or sharp (square pixels).
+    std::string picture = "clean";
     int master_volume = 100;
     int music_volume = 100;
     int effects_volume = 100;

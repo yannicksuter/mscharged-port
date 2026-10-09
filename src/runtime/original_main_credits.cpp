@@ -412,7 +412,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         mscharged::ConfigureNativeSystemIdleMode(nullptr,0);
         mscharged::platform::ConfigureNativeVideoHardware(VI_TVMODE_NTSC_INT,false);
         if(nativeSend) {
-            mscharged::platform::ConfigureNativeVideoOutputHardware(settings);
+            // display.picture: host desktop presentation of the original XFB.
+            mscharged::platform::ConfigureNativeVideoOutputHardware(settings,
+                launch.settings.picture=="sharp" ? mscharged::platform::NativeDesktopPicture::Sharp
+                : launch.settings.picture=="clean" ? mscharged::platform::NativeDesktopPicture::Clean
+                                                   : mscharged::platform::NativeDesktopPicture::Signal);
             // Arm source-owned recording before original constructors/commands.
             // This mode never uses diagnostic aurora_begin/end_frame.
             aurora_configure_native_gx_hardware();

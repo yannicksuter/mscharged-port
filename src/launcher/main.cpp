@@ -1120,6 +1120,14 @@ private:
                 TextWrappedColored(CurrentFonts().caption, color::warning,
                                    ("Saved value " + draft_.aspect + " is not supported by the game. Choose one above.").c_str());
 
+            Row("Sharpness", "Clean and Sharp draw the game straight into the window without the TV flicker "
+                "filter; Sharp keeps pixels square. Soft is the original TV picture.");
+            const char* pictures[] = {"soft", "clean", "sharp"};
+            int picture = 1;
+            for (int i = 0; i < 3; ++i) if (draft_.picture == pictures[i]) picture = i;
+            if (Segmented("##sharpness", &picture, {"Soft (TV)", "Clean", "Sharp"}, ImGui::GetContentRegionAvail().x))
+            { draft_.picture = pictures[picture]; dirty_ = true; }
+
             Row("VSync", "Synchronizes frames with your display to prevent tearing.");
             if (Toggle("##vsync", &draft_.vsync)) dirty_ = true;
 

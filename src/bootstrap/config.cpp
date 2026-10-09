@@ -34,7 +34,7 @@ Values Encode(const Settings& s)
             {"display.width", std::to_string(s.width)}, {"display.height", std::to_string(s.height)},
             {"display.fullscreen", s.fullscreen ? "true" : "false"},
             {"display.vsync", s.vsync ? "true" : "false"},
-            {"display.backend", s.backend}, {"display.aspect", s.aspect},
+            {"display.backend", s.backend}, {"display.aspect", s.aspect}, {"display.picture", s.picture},
             {"audio.master_volume", std::to_string(s.master_volume)},
             {"audio.music_volume", std::to_string(s.music_volume)},
             {"audio.effects_volume", std::to_string(s.effects_volume)},
@@ -93,6 +93,7 @@ Settings Decode(const Values& values)
     boolean("display.vsync", s.vsync);
     choice("display.backend", s.backend, {"auto", "vulkan", "metal", "d3d12"});
     choice("display.aspect", s.aspect, {"auto", "4:3", "16:9", "16:10", "21:9"});
+    choice("display.picture", s.picture, {"soft", "clean", "sharp"});
     number("audio.master_volume", s.master_volume, 0, 100);
     number("audio.music_volume", s.music_volume, 0, 100);
     number("audio.effects_volume", s.effects_volume, 0, 100);
