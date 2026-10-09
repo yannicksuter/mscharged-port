@@ -65,3 +65,4 @@
 0069-host-screenshot-of-presented-frame.patch
 0070-skip-idle-draw-done-mask.patch
 0071-spirv-validation-follows-debug-layers.patch
+0072-reset-consumed-fifo-prefix.patch

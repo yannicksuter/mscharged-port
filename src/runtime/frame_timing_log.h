@@ -16,6 +16,7 @@ struct FrameTimingCounters {
     std::uint32_t pipelines_created = 0;    // cumulative created pipelines
     std::uint32_t pipelines_queued = 0;     // pipelines still being created
     std::uint32_t texture_upload_bytes = 0; // texture uploads of the last frame
+    std::uint64_t fifo_bytes = 0;           // GX FIFO backlog after the frame
 };
 
 // One original game frame as seen by the native loop.
@@ -32,6 +33,7 @@ struct FrameTimingRecord {
     std::uint32_t pipelines_created = 0;
     std::uint32_t pipelines_queued = 0;
     std::uint32_t texture_upload_bytes = 0;
+    std::uint64_t fifo_bytes = 0;
 };
 
 // Opt-in per-frame timing log: MSCHARGED_FRAME_LOG=frames.csv writes one CSV

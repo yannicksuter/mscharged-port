@@ -654,6 +654,10 @@ the clock while it waits for draw-done); delivery is unchanged.
 `0071-spirv-validation-follows-debug-layers.patch` turns off Dawn's spirv-val of
 Tint output when the backend debug layers are off (`graphics_validation=false`),
 removing that cost from every pipeline creation; validated runs keep it.
+`0072-reset-consumed-fifo-prefix.patch` drops the GX FIFO bytes the processor has
+already consumed without a join (after VI retrace waits and between host
+frames), instead of letting the buffer grow to the host's 64 MiB full drain,
+which dropped a frame about once a second in matches.
 
 ## Dawn series
 

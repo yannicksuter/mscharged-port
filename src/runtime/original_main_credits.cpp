@@ -121,6 +121,7 @@ mscharged::runtime::FrameTimingCounters ReadFrameTimingCounters() {
         counters.pipelines_queued=load(stats->queuedPipelines);
         counters.texture_upload_bytes=load(stats->lastTextureUploadSize);
     }
+    counters.fifo_bytes=aurora::gx::fifo::get_buffer_size();
     return counters;
 }
 
@@ -641,6 +642,9 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
                 const auto receipt=AuroraGXBeginDrawReceipt();
                 Check(receipt,"Native source draw receipt unavailable");
                 const float delta=std::chrono::duration<float>(now-previous).count(); previous=now;
+                // Keep the GX FIFO buffer at about one frame when the processor has
+                // caught up, instead of growing it to the full-drain limit below.
+                aurora::gx::fifo::rebase_if_caught_up();
                 if(frameTiming)frameTiming->BeginFrame();
                 frame(delta); observeOptions(); observeBoot(); AuroraGXEndDrawReceipt(); ++frames;
                 if(frameTiming)frameTiming->EndFrame(ReadFrameTimingCounters());

@@ -90,7 +90,7 @@ FrameTimingLog::FrameTimingLog(std::FILE* file, std::string path) : file_(file),
 {
     if (file_)
         std::fputs("frame,start_ms,duration_ms,game_ms,game_cpu_ms,process_cpu_ms,vi_fields,presents,draws,"
-                   "pipelines_created,pipelines_queued,texture_upload_kb,steady_ns\n",
+                   "pipelines_created,pipelines_queued,texture_upload_kb,fifo_mib,steady_ns\n",
                    file_);
 }
 
@@ -151,6 +151,7 @@ void FrameTimingLog::EndFrame(const FrameTimingCounters& counters)
     record.draws = counters.draws;
     record.pipelines_queued = counters.pipelines_queued;
     record.texture_upload_bytes = counters.texture_upload_bytes;
+    record.fifo_bytes = counters.fifo_bytes;
     if (has_previous_) {
         record.vi_fields = counters.retraces - previous_counters_.retraces;
         record.presents = static_cast<std::uint32_t>(counters.presents - previous_counters_.presents);
@@ -170,11 +171,11 @@ void FrameTimingLog::Add(const FrameTimingRecord& record)
     const std::int64_t origin = records_.empty() ? record.start_ns : records_.front().start_ns;
     std::fprintf(file_,
                  "%" PRIu64 ",%.3f,%.3f,%.3f,%.3f,%.3f,%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32 ",%" PRIu32
-                 ",%.1f,%" PRId64 "\n",
+                 ",%.1f,%.2f,%" PRId64 "\n",
                  record.index, Ms(record.start_ns - origin), Ms(record.duration_ns), Ms(record.game_ns),
                  Ms(record.game_cpu_ns), Ms(record.process_cpu_ns), record.vi_fields, record.presents, record.draws,
                  record.pipelines_created, record.pipelines_queued, record.texture_upload_bytes / 1024.0,
-                 record.start_ns);
+                 record.fifo_bytes / 1048576.0, record.start_ns);
     if (record.index % 60 == 59) std::fflush(file_);
 }
 
