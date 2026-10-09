@@ -46,6 +46,9 @@ using namespace mscharged::launcher;
 
 namespace
 {
+// Window title of the game and the launcher: the port's name and build.
+std::string GameTitle() { return std::string("MSCharged Port ") + mscharged::build::version; }
+
 enum Page { PagePlay, PageGame, PageDisplay, PageAudio, PageControls, PageAdvanced, PageAbout, PageCount };
 constexpr const char* page_names[] = {"Play", "Game", "Display", "Audio", "Controls", "Advanced", "About"};
 constexpr const char* page_ids[] = {"play", "game", "display", "audio", "controls", "advanced", "about"};
@@ -194,7 +197,7 @@ public:
 
         // Created at the design size, then fitted once the window knows its
         // display's pixel density and content scale.
-        window_ = SDL_CreateWindow("Mario Strikers Charged - Launcher", int(kDefaultDesignWidth),
+        window_ = SDL_CreateWindow(GameTitle().c_str(), int(kDefaultDesignWidth),
                                    int(kDefaultDesignHeight),
                                    SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN);
         Require(window_ != nullptr, "Cannot create launcher window");
@@ -1123,7 +1126,7 @@ private:
             Row("Sharpness", "Clean and Sharp draw the game straight into the window without the TV flicker "
                 "filter; Sharp keeps pixels square. Soft is the original TV picture.");
             const char* pictures[] = {"soft", "clean", "sharp"};
-            int picture = 1;
+            int picture = 2;
             for (int i = 0; i < 3; ++i) if (draft_.picture == pictures[i]) picture = i;
             if (Segmented("##sharpness", &picture, {"Soft (TV)", "Clean", "Sharp"}, ImGui::GetContentRegionAvail().x))
             { draft_.picture = pictures[picture]; dirty_ = true; }
@@ -2050,7 +2053,7 @@ int main(int argc, char** argv)
             arguments.push_back(nullptr);
             return RunOriginalMainCredits(static_cast<int>(arguments.size()) - 1, arguments.data(),
                 nullptr, false, options.experimental_options ?
-                    OriginalMainScene::FrontendOptions : OriginalMainScene::FrontendSequence);
+                    OriginalMainScene::FrontendOptions : OriginalMainScene::FrontendSequence, GameTitle().c_str());
 #else
             std::cerr << "Original game runtime is not included in this build. "
                          "A game-enabled build is required for direct disc startup; --launcher opens settings.\n";
@@ -2066,7 +2069,8 @@ int main(int argc, char** argv)
             for (int i = 0; i < argc; ++i)
                 if (std::string_view(argv[i]) != "--experimental-credits") arguments.push_back(argv[i]);
             arguments.push_back(nullptr);
-            return RunOriginalMainCredits(static_cast<int>(arguments.size()) - 1, arguments.data());
+            return RunOriginalMainCredits(static_cast<int>(arguments.size()) - 1, arguments.data(), nullptr, false,
+                OriginalMainScene::Credits, GameTitle().c_str());
 #else
             std::cerr << "Original-main Credits is not in this build. Enable MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC and MSCHARGED_BUILD_LAUNCHER.\n";
             return 2;
@@ -2115,11 +2119,12 @@ int main(int argc, char** argv)
             frontend_launch = launcher.FrontendLaunch();
         } // Destroy the launcher/ImGui/SDL session before Aurora initializes.
 #ifdef MSCHARGED_HAS_ORIGINAL_CREDITS
-        if (credits_launch) return RunOriginalMainCredits(argc, argv, &*credits_launch, true);
+        if (credits_launch) return RunOriginalMainCredits(argc, argv, &*credits_launch, true,
+            OriginalMainScene::Credits, GameTitle().c_str());
 #endif
 #ifdef MSCHARGED_HAS_ORIGINAL_FRONTEND
         if (frontend_launch) return RunOriginalMainCredits(argc, argv, &*frontend_launch, true,
-            OriginalMainScene::FrontendSequence);
+            OriginalMainScene::FrontendSequence, GameTitle().c_str());
 #endif
 #ifdef MSCHARGED_HAS_GAME_STARTUP
         if (startup_launch) return RunGameStartup(argc, argv, *startup_launch);

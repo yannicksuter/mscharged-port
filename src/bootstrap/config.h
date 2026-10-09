@@ -19,10 +19,10 @@ struct Settings
     std::string aspect = "16:9";
     // display.picture: soft (the TV signal, as on a Wii), clean (one smooth
     // pass to the window, no TV flicker filter) or sharp (square pixels).
-    std::string picture = "clean";
+    std::string picture = "sharp";
     // display.antialiasing: off or 4x (Aurora multisampling of the game's
     // 640x448 frame; smooths polygon edges, not a higher resolution).
-    std::string antialiasing = "off";
+    std::string antialiasing = "4x";
     int master_volume = 100;
     int music_volume = 100;
     int effects_volume = 100;

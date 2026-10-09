@@ -232,7 +232,7 @@ void EndWithSnapshot(const std::filesystem::path& output) {
 }
 }
 int mscharged::RunOriginalMainCredits(int argc, char** argv,
-    const ResolvedLaunch* suppliedLaunch, bool interactive, OriginalMainScene scene) {
+    const ResolvedLaunch* suppliedLaunch, bool interactive, OriginalMainScene scene, const char* title) {
     try {
         const bool frontend = scene != OriginalMainScene::Credits;
         const bool optionsScene = scene == OriginalMainScene::FrontendOptions;
@@ -328,10 +328,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         std::filesystem::create_directories(dataDirectory);
         const auto dataPath = dataDirectory.string();
         AuroraConfig config{};
-        config.appName=optionsScene ? "Mario Strikers Charged | original Options diagnostic" :
-            frontend ? "Mario Strikers Charged | original Boot/Intro diagnostic" :
-            "Mario Strikers Charged | original-main Credits diagnostic";
-        const std::string windowTitle=config.appName;
+        // Window title: the port's name and build, then the diagnostic scene.
+        const std::string appTitle=title ? title : "MSCharged Port";
+        const std::string windowTitle=optionsScene ? appTitle+" | Options diagnostic" :
+            frontend ? appTitle : appTitle+" | Credits diagnostic";
+        config.appName=windowTitle.c_str();
         config.userPath=config.cachePath=dataPath.c_str();
         config.desiredBackend=mscharged::platform::NativeGraphicsBackend;
         config.windowWidth=windowWidth;config.windowHeight=windowHeight;
