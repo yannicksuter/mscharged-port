@@ -62,6 +62,9 @@ decides what each input does. Keep the game window focused.
 | Shake Wii Remote (hit an opponent) | E |
 | Shake Nunchuk (switch items) | Q |
 
+Press **P** to save the presented frame as `screenshots/screenshot_<timestamp>.png`
+in the directory the port was started from.
+
 ## Porting approach
 
 Original source plus reviewed patches becomes the compiled game:

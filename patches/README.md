@@ -643,6 +643,11 @@ vertices behind the eye or beyond near/far still define it, and keeps the last
 plane when a primitive defines none. A freeze without any usable plane logs once
 and draws with the polygon's own depth instead of stopping the match.
 
+`0069-host-screenshot-of-presented-frame.patch` adds
+`aurora_request_video_screenshot`, a host convenience outside the emulated
+hardware: the next successfully presented frame is copied exactly as drawn into
+the window viewport and written as a PNG off the presentation path.
+
 ## Dawn series
 
 The series targets Dawn `1155e0ed531126f33a1279afa029349651ca1c93`.

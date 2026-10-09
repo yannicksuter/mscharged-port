@@ -62,3 +62,4 @@
 0066-preserve-position-invariance-between-gx-shaders.patch
 0067-native-coplanar-reference-depth.patch
 0068-keep-coplanar-plane-across-clipped-references.patch
+0069-host-screenshot-of-presented-frame.patch

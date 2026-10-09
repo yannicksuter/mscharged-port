@@ -1247,6 +1247,7 @@ private:
             KeyRow("C  /  Z", {"C", "V"}, nullptr, "Nunchuk buttons");
             KeyRow("Shake Remote", {"E"}, nullptr, "Hit an opponent");
             KeyRow("Shake Nunchuk", {"Q"}, nullptr, "Switch items");
+            KeyRow("Screenshot", {"P"}, nullptr, "Saved in the screenshots folder");
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
