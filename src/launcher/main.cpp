@@ -1219,7 +1219,7 @@ private:
 
     void ControlsPage()
     {
-        PageHeader("Controls", "Play with keyboard and mouse. Keep the game window focused. Controller support is planned.");
+        PageHeader("Controls", "Play with keyboard and mouse, or a Wii Remote with Nunchuk (experimental). Keep the game window focused.");
         BeginCard("##keys", "Keyboard & mouse",
                   "Keys press Wii Remote and Nunchuk buttons or shake them; the mouse is the pointer.", Icon::Keyboard);
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));
@@ -1253,7 +1253,7 @@ private:
         ImGui::PopStyleVar();
         EndCard();
 
-        BeginCard("##controller", "Controller test", "Controllers are not used by the game yet. You can check one here.", Icon::Gamepad);
+        BeginCard("##controller", "Controller test", "Other controllers are not used by the game yet. You can check one here.", Icon::Gamepad);
         if (!gamepad_)
             TextWrappedColored(CurrentFonts().body, color::muted, "No controller detected.");
         else

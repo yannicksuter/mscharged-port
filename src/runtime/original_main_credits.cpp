@@ -54,6 +54,7 @@
 #include "platform/os_shutdown_requests.h"
 #endif
 #include <SDL3/SDL_video.h>
+#include <SDL3/SDL_hints.h>
 #include <SDL3/SDL_filesystem.h>
 #include "platform/native_module_loader.h"
 #include <cstdio>
@@ -342,6 +343,11 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             logLevel=="error"?LOG_ERROR:LOG_INFO;
         config.enableBackendValidation=launch.settings.graphics_validation;
         config.vsync=launch.settings.vsync;
+        // SDL's Wii HID driver must own physical Wii Remotes from Aurora's first
+        // joystick scan. Enabled only at WPADInit it misses SDL's three-second
+        // idle window and drops a Remote that was connected before the start.
+        // SDL_JOYSTICK_HIDAPI_WII=0 in the environment still takes precedence.
+        SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_WII,"1",SDL_HINT_DEFAULT);
         const auto host=aurora_initialize(argc,argv,&config);
         if(!host.window||host.backend!=mscharged::platform::NativeGraphicsBackend)
             throw std::runtime_error(std::string("Actual ")+mscharged::platform::NativeGraphicsBackendName
@@ -435,7 +441,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         // keyboard remote carries a virtual Nunchuk, which original matches
         // require of every playing controller. Physical Wii Remotes (with a
         // Nunchuk) point with the mouse: SDL reports no Wii Remote IR data.
-        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,true,false},
+        // controls.rumble is the system rumble setting original Options reads.
+        mscharged::platform::InitializeNativeHardwareInput(host.window,{0,3,true,launch.settings.rumble},
             mscharged::platform::GetNativeSTMInput(),
             {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true});
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)

@@ -58,6 +58,30 @@ repeat during host scheduling delays. Enter/Space is A, Escape/Backspace is B,
 arrows are D-pad, and Z/X are 1/2. A advances to COPYRIGHTS; the following menu
 transition is unfinished. Host focus and menu input remain under validation.
 
+## Wii Remote
+
+Experimental, Linux. A Wii Remote (or Wii Remote Plus) with a Nunchuk plays
+alongside the keyboard; the mouse stays the pointer (sensor-bar IR, the Remote
+speaker and other extensions are not supported yet).
+
+Once, allow your user to open Wii Remotes, then reconnect the Remote:
+
+```sh
+sudo tee /etc/udev/rules.d/60-mscharged-wiimote.rules >/dev/null <<'EOF'
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="*057E:0306*", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="*057E:0330*", TAG+="uaccess"
+EOF
+sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=hidraw
+```
+
+Pair each Remote once with its Nunchuk plugged in: in the Bluetooth settings add
+a device and press the red **SYNC** button under the battery cover (not 1+2), then
+choose *Nintendo RVL-CNT-01*. Connect the Remotes before starting the game, keep
+their Nunchuks plugged in, and restart the game if a Remote disconnects. Hold the
+Remote upright and level while pointing with the mouse. `controls.rumble` in
+`mscharged.ini` switches rumble. Started from a terminal, the game logs
+`Wii Remote connected on WPAD channel N`, or the reason it could not use a Remote.
+
 ## Performance log
 
 `MSCHARGED_FRAME_LOG=frames.csv` writes one row per original game frame (frame
