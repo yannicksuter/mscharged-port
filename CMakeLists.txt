@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(mscharged_port VERSION 0.0.1 LANGUAGES C CXX)
+if(WIN32 AND MINGW)
+    # COFF weak definitions cannot be exported from mscharged.exe to the game
+    # DLLs (OSReport and friends would bind to address 0). Plain definitions,
+    # as the SDK and decomp headers already use for MSVC.
+    add_compile_definitions(DECL_WEAK=)
+endif()
 if(APPLE AND POLICY CMP0156)
     # Apple linkers resolve archive cycles without repeating the libraries.
     cmake_policy(SET CMP0156 NEW)
@@ -40,8 +46,9 @@ if(MSCHARGED_BUILD_SCENE_PREVIEW)
     set(MSCHARGED_BUILD_GX_CHECK ON)
 endif()
 if(MSCHARGED_BUILD_GX_CHECK)
-    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-        message(FATAL_ERROR "The GX runtime currently selects Linux/Vulkan or macOS/Metal")
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin"
+            AND NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        message(FATAL_ERROR "The GX runtime selects Linux/Vulkan, macOS/Metal or Windows/Vulkan")
     endif()
     if(MSCHARGED_BUILD_THP_AUDIO_DIAGNOSTIC AND NOT MSCHARGED_BUILD_GAME_STARTUP)
     message(FATAL_ERROR "Use the startup preset for the temporary original movie audio diagnostic")

@@ -121,6 +121,7 @@ function(mscharged_add_original_frontend_diagnostic)
     else()
         set(_vtable_format elf)
     endif()
+    if(NOT WIN32)
     add_custom_command(TARGET mscharged_original_frontend_module POST_BUILD
         COMMAND "${Python3_EXECUTABLE}" -B "${_vtable_check}"
             --nm "${CMAKE_NM}" --object-format "${_vtable_format}"
@@ -129,11 +130,18 @@ function(mscharged_add_original_frontend_diagnostic)
         VERBATIM)
     set_property(TARGET mscharged_original_frontend_module APPEND PROPERTY
         LINK_DEPENDS "${_vtable_check}")
-    add_dependencies(charged_original_main_credits_host mscharged_original_frontend_module)
+    endif()
+    if(WIN32)
+        mscharged_import_original_windows_host(mscharged_original_frontend_module)
+    else()
+        add_dependencies(charged_original_main_credits_host mscharged_original_frontend_module)
+    endif()
     target_compile_definitions(charged_original_main_credits_host PRIVATE
         MSCHARGED_ORIGINAL_FRONTEND_MODULE_FILENAME="$<TARGET_FILE_NAME:mscharged_original_frontend_module>")
     if(TARGET mscharged)
-        add_dependencies(mscharged mscharged_original_frontend_module)
+        if(NOT WIN32)
+            add_dependencies(mscharged mscharged_original_frontend_module)
+        endif()
         target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_ORIGINAL_FRONTEND=1)
     endif()
 endfunction()
