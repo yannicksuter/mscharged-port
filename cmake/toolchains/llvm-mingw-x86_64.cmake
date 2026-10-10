@@ -10,6 +10,8 @@ if(NOT LLVM_MINGW_ROOT)
     message(FATAL_ERROR "Set LLVM_MINGW_ROOT to the LLVM-MinGW toolchain directory")
 endif()
 set(LLVM_MINGW_ROOT "${LLVM_MINGW_ROOT}" CACHE PATH "LLVM-MinGW toolchain directory")
+# Compiler checks run this file again in try_compile projects; pass the root on.
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES LLVM_MINGW_ROOT)
 set(_triple x86_64-w64-mingw32)
 set(CMAKE_C_COMPILER "${LLVM_MINGW_ROOT}/bin/${_triple}-clang")
 set(CMAKE_CXX_COMPILER "${LLVM_MINGW_ROOT}/bin/${_triple}-clang++")
