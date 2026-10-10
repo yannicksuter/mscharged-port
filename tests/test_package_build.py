@@ -36,7 +36,7 @@ class PackageBuildTests(unittest.TestCase):
         for public in PACKAGER.PUBLIC_FILES:
             self.write(self.source, public, b"public text")
         self.write(self.build, "generated/mscharged/build_version.h",
-                   b'inline constexpr const char* version = "0.0.1-dev+g123456789abc";\n')
+                   b'inline constexpr const char* version = "0.1.0+g123456789abc";\n')
         self.write(self.build, "CMakeCache.txt",
                    b"MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC:BOOL=ON\n"
                    b"Rust_CARGO_TARGET_CACHED:INTERNAL=x86_64-unknown-linux-gnu\n")
@@ -142,7 +142,7 @@ checksum = "{self.checksum}"
             self.assertTrue(all(not member.issym() and not member.islnk() for member in members))
             manifest_member = next(member for member in members if member.name.endswith("/SOURCE-MANIFEST.json"))
             manifest = json.load(archive.extractfile(manifest_member))
-            self.assertEqual(manifest["version"], "0.0.1-dev+g123456789abc")
+            self.assertEqual(manifest["version"], "0.1.0+g123456789abc")
             self.assertEqual(manifest["packaging_source_commit"], "6" * 40)
             self.assertEqual(len(manifest["modules"]), 2)
             self.assertEqual(len(manifest["prepared"]), len(PACKAGER.DEPENDENCIES))

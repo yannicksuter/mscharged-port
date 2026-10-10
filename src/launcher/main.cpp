@@ -636,13 +636,11 @@ private:
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y + Dp(4));
         }
 
-        // Build badge at the bottom of the sidebar.
-        const float badge = height - Dp(78);
+        // Version at the bottom of the sidebar.
+        const float badge = height - Dp(40);
         if (ImGui::GetCursorPosY() < badge)
         {
             ImGui::SetCursorPos({pad, badge});
-            Chip("Development build", color::warning, Icon::Warning);
-            ImGui::SetCursorPosX(pad);
             ImGui::PushFont(fonts.caption);
             ImGui::PushStyleColor(ImGuiCol_Text, color::dim);
             ImGui::TextUnformatted(build::version);

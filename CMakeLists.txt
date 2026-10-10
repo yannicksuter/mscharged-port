@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(mscharged_port VERSION 0.0.1 LANGUAGES C CXX)
+project(mscharged_port VERSION 0.1.0 LANGUAGES C CXX)
 if(WIN32 AND MINGW)
     # COFF weak definitions cannot be exported from mscharged.exe to the game
     # DLLs (OSReport and friends would bind to address 0). Plain definitions,
@@ -15,7 +15,8 @@ if(APPLE AND POLICY CMP0156)
 endif()
 include(cmake/MacOSDeploymentTarget.cmake)
 mscharged_set_macos_deployment_target()
-set(MSCHARGED_PORT_VERSION "${PROJECT_VERSION}-dev")
+# Release version; the build appends +g<commit> and .dirty for local changes.
+set(MSCHARGED_PORT_VERSION "${PROJECT_VERSION}")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Use an out-of-source build: cmake -S . -B build -G Ninja")
