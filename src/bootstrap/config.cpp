@@ -107,7 +107,8 @@ Settings Decode(const Values& values)
     for (int n = 0; n < 4; ++n)
     {
         const auto key = "controls.player" + std::to_string(n + 1);
-        choice(key.c_str(), s.players[n], {"keyboard", "remote1", "remote2", "remote3", "remote4", "off"});
+        choice(key.c_str(), s.players[n], {"keyboard", "remote1", "remote2", "remote3", "remote4",
+                                            "gamepad1", "gamepad2", "gamepad3", "gamepad4", "off"});
     }
     for (int n = 0; n < 4; ++n)
     {
@@ -146,7 +147,7 @@ Settings Decode(const Values& values)
     }
     // Players fill in order from player 1, and each device plays once.
     if (s.players[0] == "off")
-        throw std::runtime_error("Invalid configuration: controls.player1 must be keyboard or a Wii Remote");
+        throw std::runtime_error("Invalid configuration: controls.player1 must be keyboard, a Wii Remote or a gamepad");
     for (int n = 1; n < 4; ++n)
     {
         if (s.players[n] == "off") continue;

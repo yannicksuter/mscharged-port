@@ -458,6 +458,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         for (int player = 0; player < 4; ++player) {
             const auto& device = launch.settings.players[player];
             if (device == "keyboard") players.keyboard = player;
+            else if (device.rfind("gamepad", 0) == 0) players.gamepads[device.back() - '1'] = player;
             else if (device != "off") players.remotes[device.back() - '1'] = player;
         }
         // controls.remoteN_calibration: launcher pointer calibration by DolphinBar slot.

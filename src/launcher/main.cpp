@@ -468,12 +468,22 @@ private:
         }
     }
 
+    // Standard gamepads in the order the game numbers them (gamepad1-4);
+    // Wii Remotes have their own driver and are left out.
     void RefreshGamepad()
     {
         if (gamepad_) { SDL_CloseGamepad(gamepad_); gamepad_ = nullptr; }
+        gamepad_names_.clear();
         int count = 0;
         auto* ids = SDL_GetGamepads(&count);
-        if (ids && count > 0) gamepad_ = SDL_OpenGamepad(ids[0]);
+        for (int n = 0; ids && n < count; ++n)
+        {
+            const auto vendor = SDL_GetGamepadVendorForID(ids[n]), product = SDL_GetGamepadProductForID(ids[n]);
+            if (vendor == 0x057e && (product == 0x0306 || product == 0x0330)) continue;
+            const char* name = SDL_GetGamepadNameForID(ids[n]);
+            gamepad_names_.push_back(name ? name : "Controller");
+            if (!gamepad_) gamepad_ = SDL_OpenGamepad(ids[n]);
+        }
         SDL_free(ids);
     }
 
@@ -1462,9 +1472,9 @@ private:
         const bool bar = status.dolphinbar;
         auto& players = draft_.players;
         const char* subtitle = !wii_known_ ? "Looking for a DolphinBar..."
-            : bar ? "Players fill in order and each controller plays once. Changes apply when the game starts."
             : status.dolphinbar_other_mode ? "The DolphinBar is in a mouse or gamepad mode. Press its MODE button until light 4 is on."
-            : "Keyboard & mouse is player 1. Connect a Mayflash DolphinBar in mode 4 to play with Wii Remotes and friends.";
+            : bar ? "Players fill in order and each controller plays once. Changes apply when the game starts."
+            : "Players fill in order: keyboard & mouse and gamepads. Connect a Mayflash DolphinBar in mode 4 for Wii Remotes.";
         BeginCard("##players", "Players", subtitle, Icon::Gamepad);
         if (bar)
             Chip("DolphinBar", color::accent, Icon::Check);
@@ -1480,6 +1490,10 @@ private:
             if (device == "keyboard") return std::string("Keyboard & mouse");
             if (device == "off") return std::string("Off");
             const int slot = device.back() - '1';
+            if (device.rfind("gamepad", 0) == 0)
+                return slot < int(gamepad_names_.size()) ? "Gamepad " + std::to_string(slot + 1) + ": " + gamepad_names_[slot]
+                                                         : "Gamepad " + std::to_string(slot + 1) + "  (not connected)";
+            if (!bar) return "Wii Remote " + std::to_string(slot + 1) + "  (needs the DolphinBar)";
             const auto* remote = connected(slot);
             return "Wii Remote " + std::to_string(slot + 1)
                 + (!remote ? "  (not connected)" : remote->nunchuk ? " + Nunchuk" : "");
@@ -1496,8 +1510,8 @@ private:
                 ImGui::PushID(n);
                 ImGui::TableNextRow(ImGuiTableRowFlags_None, Dp(36));
                 ImGui::TableSetColumnIndex(0);
-                const std::string shown = bar ? players[n] : n == 0 ? "keyboard" : "off";
-                const bool enabled = bar && (n == 0 || players[n - 1] != "off");
+                const std::string shown = players[n];
+                const bool enabled = n == 0 || players[n - 1] != "off";
                 ImGui::AlignTextToFramePadding();
                 TextColored(CurrentFonts().label, enabled || n == 0 ? color::text : color::dim,
                             ("Player " + std::to_string(n + 1)).c_str());
@@ -1528,7 +1542,12 @@ private:
                     for (int slot = 0; slot < 4; ++slot)
                     {
                         const auto device = "remote" + std::to_string(slot + 1);
-                        if (connected(slot) || players[n] == device) option(device);
+                        if ((bar && connected(slot)) || players[n] == device) option(device);
+                    }
+                    for (int pad = 0; pad < 4; ++pad)
+                    {
+                        const auto device = "gamepad" + std::to_string(pad + 1);
+                        if (pad < int(gamepad_names_.size()) || players[n] == device) option(device);
                     }
                     if (n > 0) option("off");
                     ImGui::EndCombo();
@@ -1536,9 +1555,24 @@ private:
                 ImGui::EndDisabled();
                 ImGui::TableSetColumnIndex(2);
                 const int slot = shown.rfind("remote", 0) == 0 ? shown.back() - '1' : -1;
-                const auto* remote = slot >= 0 ? connected(slot) : nullptr;
+                const auto* remote = slot >= 0 && bar ? connected(slot) : nullptr;
                 if (remote) BatteryIcon(remote->battery);
                 ImGui::TableSetColumnIndex(3);
+                if (shown.rfind("gamepad", 0) == 0)
+                {
+                    SecondaryButton("##layout", "", Dp(36, 30), true, Icon::Info);
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Gamepad as Wii Remote + Nunchuk\n\n"
+                                          "A / Cross            A        B / Circle          B\n"
+                                          "X / Square           1        Y / Triangle        2\n"
+                                          "Start                +        Back / Select       -\n"
+                                          "Guide / PS           HOME     D-pad               D-pad\n"
+                                          "Left stick           Nunchuk stick\n"
+                                          "Left trigger         Z        Left bumper         C\n"
+                                          "Right trigger        Shake Remote (hit)\n"
+                                          "Right bumper         Shake Nunchuk (switch items)\n"
+                                          "Right stick          Pointer");
+                }
                 if (shown == "keyboard")
                 {
                     if (SecondaryButton("##keys", "", Dp(36, 30), true, Icon::Sliders)) OpenKeyboardView();
@@ -1747,10 +1781,10 @@ private:
 
     void ControlsMain()
     {
-        PageHeader("Controls", "Play with keyboard and mouse, or a Wii Remote with Nunchuk (experimental). Keep the game window focused.");
+        PageHeader("Controls", "Play with keyboard and mouse, an Xbox, PlayStation or other gamepad, or a Wii Remote with Nunchuk. Keep the game window focused.");
         PlayersCard();
 
-        BeginCard("##controller", "Controller test", "Other controllers are not used by the game yet. You can check one here.", Icon::Gamepad);
+        BeginCard("##controller", "Controller test", "Check a gamepad's buttons and sticks. Assign gamepads to players above.", Icon::Gamepad);
         if (!gamepad_)
             TextWrappedColored(CurrentFonts().body, color::muted, "No controller detected.");
         else
@@ -1964,6 +1998,7 @@ private:
     SDL_Renderer* renderer_ = nullptr;
     SDL_Texture* header_ = nullptr;
     SDL_Gamepad* gamepad_ = nullptr;
+    std::vector<std::string> gamepad_names_;
     // Wii Remote / DolphinBar detection for the Controls page (non-blocking).
     platform::WiimoteHidProbe wii_probe_;
     platform::WiimoteHidStatus wii_status_{};

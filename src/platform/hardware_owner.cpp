@@ -212,22 +212,34 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
         std::any_of(players.remotes.begin(), players.remotes.end(), [](int channel) { return channel >= 0; });
     if (settings.physical_wii_remotes && remotes_play) InitializeWiimoteHid(hid);
     if (players.fixed) {
-        std::uint32_t reserved = 0;
         if (!GetWiimoteHidStatus().dolphinbar) {
-            // Without a DolphinBar keyboard & mouse is player 1, alone.
-            if (remotes_play) SDL_Log("No DolphinBar in mode 4: keyboard & mouse is player 1");
+            // Without a DolphinBar the Wii Remote players drop out and the
+            // others close up in order; with nobody left keyboard & mouse is
+            // player 1.
+            if (remotes_play) SDL_Log("No DolphinBar in mode 4: Wii Remote players are left out");
             ShutdownWiimoteHid();
-            desktop.keyboard_channel = 0;
-            reserved = 1;
-        } else if (players.keyboard >= 0) {
+            players.remotes = {-1, -1, -1, -1};
+            std::array<int*, 4> by_channel{};
+            if (players.keyboard >= 0) by_channel[players.keyboard] = &players.keyboard;
+            for (auto& channel : players.gamepads) if (channel >= 0) by_channel[channel] = &channel;
+            int next = 0;
+            for (auto* channel : by_channel) if (channel) *channel = next++;
+            if (!next) players.keyboard = 0;
+        }
+        std::uint32_t reserved = 0;
+        if (players.keyboard >= 0) {
             desktop.keyboard_channel = players.keyboard;
             reserved = 1u << players.keyboard;
         } else {
             desktop.keyboard = desktop.mouse = desktop.nunchuk = desktop.share_mouse_with_remotes = false;
         }
-        if (GetWiimoteHidStatus().dolphinbar)
-            for (const int channel : players.remotes)
-                if (channel >= 0) reserved |= 1u << channel;
+        for (const int channel : players.remotes)
+            if (channel >= 0) reserved |= 1u << channel;
+        desktop.gamepad_channels = players.gamepads;
+        desktop.gamepad_players = desktop.gamepads =
+            std::any_of(players.gamepads.begin(), players.gamepads.end(), [](int channel) { return channel >= 0; });
+        for (const int channel : players.gamepads)
+            if (channel >= 0) reserved |= 1u << channel;
         SetNativeWpadReservedChannels(reserved);
     }
     try { InitializeDesktopWpad(window, desktop); }

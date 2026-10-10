@@ -2,6 +2,7 @@
 
 #include "platform/key_bindings.h"
 
+#include <array>
 #include <cstdint>
 
 struct SDL_Window;
@@ -32,6 +33,13 @@ struct DesktopWpadSettings {
     int keyboard_channel = -1;
     // Keys of each keyboard action ([keyboard] in mscharged.ini).
     KeyBindings keys = DefaultKeyBindings();
+    // Standard gamepads (Xbox, PlayStation, Switch Pro...) as a Wii Remote
+    // with Nunchuk: the n-th connected pad plays on WPAD channel
+    // gamepad_channels[n]; -1 leaves that pad out. Requires `gamepads` and,
+    // for the right-stick pointer, `pointer_projection`. Without
+    // `gamepad_players` every pad takes the lowest free channel, buttons only.
+    bool gamepad_players = false;
+    std::array<int, 4> gamepad_channels{-1, -1, -1, -1};
 };
 
 // Native desktop buttons are carried by explicit SDL virtual core-Wii devices.

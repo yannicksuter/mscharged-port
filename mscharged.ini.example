@@ -36,8 +36,10 @@ mute = false
 
 [controls]
 # Who plays: keyboard (keyboard & mouse), remote1-remote4 (the Wii Remote in
-# that DolphinBar slot) or off. Players fill in order and each device plays
-# once. Without a DolphinBar, keyboard & mouse is player 1 and plays alone.
+# that DolphinBar slot), gamepad1-gamepad4 (the n-th connected Xbox,
+# PlayStation or other standard gamepad, played as Wii Remote + Nunchuk) or
+# off. Players fill in order and each device plays once. Without a DolphinBar
+# the Wii Remote players are left out and the others close up in order.
 player1 = keyboard
 player2 = off
 player3 = off

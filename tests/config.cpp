@@ -86,6 +86,11 @@ int main()
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[controls]\nplayer2 = gamepad\n";
         Reject([&] { LoadConfig(path); });
+        // Gamepads are players too.
+        std::ofstream(path) << "[controls]\nplayer1 = gamepad1\nplayer2 = keyboard\n";
+        Require(LoadConfig(path).settings.players[0] == "gamepad1", "Gamepad player loads");
+        std::ofstream(path) << "[controls]\nplayer1 = gamepad1\nplayer2 = gamepad1\n";
+        Reject([&] { LoadConfig(path); });
         // [keyboard]: one or two key names per action.
         Require(Settings{}.keys[mscharged::KeyActionA] == "Return | Space", "Default keys");
         std::ofstream(path) << "[keyboard]\na = F1\nb = Escape | Left Shift\n";

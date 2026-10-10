@@ -38,6 +38,8 @@ struct NativePlayers {
     bool fixed = false; // false: remotes, then keyboard & mouse, as they connect
     int keyboard = 0;
     std::array<int, 4> remotes{-1, -1, -1, -1};
+    // WPAD channel of the n-th connected standard gamepad, or -1.
+    std::array<int, 4> gamepads{-1, -1, -1, -1};
     // Pointer calibration of the Wii Remote in each DolphinBar slot.
     std::array<std::optional<WiimoteCalibration>, 4> calibrations{};
 };

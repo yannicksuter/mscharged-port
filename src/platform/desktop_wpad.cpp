@@ -5,6 +5,7 @@
 #include <revolution/wpad/WPAD.h>
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <chrono>
@@ -47,6 +48,11 @@ struct Device {
     mscharged::platform::NativeNunchukSource nunchuk_source{};
     std::array<int, ShakeCount> shake_reports{};
     std::array<bool, ShakeCount> shaking{};
+    // Gamepad player: right-stick pointer position (0..1 of the picture) and
+    // the shake buttons' previous state, for press edges.
+    float pointer_x = 0.5f, pointer_y = 0.5f;
+    std::array<bool, ShakeCount> shake_held{};
+    Clock::time_point last_service{};
 };
 struct State {
     std::mutex mutex;
@@ -360,6 +366,64 @@ void Report(Device& device, const std::array<bool, 11>& buttons, Clock::time_poi
             SDL_SENSOR_ACCEL, SDL_GetTicksNS(), gravity, 3), "Publish desktop core-Wii raw report");
     }
 }
+// Gamepad players: the pad is a Wii Remote with Nunchuk (see desktop_wpad.h).
+void AttachGamepadPlayer(State& state, Device& pad, int index) {
+    pad.nunchuk_source = mscharged::platform::AttachNativeWpadNunchukSource(pad.virtual_id);
+    if (state.settings.pointer_projection)
+        pad.dpd_source = mscharged::platform::AttachNativeWpadDpdSource(pad.virtual_id);
+    mscharged::platform::SetNativeWpadFixedChannel(pad.virtual_id, state.settings.gamepad_channels[index]);
+}
+// A stick axis in -1..1 outside a small dead zone, rescaled to the full range.
+float StickAxis(SDL_Gamepad* pad, SDL_GamepadAxis axis) {
+    constexpr float dead = 0.15f;
+    const float value = std::clamp(float(SDL_GetGamepadAxis(pad, axis)) / 32767.0f, -1.0f, 1.0f);
+    if (std::fabs(value) < dead) return 0.0f;
+    return std::copysign((std::fabs(value) - dead) / (1.0f - dead), value);
+}
+bool TriggerHeld(SDL_Gamepad* pad, SDL_GamepadAxis axis) { return SDL_GetGamepadAxis(pad, axis) > 16384; }
+mscharged::platform::NativeNunchukObservation GamepadNunchuk(Device& pad, bool focused) {
+    // Left stick on the physical Nunchuk's range (about 100 counts from the
+    // calibrated centre); original ClampWiiStick/KPAD apply their own dead
+    // zone. Left trigger = Z, left bumper = C.
+    mscharged::platform::NativeNunchukObservation result{};
+    result.acc_z = mscharged::platform::kNativeNunchukGravity;
+    if (!focused) return result;
+    float x = StickAxis(pad.input, SDL_GAMEPAD_AXIS_LEFTX), y = -StickAxis(pad.input, SDL_GAMEPAD_AXIS_LEFTY);
+    const float length = std::hypot(x, y);
+    if (length > 1.0f) { x /= length; y /= length; }
+    result.stick_x = static_cast<std::int8_t>(std::lround(x * 100.0f));
+    result.stick_y = static_cast<std::int8_t>(std::lround(y * 100.0f));
+    result.z = TriggerHeld(pad.input, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+    result.c = SDL_GetGamepadButton(pad.input, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    return result;
+}
+void UpdateGamepadShakes(Device& pad, bool focused) {
+    // Right trigger shakes the Remote, right bumper the Nunchuk: one flick per press.
+    const std::array<bool, ShakeCount> held{
+        focused && TriggerHeld(pad.input, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER),
+        focused && SDL_GetGamepadButton(pad.input, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)};
+    for (int shake = 0; shake != ShakeCount; ++shake) {
+        if (held[shake] && !pad.shake_held[shake]) {
+            pad.shake_reports[shake] = 0;
+            pad.shaking[shake] = true;
+        } else if (!focused) pad.shaking[shake] = false;
+        pad.shake_held[shake] = held[shake];
+    }
+}
+mscharged::platform::NativeDpdObservation GamepadPointer(State& state, Device& pad, bool focused, Clock::time_point now) {
+    // The right stick moves the pointer across the picture: full deflection
+    // crosses its width in about 0.8 s. It stays where it was left.
+    const float seconds = pad.last_service == Clock::time_point{} ? 0.0f
+        : std::min(0.1f, std::chrono::duration<float>(now - pad.last_service).count());
+    pad.last_service = now;
+    if (focused) {
+        constexpr float speed = 1.25f;
+        pad.pointer_x = std::clamp(pad.pointer_x + StickAxis(pad.input, SDL_GAMEPAD_AXIS_RIGHTX) * speed * seconds, 0.0f, 1.0f);
+        pad.pointer_y = std::clamp(pad.pointer_y + StickAxis(pad.input, SDL_GAMEPAD_AXIS_RIGHTY) * speed * seconds, 0.0f, 1.0f);
+    }
+    return mscharged::platform::MakeDesktopDpdObservation(pad.pointer_x, pad.pointer_y, WPADGetSensorBarPosition(),
+                                                          focused && state.ready);
+}
 } // namespace
 
 namespace mscharged::platform {
@@ -375,6 +439,9 @@ void InitializeDesktopWpad(SDL_Window* window, DesktopWpadSettings settings) {
         throw std::invalid_argument("Sharing the mouse camera requires the mouse profile");
     if (settings.keyboard_channel < -1 || settings.keyboard_channel >= WPAD_MAX_CONTROLLERS)
         throw std::invalid_argument("Keyboard & mouse player outside Wii hardware ports");
+    for (const int channel : settings.gamepad_channels)
+        if (channel < -1 || channel >= WPAD_MAX_CONTROLLERS)
+            throw std::invalid_argument("Gamepad player outside Wii hardware ports");
     {
         std::lock_guard lock(state.mutex);
         if (state.ready) throw std::logic_error("Desktop WPAD transport is already initialized");
@@ -440,10 +507,22 @@ void ServiceDesktopWpad() {
             auto* input = SDL_OpenGamepad(ids[n]);
             if (!input) continue;
             std::unique_ptr<Device>* slot = nullptr;
-            for (auto& pad : state.pads) if (!pad) { slot = &pad; break; }
+            int index = 0;
+            for (; index < int(state.pads.size()); ++index)
+                if (!state.pads[index] && (!state.settings.gamepad_players || state.settings.gamepad_channels[index] >= 0)) {
+                    slot = &state.pads[index];
+                    break;
+                }
             if (!slot) { SDL_CloseGamepad(input); break; }
-            try { *slot = MakeDevice(input); }
-            catch (...) { SDL_CloseGamepad(input); throw; }
+            try {
+                *slot = MakeDevice(input);
+                if (state.settings.gamepad_players) AttachGamepadPlayer(state, **slot, index);
+            }
+            catch (...) {
+                if (*slot) Retire(*slot);
+                else SDL_CloseGamepad(input);
+                throw;
+            }
         }
     }
     bool focused, mouse_known, mouse_inside;
@@ -511,7 +590,11 @@ void ServiceDesktopWpad() {
         std::array<bool, 11> buttons{};
         if (focused) for (int n = 0; n < int(buttons.size()); ++n)
             buttons[n] = SDL_GetGamepadButton(pad->input, DesktopButtons[n]);
-        Report(*pad, buttons, now);
+        if (!state.settings.gamepad_players) { Report(*pad, buttons, now); continue; }
+        auto nunchuk = GamepadNunchuk(*pad, focused);
+        UpdateGamepadShakes(*pad, focused);
+        const auto pointer = GamepadPointer(state, *pad, focused, now);
+        Report(*pad, buttons, now, pad->dpd_source.generation ? &pointer : nullptr, &nunchuk);
     }
 }
 void ShutdownDesktopWpad() {

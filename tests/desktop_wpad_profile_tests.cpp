@@ -240,6 +240,49 @@ void Cycle(bool gamepads, bool physical) {
     mscharged::platform::ShutdownDesktopWpad();
     WPADShutdown();
 }
+// A standard gamepad as a player: a Wii Remote with Nunchuk on its own channel.
+void GamepadPlayerCycle() {
+    connects = samples = extension_count = 0;
+    mscharged::platform::ConfigureWpadSDL({0,3,false,false});
+    mscharged::platform::DesktopWpadSettings settings{};
+    settings.gamepads = settings.gamepad_players = true;
+    settings.gamepad_channels = {1, -1, -1, -1};
+    GenericPad pad;
+    mscharged::platform::InitializeDesktopWpad(window, settings);
+    WPADInit();
+    // Extension callbacks are checked on player 1 elsewhere; this pad is player 2.
+    for (int n = 0; n != 4; ++n) {
+        WPADSetConnectCallback(n, Connect);
+        WPADSetSamplingCallback(n, Sample);
+    }
+    Event(SDL_EVENT_WINDOW_FOCUS_GAINED);
+    WPADDeviceType type{};
+    Until([&] { return WPADProbe(1, &type) == WPAD_ERR_OK && type == WPAD_DEV_FREESTYLE; },
+          "Gamepad did not connect as player 2 with a Nunchuk");
+    Check(WPADProbe(0, &type) != WPAD_ERR_OK, "Gamepad also took player 1");
+    Check(WPADSetDataFormat(1, WPAD_FMT_FS_BTN_ACC_DPD) == WPAD_ERR_OK, "Freestyle format was rejected");
+    const auto report = [] {
+        WPADFSStatus status{};
+        WPADRead(1, reinterpret_cast<WPADStatus*>(&status));
+        return status;
+    };
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_SOUTH, true);
+    Until([&] { return report().button == WPAD_BUTTON_A; }, "Gamepad south did not press A");
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_SOUTH, false);
+    SDL_SetJoystickVirtualAxis(pad.joystick, SDL_GAMEPAD_AXIS_LEFTX, 32767);
+    Until([&] { auto r = report(); return r.fsStickX == 100 && r.fsStickY == 0 && r.button == 0; },
+          "Left stick did not move the Nunchuk stick right");
+    SDL_SetJoystickVirtualAxis(pad.joystick, SDL_GAMEPAD_AXIS_LEFTX, 0);
+    SDL_SetJoystickVirtualAxis(pad.joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 32767);
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true);
+    Until([&] { auto r = report(); return r.fsStickX == 0 && r.button == (WPAD_BUTTON_FS_Z | WPAD_BUTTON_FS_C); },
+          "Left trigger and bumper did not press Z and C");
+    SDL_SetJoystickVirtualAxis(pad.joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0);
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, false);
+    Until([&] { return report().button == 0; }, "Gamepad release kept a button");
+    mscharged::platform::ShutdownDesktopWpad();
+    WPADShutdown();
+}
 void NunchukCycle() {
     connects = samples = extension_count = 0;
     mscharged::platform::ConfigureWpadSDL({0,3,false,false});
@@ -358,9 +401,11 @@ int main() {
             FixedPlayersCycle();
             CustomKeysCycle();
         }
+        // With the generic pad above gone, this test's pad is gamepad 1.
+        GamepadPlayerCycle();
         SDL_DestroyWindow(window); window = nullptr;
         SDL_Quit();
-        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players, custom keys and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
+        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players, custom keys, gamepad players and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
         return 0;
     } catch (const std::exception& e) {
         try { mscharged::platform::ShutdownDesktopWpad(); } catch (...) {}
