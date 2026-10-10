@@ -488,3 +488,4 @@
 0649-native-lp64-posed-ball-drawable.patch
 0685-diagnose-replay-choreography.patch
 0686-load-common-config.patch
+0687-seed-and-physics-setup.patch
