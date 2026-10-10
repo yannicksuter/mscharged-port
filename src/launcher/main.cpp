@@ -1963,7 +1963,7 @@ private:
         }
         EndCard();
 
-        BeginCard("##project", "The project", nullptr, Icon::Disc);
+        BeginCard("##project", "Mario Strikers Charged Decompilation Project", nullptr, Icon::Disc);
         TextWrappedColored(CurrentFonts().body, color::text,
             "This port compiles the reconstructed C/C++ source of Mario Strikers Charged to native code. "
             "The original game logic runs unchanged; the port provides the platform underneath it: graphics, audio, "
