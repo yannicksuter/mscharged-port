@@ -314,7 +314,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         const auto systemLanguage = mscharged::ResolveNativeUSASystemLanguage(launch.settings.language);
         const auto discProfile = mscharged::InspectDisc(launch.disc_path);
         Check(mscharged::SupportedRelease(discProfile),
-              "Only the USA version of Mario Strikers Charged (R4QE01, revision 1, original main.dol) is "
+              "Only the USA version of Mario Strikers Charged (R4QE01) is "
               "supported for now; European, Japanese and Korean versions are planned");
         Check(!resizeCheck || !launch.settings.fullscreen,"--resize-check requires a windowed launch; add --window");
         Check(!priorBoot || !resizeCheck,
