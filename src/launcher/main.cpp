@@ -1929,11 +1929,17 @@ private:
             "To the contributors of the decompilation, who helped bring it over the last miles:");
         ImGui::Dummy({0, Dp(2)});
         {
-            const char* contributors[] = {"Jasu14", "vZylev", "GoldenPalazzo", "neemyako"};
-            for (int i = 0; i < 4; ++i)
+            // GitHub accounts; each button opens the profile.
+            const char* contributors[] = {"Jasu14", "vZylev", "GoldenPalazzo"};
+            for (int i = 0; i < 3; ++i)
             {
                 if (i) ImGui::SameLine(0, Dp(8));
-                Chip(contributors[i], color::accent);
+                const std::string url = std::string("https://github.com/") + contributors[i];
+                ImGui::PushID(i);
+                if (SecondaryButton("##contributor", contributors[i], Dp(170, 36), true, Icon::Link))
+                    SDL_OpenURL(url.c_str());
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", url.c_str());
+                ImGui::PopID();
             }
         }
         EndCard();
