@@ -75,3 +75,4 @@
 0079-windows-low-wii-arenas.patch
 0080-diagnostic-fog-switches.patch
 0081-diagnostic-inline-fifo.patch
+0082-inline-fifo-on-apple-silicon.patch
