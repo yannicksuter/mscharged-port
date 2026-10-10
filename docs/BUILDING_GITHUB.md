@@ -1,8 +1,7 @@
 # GitHub builds
 
 `main` contains development work. `stable` holds reviewed snapshots, promoted
-through a `main` → `stable` pull request. A stable snapshot is still a work in
-progress until the game is complete.
+through a `main` → `stable` pull request.
 
 The **Build binaries** workflow checks PRs targeting `stable`. After a merge
 into `stable`, successful Linux x86_64 and macOS Apple Silicon jobs upload

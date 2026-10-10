@@ -3,70 +3,88 @@
 [![Build stable](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml/badge.svg?branch=stable)](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable)
 [![Development version: 0.0.1-dev](https://img.shields.io/badge/version-0.0.1--dev-blue)](CMakeLists.txt)
 
-A native C/C++ port of **Mario Strikers Charged** for modern systems, based on
-[mscharged-decomp](https://github.com/yannicksuter/mscharged-decomp) and
-[Aurora](https://github.com/encounter/aurora). It compiles reconstructed game
-source into native machine code; it is not a recompilation of the PowerPC binary.
+Play **Mario Strikers Charged** natively on your PC. The port compiles the
+fully reconstructed game source of
+[mscharged-decomp](https://github.com/yannicksuter/mscharged-decomp) into native
+code, with [Aurora](https://github.com/encounter/aurora) in place of the Wii
+hardware. It is not an emulator and not a recompilation of the PowerPC binary:
+the original game runs unchanged, modern systems provide the rest.
+
+> [!IMPORTANT]
+> Only the **USA version** of the game (**R4QE01**, revision 1) is supported.
+> European and Japanese discs need their own complete decompilation before they
+> can run glitch free.
 
 ## Status
 
-**Work in progress.** Native platform integration is ongoing.
-Experimental startup and menus run on Linux; a complete playable game and
-Windows/macOS game support remain in development.
+**Every offline feature of the original game works**: all modes, up to four
+players, saves, movies, music and sound. What remains is polishing and testing.
+Online play is not available, since Nintendo Wi-Fi Connection has shut down.
 
-## Checkout, build, run
+Highlights:
 
-Install the [build prerequisites](docs/BUILDING.md#requirements) first; Mac users
-can follow [macOS tool setup](docs/BUILDING_MACOS.md#install-tools).
-For a **fresh checkout**, run these three lines from the parent directory:
+- Keyboard & mouse with freely assignable keys
+- Xbox, PlayStation and other gamepads
+- Real Wii Remotes with Nunchuk through a Mayflash DolphinBar, with pointer
+  calibration
+- Sharp picture, 4:3 or 16:9, optional antialiasing, any window size or
+  fullscreen
+- A launcher for disc, players, controls, display and audio
 
-The Release build includes the incomplete original-source frontend runtime.
-Supply your own USA `R4QE01` revision 1 ISO/RVZ at the path below. Linux startup
-and menus have been tested; macOS runtime validation is still in progress.
+See the full **[feature list](docs/FEATURES.md)**.
 
-```sh
-git clone --branch main --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git && cd mscharged-port
-python3 tools/setup_dependencies.py && CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset release --fresh
-./build/release/mscharged --disc ./game/R4QE01.rvz --window
-```
+| Platform | State |
+| --- | --- |
+| Linux x86_64 | Tested |
+| macOS Apple Silicon | Builds; testing in progress |
+| Windows | In progress |
 
-`main` is the development branch; `stable` is for reviewed snapshots promoted
-through pull requests. The [GitHub build workflow](docs/BUILDING_GITHUB.md)
-checks promotions and provides binaries after merging. The helper initializes
-only the pinned dependencies required by your platform. See the [build guide](docs/BUILDING.md)
-for updates and the smaller launcher build, and [runtime instructions](docs/RUNTIME.md)
-for separate diagnostics.
+## Download
+
+Builds of the reviewed `stable` branch are attached to each successful
+[**Build binaries** run](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
+under *Artifacts* (Linux x86_64 and macOS Apple Silicon). Extract the archive,
+keep its files together and start `mscharged`; the launcher guides you through
+the rest. See [GitHub builds](docs/BUILDING_GITHUB.md) for details.
 
 ## Game data
 
-Supply an **ISO or RVZ from your own copy**. Game data is not included. Files in
-`game/` and your personal `mscharged.ini` are excluded from Git.
-See [disc setup](docs/BUILDING.md#configure-your-disc).
+Supply an **ISO or RVZ from your own copy** of the USA disc. Game data is not
+included. Choose the file in the launcher or see
+[disc setup](docs/BUILDING.md#configure-your-disc).
 
 ## Controls
 
-The keyboard and mouse act as a Wii Remote with a Nunchuk; the original game
-decides what each input does. Keep the game window focused.
+Keyboard & mouse act as a Wii Remote with a Nunchuk; gamepads and real Wii
+Remotes can be assigned to players 1–4 in the launcher. Default keys:
 
 | Wii input | Keyboard / mouse |
 | --- | --- |
 | Pointer | Mouse |
-| A | Enter, Space, or left click |
-| B | Esc, Backspace, or right click |
+| A / B | Enter or left click / Esc or right click |
 | D-pad | Arrow keys |
-| 1 / 2 | Z / X |
-| + (Plus) / − (Minus) | Tab / - |
-| HOME | Home |
 | Nunchuk stick | W A S D |
 | Nunchuk C / Z | C / V |
-| Shake Wii Remote (hit an opponent) | E |
-| Shake Nunchuk (switch items) | Q |
+| 1 / 2 | Z / X |
+| + / − / HOME | Tab / - / Home |
+| Shake Remote / Nunchuk | E / Q |
 
-A real **Wii Remote with a Nunchuk** also works (experimental, Linux), with the
-mouse as its pointer; see [Wii Remote setup](docs/RUNTIME.md#wii-remote).
+Press **P** for a screenshot. See [Wii Remote setup](docs/RUNTIME.md#wii-remote)
+for the DolphinBar.
 
-Press **P** to save the presented frame as `screenshots/screenshot_<timestamp>.png`
-in the directory the port was started from.
+## Build from source
+
+Install the [build prerequisites](docs/BUILDING.md#requirements) first; Mac users
+can follow [macOS tool setup](docs/BUILDING_MACOS.md#install-tools). Then:
+
+```sh
+git clone --branch main --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git && cd mscharged-port
+python3 tools/setup_dependencies.py && CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset release --fresh
+./build/release/mscharged
+```
+
+`main` is the development branch; `stable` holds reviewed snapshots. See the
+[build guide](docs/BUILDING.md) for updates and options.
 
 ## Porting approach
 

@@ -1,9 +1,9 @@
-# Experimental runtime
+# Runtime
 
-The port is a work in progress alongside the decompilation. Selected tests run
-original game code on Linux/Vulkan; **full startup and matches are unfinished**.
-These tests currently require a USA `R4QE01` revision 1 ISO/RVZ. See
-[Building](BUILDING.md) for the Release runtime build and disc configuration.
+The Release build runs the whole original game on Linux/Vulkan; macOS/Metal is
+being tested and Windows is in progress. It requires a USA `R4QE01` revision 1
+ISO/RVZ. See [Building](BUILDING.md) for the Release build and disc
+configuration, and the [feature list](FEATURES.md) for what is supported.
 
 ## Graphics prerequisites
 
@@ -17,7 +17,7 @@ python3 tools/setup_dependencies.py
 
 The first graphics build is large. Adjust parallelism for available memory.
 Real GPU tests are opt-in; the Vulkan test gate requires Linux and installed
-validation layers. Windows, other disc regions and Wii peripherals remain unverified.
+validation layers. Windows and other disc regions remain unsupported.
 
 ## Original frontend sequence
 
