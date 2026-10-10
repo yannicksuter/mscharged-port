@@ -1256,6 +1256,50 @@ private:
         EndCard();
     }
 
+    // The gamepad layout as a two-column table: pad control, then Wii input.
+    void GamepadLayoutTooltip()
+    {
+        struct Mapping { const char* pad; const char* wii; };
+        static const Mapping buttons[] = {
+            {"A / Cross", "A"}, {"B / Circle", "B"}, {"X / Square", "1"}, {"Y / Triangle", "2"},
+            {"Start", "+"}, {"Back / Select", "-"}, {"Guide / PS", "HOME"}, {"D-pad", "D-pad"}};
+        static const Mapping sticks[] = {
+            {"Left stick", "Nunchuk stick"}, {"Left trigger", "Z"}, {"Left bumper", "C"},
+            {"Right stick", "Pointer"}, {"Right trigger", "Shake Remote (hit)"},
+            {"Right bumper", "Shake Nunchuk (switch items)"}};
+        const auto& fonts = CurrentFonts();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Dp(16, 14));
+        if (ImGui::BeginTooltip())
+        {
+            TextColored(fonts.label, color::text, "Gamepad as Wii Remote + Nunchuk");
+            TextColored(fonts.caption, color::muted, "Xbox, PlayStation and other standard controllers");
+            auto section = [&](const char* title, const Mapping* rows, std::size_t count, const char* id) {
+                ImGui::Dummy({0, Dp(6)});
+                TextColored(fonts.caption, color::dim, title);
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 3));
+                if (ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingFixedFit))
+                {
+                    ImGui::TableSetupColumn("pad", ImGuiTableColumnFlags_WidthFixed, Dp(132));
+                    ImGui::TableSetupColumn("wii", ImGuiTableColumnFlags_WidthFixed, Dp(200));
+                    for (std::size_t i = 0; i < count; ++i)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        TextColored(fonts.body, color::text, rows[i].pad);
+                        ImGui::TableSetColumnIndex(1);
+                        TextColored(fonts.body, color::accent, rows[i].wii);
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::PopStyleVar();
+            };
+            section("BUTTONS", buttons, std::size(buttons), "##pad_buttons");
+            section("STICKS & TRIGGERS", sticks, std::size(sticks), "##pad_sticks");
+            ImGui::EndTooltip();
+        }
+        ImGui::PopStyleVar();
+    }
+
     void WindowSizeControl()
     {
         // Sizes are logical units like the game window's (points on a Retina
@@ -1658,17 +1702,7 @@ private:
                 if (shown.rfind("gamepad", 0) == 0)
                 {
                     SecondaryButton("##layout", "", Dp(36, 30), true, Icon::Info);
-                    if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("Gamepad as Wii Remote + Nunchuk\n\n"
-                                          "A / Cross            A        B / Circle          B\n"
-                                          "X / Square           1        Y / Triangle        2\n"
-                                          "Start                +        Back / Select       -\n"
-                                          "Guide / PS           HOME     D-pad               D-pad\n"
-                                          "Left stick           Nunchuk stick\n"
-                                          "Left trigger         Z        Left bumper         C\n"
-                                          "Right trigger        Shake Remote (hit)\n"
-                                          "Right bumper         Shake Nunchuk (switch items)\n"
-                                          "Right stick          Pointer");
+                    if (ImGui::IsItemHovered()) GamepadLayoutTooltip();
                 }
                 if (shown == "keyboard")
                 {
