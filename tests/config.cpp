@@ -115,19 +115,19 @@ int main()
         // Host presentation/diagnostic settings: defaults keep the previous
         // behaviour, values round trip and out-of-range input is rejected.
         const Settings defaults;
-        Require(defaults.show_fps && defaults.monitor == 0 && defaults.graphics_validation
+        Require(defaults.show_fps && defaults.monitor == 0 && !defaults.graphics_validation
             && defaults.log_level == "info" && defaults.ui_scale == "auto", "Host setting defaults");
         const auto host = directory / "host.ini";
         auto hostFile = LoadConfig(host, true);
         Settings hostSettings;
         hostSettings.show_fps = false;
         hostSettings.monitor = 2;
-        hostSettings.graphics_validation = false;
+        hostSettings.graphics_validation = true;
         hostSettings.log_level = "warning";
         hostSettings.ui_scale = "150";
         SaveConfig(hostFile, hostSettings);
         const auto hostReloaded = LoadConfig(host).settings;
-        Require(!hostReloaded.show_fps && hostReloaded.monitor == 2 && !hostReloaded.graphics_validation
+        Require(!hostReloaded.show_fps && hostReloaded.monitor == 2 && hostReloaded.graphics_validation
             && hostReloaded.log_level == "warning" && hostReloaded.ui_scale == "150", "Host settings round trip");
         const auto hostText = LoadConfig(host).contents;
         Require(hostText.find("[advanced]") != std::string::npos && hostText.find("[launcher]") != std::string::npos

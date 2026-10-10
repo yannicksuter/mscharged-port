@@ -82,10 +82,10 @@ shake_remote = E
 shake_nunchuk = Q
 
 [advanced]
-# Backend graphics debug layers (slower; useful for bug reports). WebGPU
+# Backend graphics debug layers (slower; turn on for bug reports). WebGPU
 # validation and robust buffer access stay enabled in both modes.
 # Log detail: error, warning, info or debug.
-graphics_validation = true
+graphics_validation = false
 log_level = info
 
 [launcher]
