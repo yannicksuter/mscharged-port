@@ -1189,7 +1189,7 @@ private:
 
     void DisplayPage()
     {
-        PageHeader("Display", "How the game window opens. The game renders its original 640 x 448 picture and scales it to fit.");
+        PageHeader("Display", "How the game window opens and how sharply the game is drawn.");
         const auto run = EffectiveLaunch().settings;
         if (options_.launch.size || options_.launch.fullscreen || options_.launch.aspect)
         {
@@ -1237,6 +1237,15 @@ private:
             for (int i = 0; i < 3; ++i) if (draft_.picture == pictures[i]) picture = i;
             if (Segmented("##sharpness", &picture, {"Soft (TV)", "Clean", "Sharp"}, ImGui::GetContentRegionAvail().x))
             { draft_.picture = pictures[picture]; dirty_ = true; }
+
+            Row("3D resolution", "Window renders the game at your window's own resolution, the sharpest picture. "
+                "Native is the Wii's 640 x 448; 2x-4x are fixed multiples for slower graphics cards.");
+            const char* resolutions[] = {"window", "native", "2x", "3x", "4x"};
+            int resolution = 0;
+            for (int i = 0; i < 5; ++i) if (draft_.resolution == resolutions[i]) resolution = i;
+            if (Segmented("##resolution", &resolution, {"Window", "Native", "2x", "3x", "4x"},
+                          ImGui::GetContentRegionAvail().x))
+            { draft_.resolution = resolutions[resolution]; dirty_ = true; }
 
             Row("Antialiasing", "Smooths the jagged edges of 3D shapes (4x multisampling). Costs some GPU time.");
             bool antialiasing = draft_.antialiasing == "4x";
@@ -1306,7 +1315,8 @@ private:
         // Mac), so only those that fit the chosen display are offered.
         struct Group { const char* title; std::vector<std::array<int, 2>> sizes; };
         static const std::array<Group, 4> groups{{
-            // The game renders 640 x 448 (480p); whole multiples stay sharpest.
+            // The Wii picture is 640 x 448 (480p); at 3D resolution Native,
+            // whole multiples of it stay sharpest.
             {"Wii output (480p and multiples)", {{640, 480}, {854, 480}, {1280, 960}, {1708, 960}, {1920, 1440}, {2562, 1440}}},
             {"16:9", {{1280, 720}, {1366, 768}, {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}}},
             {"16:10", {{1280, 800}, {1440, 900}, {1680, 1050}, {1920, 1200}, {2560, 1600}}},
