@@ -12,6 +12,7 @@
 #include "launcher/ui_metrics.h"
 #include "mscharged/build_version.h"
 #include "platform/parse_float.h"
+#include "platform/window_fit.h"
 #include "platform/disc.h"
 #include "platform/app_icon.h"
 #include "platform/path.h"
@@ -497,6 +498,7 @@ private:
     void RefreshDisplays()
     {
         displays_.clear();
+        display_ids_.clear();
         int count = 0;
         SDL_DisplayID* ids = SDL_GetDisplays(&count);
         const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
@@ -508,6 +510,7 @@ private:
                 label += "  (" + std::to_string(mode->w) + " x " + std::to_string(mode->h) + ")";
             if (ids[i] == primary) label += "  - primary";
             displays_.push_back(std::move(label));
+            display_ids_.push_back(ids[i]);
         }
         SDL_free(ids);
     }
@@ -1255,22 +1258,61 @@ private:
 
     void WindowSizeControl()
     {
-        static constexpr std::array<std::array<int, 2>, 7> presets{{{1280, 720}, {1600, 900}, {1920, 1080},
-            {2560, 1440}, {3840, 2160}, {1024, 768}, {1440, 1080}}};
+        // Sizes are logical units like the game window's (points on a Retina
+        // Mac), so only those that fit the chosen display are offered.
+        struct Group { const char* title; std::vector<std::array<int, 2>> sizes; };
+        static const std::array<Group, 4> groups{{
+            // The game renders 640 x 448 (480p); whole multiples stay sharpest.
+            {"Wii output (480p and multiples)", {{640, 480}, {854, 480}, {1280, 960}, {1708, 960}, {1920, 1440}, {2562, 1440}}},
+            {"16:9", {{1280, 720}, {1366, 768}, {1600, 900}, {1920, 1080}, {2560, 1440}, {3840, 2160}}},
+            {"16:10", {{1280, 800}, {1440, 900}, {1680, 1050}, {1920, 1200}, {2560, 1600}}},
+            {"4:3", {{800, 600}, {1024, 768}, {1440, 1080}, {1600, 1200}}},
+        }};
+        SDL_DisplayID display = SDL_GetPrimaryDisplay();
+        if (draft_.monitor > 0 && draft_.monitor <= int(display_ids_.size())) display = display_ids_[size_t(draft_.monitor - 1)];
+        SDL_Rect usable{};
+        const bool known = display && SDL_GetDisplayUsableBounds(display, &usable);
+        auto fits = [&](int w, int h) {
+            if (!known) return true;
+            const auto fit = platform::FitWindowSize(w, h, usable.w, usable.h);
+            return fit.width == w && fit.height == h;
+        };
+        const auto largest = known ? platform::FitWindowSize(16000, 9000, usable.w, usable.h)
+                                   : platform::WindowSize{1280, 720};
+        auto aspect = [](int w, int h) {
+            const double ratio = double(w) / h;
+            return std::abs(ratio - 16.0 / 9) < 0.01 ? "   (16:9)" : std::abs(ratio - 16.0 / 10) < 0.01 ? "   (16:10)"
+                 : std::abs(ratio - 4.0 / 3) < 0.01 ? "   (4:3)" : "";
+        };
+        auto selected = [&](int w, int h) { return draft_.width == w && draft_.height == h; };
+
         const float width = ImGui::GetContentRegionAvail().x;
-        std::string preview = std::to_string(draft_.width) + " x " + std::to_string(draft_.height);
-        bool custom = true;
-        for (const auto& preset : presets) if (preset[0] == draft_.width && preset[1] == draft_.height) custom = false;
-        if (custom) preview += "  (custom)";
+        bool custom = !selected(largest.width, largest.height);
+        for (const auto& group : groups)
+            for (const auto& size : group.sizes) if (selected(size[0], size[1])) custom = false;
+        std::string preview = std::to_string(draft_.width) + " x " + std::to_string(draft_.height)
+            + aspect(draft_.width, draft_.height) + (custom ? "  (custom)" : "");
         ImGui::SetNextItemWidth(width);
-        if (ImGui::BeginCombo("##size", preview.c_str()))
+        if (ImGui::BeginCombo("##size", preview.c_str(), ImGuiComboFlags_HeightLarge))
         {
-            for (const auto& preset : presets)
+            const std::string fill = "Largest that fits: " + std::to_string(largest.width) + " x "
+                + std::to_string(largest.height);
+            if (ImGui::Selectable(fill.c_str(), selected(largest.width, largest.height)))
+            { draft_.width = largest.width; draft_.height = largest.height; dirty_ = true; }
+            for (const auto& group : groups)
             {
-                const std::string label = std::to_string(preset[0]) + " x " + std::to_string(preset[1])
-                    + (preset[0] * 3 == preset[1] * 4 ? "   (4:3)" : "   (16:9)");
-                if (ImGui::Selectable(label.c_str(), preset[0] == draft_.width && preset[1] == draft_.height))
-                { draft_.width = preset[0]; draft_.height = preset[1]; dirty_ = true; }
+                bool any = false;
+                for (const auto& size : group.sizes) any |= fits(size[0], size[1]);
+                if (!any) continue;
+                ImGui::SeparatorText(group.title);
+                for (const auto& size : group.sizes)
+                {
+                    if (!fits(size[0], size[1])) continue;
+                    const std::string label = std::to_string(size[0]) + " x " + std::to_string(size[1])
+                        + aspect(size[0], size[1]) + "##" + group.title;
+                    if (ImGui::Selectable(label.c_str(), selected(size[0], size[1])))
+                    { draft_.width = size[0]; draft_.height = size[1]; dirty_ = true; }
+                }
             }
             ImGui::EndCombo();
         }
@@ -1281,6 +1323,13 @@ private:
             draft_.width = std::clamp(dimensions[0], 320, 16384);
             draft_.height = std::clamp(dimensions[1], 240, 16384);
             dirty_ = true;
+        }
+        if (!fits(draft_.width, draft_.height))
+        {
+            const auto shrunk = platform::FitWindowSize(draft_.width, draft_.height, usable.w, usable.h);
+            const std::string note = "Larger than this display; the game opens it at " + std::to_string(shrunk.width)
+                + " x " + std::to_string(shrunk.height) + ".";
+            TextWrappedColored(CurrentFonts().caption, color::warning, note.c_str());
         }
     }
 
@@ -2118,6 +2167,7 @@ private:
     DiscCheck check_;
     std::future<DiscCheck> future_;
     std::vector<std::string> displays_;
+    std::vector<SDL_DisplayID> display_ids_;
     std::shared_ptr<DialogResult> dialog_ = std::make_shared<DialogResult>();
 };
 }

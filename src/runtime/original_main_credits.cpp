@@ -1,6 +1,7 @@
 #include "platform/graphics_stats.h"
 #include "platform/app_icon.h"
 #include "platform/screenshot_hotkey.h"
+#include "platform/window_fit.h"
 #include "runtime/original_main_credits.h"
 #include "platform/graphics_backend.h"
 #include "runtime/original_sh_menu_diagnostic.h"
@@ -381,6 +382,24 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             } else std::fprintf(stderr,"Selected display %d is not connected; using the default display.\n",
                 launch.settings.monitor);
             SDL_free(displays);
+        }
+        if(!launch.settings.fullscreen) {
+            // A window larger than its display's usable area (an INI written
+            // for a bigger screen, or pixel sizes on a Retina Mac) shrinks to
+            // fit, keeping its shape, and is centred on that display.
+            const SDL_DisplayID display=SDL_GetDisplayForWindow(host.window);
+            SDL_Rect usable{};
+            if(display && SDL_GetDisplayUsableBounds(display,&usable)) {
+                const auto fit=mscharged::platform::FitWindowSize(int(windowWidth),int(windowHeight),usable.w,usable.h);
+                if(fit.width!=int(windowWidth) || fit.height!=int(windowHeight)) {
+                    std::fprintf(stderr,"Window %ux%u does not fit the display (%dx%d usable); using %dx%d.\n",
+                        windowWidth,windowHeight,usable.w,usable.h,fit.width,fit.height);
+                    windowWidth=unsigned(fit.width);windowHeight=unsigned(fit.height);
+                    SDL_SetWindowSize(host.window,fit.width,fit.height);
+                    const auto centred=SDL_WINDOWPOS_CENTERED_DISPLAY(display);
+                    SDL_SetWindowPosition(host.window,int(centred),int(centred));
+                }
+            }
         }
         mscharged::platform::SetNativeAIOutputGain(launch.settings.mute ? 0.0f :
             float(launch.settings.master_volume)/100.0f);
