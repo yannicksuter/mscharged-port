@@ -71,3 +71,4 @@
 0075-multisampled-pe-aperture.patch
 0076-mingw-system-info-libraries.patch
 0077-diagnostic-lighting-switches.patch
+0078-gx-shaders-strict-math.patch
