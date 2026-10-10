@@ -55,8 +55,34 @@ function(mscharged_apply_macos_original_warning_policy)
         # policy, allow integers stored in pointer-typed contexts; pointer-to-
         # integer truncation remains diagnosed.
         set_property(SOURCE ${original_sources} APPEND PROPERTY COMPILE_OPTIONS
-            "$<$<COMPILE_LANGUAGE:CXX>:-Wno-switch;-Wno-writable-strings;-Wno-return-type-c-linkage;-Wno-int-to-pointer-cast;-Wno-int-to-void-pointer-cast>")
+            "$<$<COMPILE_LANGUAGE:CXX>:-Wno-switch;-Wno-writable-strings;-Wno-return-type-c-linkage;-Wno-int-to-pointer-cast;-Wno-int-to-void-pointer-cast>"
+            # The SDK's C sources: partial enum switches and four-character
+            # tags ('FR', 'UD') like the GNU policy's -Wno-multichar.
+            "$<$<COMPILE_LANGUAGE:C>:-Wno-switch;-Wno-multichar>")
     endif()
+
+    # Native adapters that include the game's headers inherit one partial
+    # switch from PlayerStats.h.
+    foreach(adapter IN ITEMS src/platform/save_data.cpp tests/diagnostics/original_sh_menu.cpp)
+        set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/${adapter}" "${adapter}"
+            APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-switch>")
+    endforeach()
+
+    # Retail idioms in single files, kept as written: null checks of this,
+    # an array tested as a pointer, an address compared with null, a u32
+    # compared with ULONG_MAX and NULL returned as bool.
+    set_property(SOURCE
+        "${MSCHARGED_PREPARED}/src/Game/Render/NetMesh.cpp"
+        "${MSCHARGED_PREPARED}/src/Game/AI/Powerups.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-tautological-undefined-compare>")
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/Game/FE/fePageControls.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-pointer-bool-conversion>")
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/NL/glx/GXScrollingCameraOverlayMaterialProgramRender.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-tautological-pointer-compare>")
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/RVL_SDK/hbm/nw4hbm/snd/snd_BasicSound.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-tautological-constant-out-of-range-compare>")
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/RVL_SDK/hbm/nw4hbm/snd/snd_SoundArchivePlayer.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-null-conversion>")
 
     # Keep the original argument order/conversion in this retail call.
     set_property(SOURCE "${MSCHARGED_PREPARED}/src/Game/AI/SpaceSearch.cpp"
