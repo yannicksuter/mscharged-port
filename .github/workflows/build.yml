@@ -25,15 +25,22 @@ jobs:
         include:
           - platform: linux-x86_64
             runner: ubuntu-26.04
+            jobs: 4
           - platform: macos-arm64
             runner: macos-15
+            jobs: 3
     defaults:
       run:
         shell: bash
     env:
-      CMAKE_BUILD_PARALLEL_LEVEL: 2
-      CARGO_BUILD_JOBS: 2
+      # One job per runner core; ccache keeps unchanged objects between runs.
+      CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.jobs }}
+      CARGO_BUILD_JOBS: ${{ matrix.jobs }}
       CARGO_TERM_COLOR: always
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: 'true'
+      CCACHE_MAXSIZE: 3G
     steps:
       - uses: actions/checkout@v6
         with:
@@ -49,7 +56,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-15 cmake ninja-build make tcl pkg-config \
+          sudo apt-get install -y g++-15 cmake ninja-build make tcl pkg-config ccache \
             libasound2-dev libpulse-dev libx11-dev libxext-dev libxrandr-dev \
             libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev libx11-xcb-dev \
             libwayland-dev libxkbcommon-dev wayland-protocols libdecor-0-dev \
@@ -64,7 +71,7 @@ jobs:
           # image keeps the deployment target at macOS 15.
           sudo xcode-select -s /Applications/Xcode_26.3.app
           clang++ --version
-          brew install cmake ninja tcl-tk
+          brew install cmake ninja tcl-tk ccache
           echo "$(brew --prefix tcl-tk)/bin" >> "$GITHUB_PATH"
           echo 'CC=clang' >> "$GITHUB_ENV"
           echo 'CXX=clang++' >> "$GITHUB_ENV"
@@ -75,13 +82,27 @@ jobs:
           cargo --version
       - name: Prepare pinned dependencies
         run: python tools/setup_dependencies.py
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.platform }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.platform }}-
       - name: Configure original runtime
         run: >-
           cmake --preset release
           -DBUILD_TESTING=OFF
           -DMSCHARGED_FORMAT_PREPARED_SOURCES=OFF
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      # Only the packaged targets.
       - name: Build original runtime
-        run: cmake --build --preset release
+        run: >-
+          cmake --build --preset release --target
+          mscharged mscharged_original_frontend_module mscharged_original_main_credits_module
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache --show-stats || true
       - name: Check executable
         run: |
           ./build/release/mscharged --version | tee build/release/ci-version.txt
@@ -124,6 +145,10 @@ jobs:
       CARGO_BUILD_JOBS: 4
       CARGO_TERM_COLOR: always
       LLVM_MINGW: llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: 'true'
+      CCACHE_MAXSIZE: 3G
     steps:
       - uses: actions/checkout@v6
         with:
@@ -136,7 +161,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build make tcl pkg-config xz-utils
+          sudo apt-get install -y cmake ninja-build make tcl pkg-config xz-utils ccache
       - name: Install pinned LLVM-MinGW
         run: |
           mkdir -p build/toolchain
@@ -153,6 +178,12 @@ jobs:
           cargo --version
       - name: Prepare pinned dependencies
         run: python tools/setup_dependencies.py
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-windows-x86_64-${{ github.sha }}
+          restore-keys: ccache-windows-x86_64-
       - name: Configure original runtime
         run: >-
           cmake --preset release -B build/windows
@@ -160,11 +191,16 @@ jobs:
           -DLLVM_MINGW_ROOT="$PWD/build/toolchain/$LLVM_MINGW"
           -DBUILD_TESTING=OFF
           -DMSCHARGED_FORMAT_PREPARED_SOURCES=OFF
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       # Only the packaged targets: some Linux-only diagnostics are not portable.
       - name: Build original runtime
         run: >-
           cmake --build build/windows --target
           mscharged mscharged_original_frontend_module mscharged_original_main_credits_module
+      - name: Compiler cache statistics
+        if: always()
+        run: ccache --show-stats || true
       - name: Check executable
         run: |
           test -f build/windows/mscharged.exe
