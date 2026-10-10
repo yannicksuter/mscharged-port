@@ -33,7 +33,7 @@ the reconstructed source, unchanged.
 
 ## Picture and sound
 
-- Vulkan on Linux and Metal on macOS.
+- Vulkan on Linux and Windows, Metal on macOS.
 - Window or fullscreen on any monitor, freely sized, 4:3 or 16:9.
 - Picture styles: **sharp** (default), clean or soft (the console's TV look),
   and optional **4x antialiasing**.
@@ -55,4 +55,3 @@ unsaved changes.
   decompilation first; until then they would show glitches.
 - **Online play.** Nintendo Wi-Fi Connection has shut down. The port behaves
   like a Wii without internet; online modes are not available.
-- **Windows.** Builds for Windows are in progress.

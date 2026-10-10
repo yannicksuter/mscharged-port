@@ -1,7 +1,7 @@
 # Mario Strikers Charged — Native Port
 
 [![Build stable](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml/badge.svg?branch=stable)](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable)
-[![Development version: 0.0.1-dev](https://img.shields.io/badge/version-0.0.1--dev-blue)](CMakeLists.txt)
+[![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-blue)](CMakeLists.txt)
 
 Play **Mario Strikers Charged** natively on your PC. The port compiles the
 fully reconstructed game source of
@@ -33,19 +33,38 @@ Highlights:
 
 See the full **[feature list](docs/FEATURES.md)**.
 
-| Platform | State |
-| --- | --- |
-| Linux x86_64 | Tested |
-| macOS Apple Silicon | Builds; testing in progress |
-| Windows | In progress |
+### Builds
+
+All three platforms are built and packaged by the
+[**Build binaries**](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml)
+workflow (badge above: latest `stable` build).
+
+| Platform | Build | Package | State |
+| --- | --- | --- | --- |
+| Linux x86_64 | Ubuntu 26.04, GCC 15, Vulkan | `.tar.gz` | Tested, playable |
+| Windows x86_64 | Cross-compiled with LLVM-MinGW, Vulkan | `.zip` | Playable; tested on Windows |
+| macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; known issue below |
+
+Known issues:
+
+- **macOS:** during matches the 3D field and stadium are rendered noticeably
+  darker than on the other systems. Menus, the HUD and replays look right.
+- macOS needs **Input Monitoring** permission for controllers
+  ([details](docs/BUILDING_MACOS.md#controllers)).
 
 ## Download
 
 Builds of the reviewed `stable` branch are attached to each successful
 [**Build binaries** run](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
-under *Artifacts* (Linux x86_64 and macOS Apple Silicon). Extract the archive,
-keep its files together and start `mscharged`; the launcher guides you through
-the rest. See [GitHub builds](docs/BUILDING_GITHUB.md) for details.
+under *Artifacts* (Linux x86_64, Windows x86_64 and macOS Apple Silicon).
+Extract the archive, keep its files together and start `mscharged`
+(`mscharged.exe` on Windows); the launcher guides you through the rest.
+
+The builds are not signed. On **Windows**, SmartScreen may warn on first start:
+choose *More info → Run anyway*. On **macOS**, allow the app once under
+*System Settings → Privacy & Security*, or run
+`xattr -dr com.apple.quarantine <extracted folder>`. See
+[GitHub builds](docs/BUILDING_GITHUB.md) for details.
 
 ## Game data
 
