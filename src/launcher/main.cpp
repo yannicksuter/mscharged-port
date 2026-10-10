@@ -1503,8 +1503,8 @@ private:
         {
             ImGui::TableSetupColumn("player", ImGuiTableColumnFlags_WidthFixed, Dp(110));
             ImGui::TableSetupColumn("device", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("actions", ImGuiTableColumnFlags_WidthFixed, Dp(84));
             ImGui::TableSetupColumn("battery", ImGuiTableColumnFlags_WidthFixed, Dp(84));
-            ImGui::TableSetupColumn("calibration", ImGuiTableColumnFlags_WidthFixed, Dp(84));
             for (int n = 0; n < 4; ++n)
             {
                 ImGui::PushID(n);
@@ -1553,11 +1553,11 @@ private:
                     ImGui::EndCombo();
                 }
                 ImGui::EndDisabled();
-                ImGui::TableSetColumnIndex(2);
                 const int slot = shown.rfind("remote", 0) == 0 ? shown.back() - '1' : -1;
                 const auto* remote = slot >= 0 && bar ? connected(slot) : nullptr;
-                if (remote) BatteryIcon(remote->battery);
                 ImGui::TableSetColumnIndex(3);
+                if (remote) BatteryIcon(remote->battery);
+                ImGui::TableSetColumnIndex(2);
                 if (shown.rfind("gamepad", 0) == 0)
                 {
                     SecondaryButton("##layout", "", Dp(36, 30), true, Icon::Info);
