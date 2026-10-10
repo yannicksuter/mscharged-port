@@ -159,6 +159,31 @@ void FixedPlayersCycle() {
     WPADShutdown();
     mscharged::platform::SetNativeWpadReservedChannels(0);
 }
+// [keyboard] bindings replace the default keys of an action.
+void CustomKeysCycle() {
+    mscharged::platform::ConfigureWpadSDL({0,3,false,false});
+    mscharged::platform::DesktopWpadSettings settings{};
+    settings.keyboard = true;
+    settings.keys[mscharged::KeyActionA] = mscharged::platform::ParseKeyBinding("F1");
+    settings.keys[mscharged::KeyActionB] = mscharged::platform::ParseKeyBinding("Return | P");
+    Check(settings.keys[mscharged::KeyActionB][1] == SDL_SCANCODE_UNKNOWN, "The screenshot key was bound to an action");
+    mscharged::platform::InitializeDesktopWpad(window, settings);
+    WPADInit();
+    Event(SDL_EVENT_WINDOW_FOCUS_GAINED);
+    WPADDeviceType type{};
+    Until([&] { return WPADProbe(0, &type) == WPAD_ERR_OK; }, "Keyboard remote did not connect");
+    Event(SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
+    Until([&] { return Report().button == WPAD_BUTTON_A; }, "F1 bound to A did not press A");
+    Event(SDL_EVENT_KEY_UP, SDL_SCANCODE_F1);
+    Until([&] { return Report().button == 0; }, "F1 release kept A");
+    Event(SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RETURN);
+    Until([&] { return Report().button == WPAD_BUTTON_B; }, "Return rebound to B did not press B");
+    Check(!(Report().button & WPAD_BUTTON_A), "Return still pressed A after rebinding");
+    Event(SDL_EVENT_KEY_UP, SDL_SCANCODE_RETURN);
+    Until([&] { return Report().button == 0; }, "Return release kept B");
+    mscharged::platform::ShutdownDesktopWpad();
+    WPADShutdown();
+}
 void Cycle(bool gamepads, bool physical) {
     connects = samples = 0;
     mscharged::platform::ConfigureWpadSDL({0,3,physical,gamepads});
@@ -331,10 +356,11 @@ int main() {
             Cycle(true,true);
             NunchukCycle();
             FixedPlayersCycle();
+            CustomKeysCycle();
         }
         SDL_DestroyWindow(window); window = nullptr;
         SDL_Quit();
-        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
+        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players, custom keys and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
         return 0;
     } catch (const std::exception& e) {
         try { mscharged::platform::ShutdownDesktopWpad(); } catch (...) {}

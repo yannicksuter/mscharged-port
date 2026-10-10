@@ -1,6 +1,7 @@
 #include "config.h"
 #include "platform/path.h"
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -30,7 +31,7 @@ std::string Trim(const std::string& value)
 
 Values Encode(const Settings& s)
 {
-    return {{"game.disc", s.disc}, {"game.language", s.language},
+    Values values{{"game.disc", s.disc}, {"game.language", s.language},
             {"display.width", std::to_string(s.width)}, {"display.height", std::to_string(s.height)},
             {"display.fullscreen", s.fullscreen ? "true" : "false"},
             {"display.vsync", s.vsync ? "true" : "false"},
@@ -53,6 +54,9 @@ Values Encode(const Settings& s)
             {"display.monitor", std::to_string(s.monitor)},
             {"advanced.graphics_validation", s.graphics_validation ? "true" : "false"},
             {"advanced.log_level", s.log_level}, {"launcher.ui_scale", s.ui_scale}};
+    for (std::size_t n = 0; n < KeyActionCount; ++n)
+        values.emplace(std::string("keyboard.") + kKeyActions[n].key, s.keys[n]);
+    return values;
 }
 
 Settings Decode(const Values& values)
@@ -121,6 +125,24 @@ Settings Decode(const Values& values)
                 throw std::runtime_error("Invalid configuration: " + key + " must be none or six numbers");
         }
         s.remote_calibration[n] = it->second;
+    }
+    // [keyboard]: one or two key names per action, separated by " | ".
+    for (std::size_t n = 0; n < KeyActionCount; ++n)
+    {
+        const auto key = std::string("keyboard.") + kKeyActions[n].key;
+        const auto it = values.find(key);
+        if (it == values.end()) continue;
+        std::size_t names = 0, start = 0;
+        bool valid = !it->second.empty();
+        while (valid && start <= it->second.size())
+        {
+            const auto bar = std::min(it->second.find('|', start), it->second.size());
+            valid = !Trim(it->second.substr(start, bar - start)).empty() && ++names <= 2;
+            start = bar + 1;
+        }
+        if (!valid)
+            throw std::runtime_error("Invalid configuration: " + key + " must be one or two key names separated by |");
+        s.keys[n] = it->second;
     }
     // Players fill in order from player 1, and each device plays once.
     if (s.players[0] == "off")

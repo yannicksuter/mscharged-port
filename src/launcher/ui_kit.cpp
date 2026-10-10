@@ -141,6 +141,13 @@ void DrawIcon(ImDrawList* draw, Icon icon, ImVec2 c, float s, ImU32 color)
     switch (icon)
     {
     case Icon::None: break;
+    case Icon::Back:
+    {
+        const ImVec2 arrow[] = {p(0.10f, -0.32f), p(-0.24f, 0.0f), p(0.10f, 0.32f)};
+        draw->AddPolyline(arrow, 3, color, 0, t * 1.3f);
+        draw->AddLine(p(-0.22f, 0.0f), p(0.38f, 0.0f), color, t * 1.3f);
+        break;
+    }
     case Icon::Target:
         draw->AddCircle(c, 0.30f * s, color, 0, t);
         draw->AddLine(p(0.0f, -0.50f), p(0.0f, -0.16f), color, t);
@@ -559,6 +566,27 @@ void KeyCap(const char* key)
     DrawLabel(draw, fonts.caption, {pos.x + (size.x - label.x) * 0.5f, pos.y + (size.y - label.y) * 0.5f},
              Col(color::text), key);
     ImGui::Dummy({size.x, size.y + Dp(2)});
+}
+
+bool KeyCapButton(const char* id, const char* key, bool waiting)
+{
+    const auto& fonts = CurrentFonts();
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const ImVec2 label = TextSize(fonts.caption, key);
+    const ImVec2 size{std::max(Dp(30), label.x + Dp(18)), Dp(28)};
+    const bool pressed = ImGui::InvisibleButton(id, {size.x, size.y + Dp(2)});
+    const float hover = Animate(ImGui::GetItemID(), ImGui::IsItemHovered(), 12.0f);
+    const float pulse = waiting ? 0.5f + 0.5f * std::sin(float(ImGui::GetTime()) * 6.0f) : 0.0f;
+    auto* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled({pos.x, pos.y + Dp(2)}, Add(pos, {size.x, size.y + Dp(2)}), Col(color::window), Dp(7));
+    draw->AddRectFilled(pos, Add(pos, size),
+                        Col(Mix(Mix(color::field, color::border, 0.5f + 0.3f * hover), color::accent_dark, pulse)), Dp(7));
+    draw->AddRect(pos, Add(pos, size), Col(waiting ? Mix(color::border, color::accent, 0.4f + 0.6f * pulse)
+                                                   : Mix(color::border, color::accent, 0.6f * hover)),
+                  Dp(7), 0, Dp(waiting ? 1.5f : 1.0f));
+    DrawLabel(draw, fonts.caption, {pos.x + (size.x - label.x) * 0.5f, pos.y + (size.y - label.y) * 0.5f},
+              Col(waiting ? color::accent : color::text), key);
+    return pressed;
 }
 
 void KeyCapArrow(int direction)

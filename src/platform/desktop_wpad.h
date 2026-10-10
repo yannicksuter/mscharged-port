@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/key_bindings.h"
+
 #include <cstdint>
 
 struct SDL_Window;
@@ -28,6 +30,8 @@ struct DesktopWpadSettings {
     // WPAD channel (player - 1) of the keyboard & mouse remote; -1 takes the
     // lowest free channel.
     int keyboard_channel = -1;
+    // Keys of each keyboard action ([keyboard] in mscharged.ini).
+    KeyBindings keys = DefaultKeyBindings();
 };
 
 // Native desktop buttons are carried by explicit SDL virtual core-Wii devices.

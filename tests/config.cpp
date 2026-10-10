@@ -86,6 +86,14 @@ int main()
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[controls]\nplayer2 = gamepad\n";
         Reject([&] { LoadConfig(path); });
+        // [keyboard]: one or two key names per action.
+        Require(Settings{}.keys[mscharged::KeyActionA] == "Return | Space", "Default keys");
+        std::ofstream(path) << "[keyboard]\na = F1\nb = Escape | Left Shift\n";
+        Require(LoadConfig(path).settings.keys[mscharged::KeyActionB] == "Escape | Left Shift", "Custom keys load");
+        std::ofstream(path) << "[keyboard]\na = F1 | F2 | F3\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[keyboard]\na = F1 |\n";
+        Reject([&] { LoadConfig(path); });
         // Pointer calibration: none or six numbers from the launcher.
         Require(Settings{}.remote_calibration[2] == "none", "Remotes start uncalibrated");
         std::ofstream(path) << "[controls]\nremote2_calibration = -0.0024 1e-05 1.68 0 -0.0026 1.58\n";

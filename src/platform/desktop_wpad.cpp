@@ -220,8 +220,13 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
             if (event->type == SDL_EVENT_KEY_DOWN && state.focused) {
                 state.keyboard_keys.try_emplace(event->key.which).first->second.set(scancode);
                 state.keys[scancode] = true;
-                if (!event->key.repeat && event->key.scancode == SDL_SCANCODE_E) ++state.shake_requests[RemoteShake];
-                if (!event->key.repeat && event->key.scancode == SDL_SCANCODE_Q) ++state.shake_requests[NunchukShake];
+                const auto bound = [&](std::size_t action) {
+                    for (const auto code : state.settings.keys[action])
+                        if (code != SDL_SCANCODE_UNKNOWN && code == event->key.scancode) return true;
+                    return false;
+                };
+                if (!event->key.repeat && bound(mscharged::KeyActionShakeRemote)) ++state.shake_requests[RemoteShake];
+                if (!event->key.repeat && bound(mscharged::KeyActionShakeNunchuk)) ++state.shake_requests[NunchukShake];
             } else {
                 auto source = state.keyboard_keys.find(event->key.which);
                 if (source != state.keyboard_keys.end()) {
@@ -283,25 +288,35 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
     // Workers latch raw device intent only. No game callbacks/managers run here.
     return true;
 }
-std::array<bool, 11> KeyboardButtons(const std::array<bool, SDL_SCANCODE_COUNT>& keys) {
-    return {keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_SPACE],
-        keys[SDL_SCANCODE_ESCAPE] || keys[SDL_SCANCODE_BACKSPACE],
-        keys[SDL_SCANCODE_Z], keys[SDL_SCANCODE_X], keys[SDL_SCANCODE_TAB],
-        keys[SDL_SCANCODE_MINUS], keys[SDL_SCANCODE_HOME],
-        keys[SDL_SCANCODE_UP], keys[SDL_SCANCODE_DOWN], keys[SDL_SCANCODE_LEFT], keys[SDL_SCANCODE_RIGHT]};
+// Whether any key of a keyboard action is held.
+bool Held(const std::array<bool, SDL_SCANCODE_COUNT>& keys, const mscharged::platform::KeyBindings& bindings,
+          std::size_t action) {
+    for (const auto code : bindings[action])
+        if (code != SDL_SCANCODE_UNKNOWN && keys[code]) return true;
+    return false;
 }
-mscharged::platform::NativeNunchukObservation KeyboardNunchuk(const std::array<bool, SDL_SCANCODE_COUNT>& keys) {
+std::array<bool, 11> KeyboardButtons(const std::array<bool, SDL_SCANCODE_COUNT>& keys,
+                                     const mscharged::platform::KeyBindings& bindings) {
+    // WPAD order: A, B, 1, 2, +, -, HOME, up, down, left, right.
+    std::array<bool, 11> buttons{};
+    for (std::size_t n = 0; n < buttons.size(); ++n) buttons[n] = Held(keys, bindings, mscharged::KeyActionA + n);
+    return buttons;
+}
+mscharged::platform::NativeNunchukObservation KeyboardNunchuk(const std::array<bool, SDL_SCANCODE_COUNT>& keys,
+                                                              const mscharged::platform::KeyBindings& bindings) {
     // Full deflection of a physical stick after WPAD centre calibration is
     // about 100 counts; diagonals stay on the same circular gate. Original
     // ClampWiiStick and KPAD apply their own dead zones and normalisation.
-    const int x = int(keys[SDL_SCANCODE_D]) - int(keys[SDL_SCANCODE_A]);
-    const int y = int(keys[SDL_SCANCODE_W]) - int(keys[SDL_SCANCODE_S]);
+    const int x = int(Held(keys, bindings, mscharged::KeyActionStickRight)) -
+                  int(Held(keys, bindings, mscharged::KeyActionStickLeft));
+    const int y = int(Held(keys, bindings, mscharged::KeyActionStickUp)) -
+                  int(Held(keys, bindings, mscharged::KeyActionStickDown));
     const int reach = x && y ? 71 : 100;
     mscharged::platform::NativeNunchukObservation result{};
     result.stick_x = static_cast<std::int8_t>(x * reach);
     result.stick_y = static_cast<std::int8_t>(y * reach);
-    result.c = keys[SDL_SCANCODE_C];
-    result.z = keys[SDL_SCANCODE_V];
+    result.c = Held(keys, bindings, mscharged::KeyActionC);
+    result.z = Held(keys, bindings, mscharged::KeyActionZ);
     result.acc_z = mscharged::platform::kNativeNunchukGravity;
     return result;
 }
@@ -470,7 +485,7 @@ void ServiceDesktopWpad() {
     }
     const auto now = Clock::now();
     if (state.keyboard) {
-        auto buttons = focused && state.settings.keyboard ? KeyboardButtons(keys) : std::array<bool, 11>{};
+        auto buttons = focused && state.settings.keyboard ? KeyboardButtons(keys, state.settings.keys) : std::array<bool, 11>{};
         // Mouse buttons are independent raw Wii A/B signals; source KPAD and
         // game listeners retain all edge/lock/invalid-pointer decisions.
         if (focused && state.settings.mouse) {
@@ -489,7 +504,7 @@ void ServiceDesktopWpad() {
                 keyboard.shaking[shake] = true;
             } else if (!keyboard_input) keyboard.shaking[shake] = false;
         }
-        if (keyboard_input) nunchuk = KeyboardNunchuk(keys);
+        if (keyboard_input) nunchuk = KeyboardNunchuk(keys, state.settings.keys);
         Report(keyboard, buttons, now, state.settings.mouse ? &observation : nullptr, &nunchuk);
     }
     for (auto& pad : state.pads) if (pad) {

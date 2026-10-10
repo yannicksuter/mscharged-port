@@ -53,6 +53,29 @@ rumble = true
 # Where the sensor bar or DolphinBar sits: bottom or top of the screen.
 sensor_bar = bottom
 
+[keyboard]
+# Keys of the keyboard & mouse Wii Remote: one or two SDL key names per
+# action, separated by |. Change them on the launcher's Controls page.
+a = Return | Space
+b = Escape | Backspace
+one = Z
+two = X
+plus = Tab
+minus = -
+home = Home
+up = Up
+down = Down
+left = Left
+right = Right
+stick_up = W
+stick_left = A
+stick_down = S
+stick_right = D
+c = C
+z = V
+shake_remote = E
+shake_nunchuk = Q
+
 [advanced]
 # Backend graphics debug layers (slower; useful for bug reports). WebGPU
 # validation and robust buffer access stay enabled in both modes.

@@ -14,6 +14,7 @@
 #include "platform/disc.h"
 #include "platform/app_icon.h"
 #include "platform/path.h"
+#include "platform/key_bindings.h"
 #include "platform/wiimote_hid.h"
 #ifdef MSCHARGED_HAS_GAME_STARTUP
 #include "runtime/startup.h"
@@ -260,6 +261,8 @@ public:
                     RefreshDisplays();
                 if (event.type == SDL_EVENT_DROP_FILE && event.drop.data)
                     SelectDisc(event.drop.data);
+                if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && capture_action_ >= 0)
+                    CaptureKey(event.key.scancode);
             }
             PollResults();
             // Moving between displays or changing the interface size rebuilds
@@ -626,6 +629,7 @@ private:
 
     void DrawMain(ImVec2 origin, ImVec2 size, bool& quit)
     {
+        if (page_ != PageControls && keyboard_view_) CloseKeyboardView();
         const float bar = Dp(74);
         const ImVec2 content{size.x, size.y - bar};
         ImGui::SetCursorPos(origin);
@@ -1491,6 +1495,11 @@ private:
                 const auto* remote = slot >= 0 ? connected(slot) : nullptr;
                 if (remote) BatteryIcon(remote->battery);
                 ImGui::TableSetColumnIndex(3);
+                if (shown == "keyboard")
+                {
+                    if (SecondaryButton("##keys", "", Dp(36, 30), true, Icon::Sliders)) OpenKeyboardView();
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Keyboard & mouse keys");
+                }
                 if (remote)
                 {
                     const bool calibrated = draft_.remote_calibration[slot] != "none";
@@ -1529,42 +1538,173 @@ private:
         EndCard();
     }
 
+    // Controls: the Players view, or the keyboard & mouse keys view that slides
+    // in from a player row and saves when it goes back.
     void ControlsPage()
     {
-        PageHeader("Controls", "Play with keyboard and mouse, or a Wii Remote with Nunchuk (experimental). Keep the game window focused.");
-        PlayersCard();
-        BeginCard("##keys", "Keyboard & mouse",
-                  "Keys press Wii Remote and Nunchuk buttons or shake them; the mouse is the pointer.", Icon::Keyboard);
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));
-        if (ImGui::BeginTable("##key_table", 2))
+        const float t = Animate(ImGui::GetID("##keyboard_slide"), keyboard_view_, 14.0f);
+        const float shift = keyboard_view_ ? (1.0f - t) * Dp(120) : -t * Dp(120);
+        if (std::fabs(shift) > 0.5f) ImGui::Indent(shift);
+        if (keyboard_view_) KeyboardView();
+        else ControlsMain();
+        if (std::fabs(shift) > 0.5f) ImGui::Unindent(shift);
+    }
+
+    void OpenKeyboardView()
+    {
+        keyboard_view_ = true;
+        capture_action_ = capture_slot_ = -1;
+    }
+
+    void CloseKeyboardView()
+    {
+        keyboard_view_ = false;
+        capture_action_ = capture_slot_ = -1;
+        if (dirty_ && config_ok_) Save();
+    }
+
+    platform::KeyBindings DraftBindings() const { return platform::ParseKeyBindings(draft_.keys); }
+
+    // A key pressed while a keycap waits: it takes that slot, moving it from
+    // another action unless it is that action's only key.
+    void CaptureKey(SDL_Scancode code)
+    {
+        const int action = capture_action_, slot = capture_slot_;
+        capture_action_ = capture_slot_ = -1;
+        if (action < 0) return;
+        const std::string name = SDL_GetScancodeName(code);
+        if (code == platform::kScreenshotKey)
         {
-            ImGui::TableSetupColumn("button", ImGuiTableColumnFlags_WidthFixed, Dp(190));
-            ImGui::TableSetupColumn("keys", ImGuiTableColumnFlags_WidthStretch);
-            KeyRow("A", {"Enter", "Space"}, "or left click", "Confirm, select");
-            KeyRow("B", {"Esc", "Backspace"}, "or right click", "Back");
-            KeyRow("Pointer", {"Mouse"}, nullptr, "Point at menu items");
-            ImGui::TableNextRow(ImGuiTableRowFlags_None, Dp(40));
-            ImGui::TableSetColumnIndex(0);
-            TextColored(CurrentFonts().label, color::text, "D-pad");
-            ImGui::TableSetColumnIndex(1);
-            for (int direction = 0; direction < 4; ++direction)
+            Notice(name + " takes screenshots and cannot be assigned.", NoticeKind::Warning);
+            return;
+        }
+        auto bindings = DraftBindings();
+        auto& mine = bindings[action];
+        if (mine[0] == code || mine[1] == code) return;
+        int moved = -1;
+        for (std::size_t other = 0; other < KeyActionCount; ++other)
+        {
+            if (int(other) == action) continue;
+            auto& binding = bindings[other];
+            for (int k = 0; k < 2; ++k)
             {
-                if (direction) ImGui::SameLine(0, Dp(6));
-                KeyCapArrow(direction);
+                if (binding[k] != code) continue;
+                if (binding[1 - k] == SDL_SCANCODE_UNKNOWN)
+                {
+                    Notice(name + " is the only key of " + kKeyActions[other].label
+                               + ". Give that action another key first.", NoticeKind::Warning);
+                    return;
+                }
+                binding = {binding[1 - k], SDL_SCANCODE_UNKNOWN};
+                moved = int(other);
             }
-            KeyRow("1  /  2", {"Z", "X"});
-            KeyRow("+ (Plus)", {"Tab"});
-            KeyRow("\xE2\x88\x92 (Minus)", {"-"});
-            KeyRow("HOME", {"Home"});
-            KeyRow("Nunchuk stick", {"W", "A", "S", "D"});
-            KeyRow("C  /  Z", {"C", "V"}, nullptr, "Nunchuk buttons");
-            KeyRow("Shake Remote", {"E"}, nullptr, "Hit an opponent");
-            KeyRow("Shake Nunchuk", {"Q"}, nullptr, "Switch items");
+        }
+        mine[slot] = code;
+        if (mine[0] == SDL_SCANCODE_UNKNOWN) mine = {mine[1], SDL_SCANCODE_UNKNOWN};
+        draft_.keys[action] = platform::FormatKeyBinding(mine);
+        if (moved >= 0) draft_.keys[moved] = platform::FormatKeyBinding(bindings[moved]);
+        dirty_ = true;
+        Notice(name + " now presses " + kKeyActions[action].label
+                   + (moved >= 0 ? std::string(" (moved from ") + kKeyActions[moved].label + ")" : std::string()) + ".",
+               NoticeKind::Info);
+    }
+
+    void KeyboardView()
+    {
+        if (SecondaryButton("##back", "Players", Dp(124, 36), true, Icon::Back)) { CloseKeyboardView(); return; }
+        ImGui::Dummy(Dp(0, 6));
+        PageHeader("Keyboard & mouse", "Click a key to change it; each action takes up to two keys. "
+                   "Changes are saved when you go back.");
+        const auto bindings = DraftBindings();
+        bool clicked = false;
+        const auto rows = [&](std::size_t first, std::size_t last) {
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));
+            if (ImGui::BeginTable("##keys", 2))
+            {
+                ImGui::TableSetupColumn("action", ImGuiTableColumnFlags_WidthFixed, Dp(220));
+                ImGui::TableSetupColumn("keys", ImGuiTableColumnFlags_WidthStretch);
+                for (std::size_t n = first; n < last; ++n)
+                {
+                    ImGui::PushID(int(n));
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, Dp(40));
+                    ImGui::TableSetColumnIndex(0);
+                    TextColored(CurrentFonts().label, color::text, kKeyActions[n].label);
+                    if (kKeyActions[n].note)
+                    {
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - Dp(6));
+                        TextColored(CurrentFonts().caption, color::muted, kKeyActions[n].note);
+                    }
+                    ImGui::TableSetColumnIndex(1);
+                    for (int slot = 0; slot < 2; ++slot)
+                    {
+                        const SDL_Scancode code = bindings[n][slot];
+                        if (slot == 1 && code == SDL_SCANCODE_UNKNOWN && bindings[n][0] == SDL_SCANCODE_UNKNOWN) break;
+                        const bool waiting = capture_action_ == int(n) && capture_slot_ == slot;
+                        const char* label = waiting ? "Press a key..." : code != SDL_SCANCODE_UNKNOWN
+                            ? SDL_GetScancodeName(code) : "+";
+                        if (slot) ImGui::SameLine(0, Dp(6));
+                        ImGui::PushID(slot);
+                        if (KeyCapButton("##key", label, waiting))
+                        {
+                            clicked = true;
+                            capture_action_ = waiting ? -1 : int(n);
+                            capture_slot_ = waiting ? -1 : slot;
+                        }
+                        if (ImGui::IsItemHovered() && !waiting)
+                            ImGui::SetTooltip(code != SDL_SCANCODE_UNKNOWN ? "Click, then press the new key"
+                                                                           : "Add a second key");
+                        ImGui::PopID();
+                    }
+                    if (bindings[n][1] != SDL_SCANCODE_UNKNOWN)
+                    {
+                        ImGui::SameLine(0, Dp(6));
+                        if (SecondaryButton("##remove", "", Dp(30, 30), true, Icon::Error))
+                        {
+                            draft_.keys[n] = platform::FormatKeyBinding({bindings[n][0], SDL_SCANCODE_UNKNOWN});
+                            dirty_ = true;
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove the second key");
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+            ImGui::PopStyleVar();
+        };
+        BeginCard("##remote_keys", "Wii Remote", "Buttons of the keyboard's Wii Remote.", Icon::Keyboard);
+        rows(KeyActionA, KeyActionStickUp);
+        EndCard();
+        BeginCard("##nunchuk_keys", "Nunchuk & motion", "The Nunchuk stick and buttons, and the shakes.", Icon::Gamepad);
+        rows(KeyActionStickUp, KeyActionCount);
+        EndCard();
+        BeginCard("##mouse_keys", "Mouse & more", nullptr, Icon::Mouse);
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));
+        if (ImGui::BeginTable("##fixed_keys", 2))
+        {
+            ImGui::TableSetupColumn("action", ImGuiTableColumnFlags_WidthFixed, Dp(220));
+            ImGui::TableSetupColumn("keys", ImGuiTableColumnFlags_WidthStretch);
+            KeyRow("Pointer", {"Mouse"}, "left click is A, right click is B", "Point at menu items");
             KeyRow("Screenshot", {"P"}, nullptr, "Saved in the screenshots folder");
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
+        if (SecondaryButton("##reset_keys", "Reset to defaults", Dp(180, 36), draft_.keys != Settings::DefaultKeys(),
+                            Icon::Refresh))
+        {
+            draft_.keys = Settings::DefaultKeys();
+            capture_action_ = capture_slot_ = -1;
+            dirty_ = true;
+        }
         EndCard();
+        // A click anywhere else stops waiting for a key.
+        if (capture_action_ >= 0 && !clicked && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            capture_action_ = capture_slot_ = -1;
+    }
+
+    void ControlsMain()
+    {
+        PageHeader("Controls", "Play with keyboard and mouse, or a Wii Remote with Nunchuk (experimental). Keep the game window focused.");
+        PlayersCard();
 
         BeginCard("##controller", "Controller test", "Other controllers are not used by the game yet. You can check one here.", Icon::Gamepad);
         if (!gamepad_)
@@ -1777,6 +1917,9 @@ private:
         Uint64 lost_since_ns = 0;
     } calibration_;
     platform::WiimoteHidLive live_;
+    // Controls: keyboard & mouse keys view, and the keycap waiting for a key.
+    bool keyboard_view_ = false;
+    int capture_action_ = -1, capture_slot_ = -1;
     bool wii_known_ = false;
     Uint64 wii_next_probe_ns_ = 0;
     float header_width_ = 1920;

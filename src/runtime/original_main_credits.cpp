@@ -468,7 +468,8 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         mscharged::platform::InitializeNativeHardwareInput(host.window,
             {static_cast<std::uint8_t>(launch.settings.sensor_bar=="top"?1:0),3,true,launch.settings.rumble},
             mscharged::platform::GetNativeSTMInput(),
-            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true}, players);
+            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true,-1,
+             mscharged::platform::ParseKeyBindings(launch.settings.keys)}, players);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)
             mscharged::diagnostic::InitializeOriginalGameAudioHardware(

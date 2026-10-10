@@ -1,5 +1,7 @@
 #pragma once
 
+#include "bootstrap/key_actions.h"
+
 #include <array>
 #include <filesystem>
 #include <string>
@@ -33,6 +35,14 @@ struct Settings
     // controls.remote1-4_calibration: pointer calibration of the Wii Remote
     // in that DolphinBar slot (six numbers from the launcher) or none.
     std::array<std::string, 4> remote_calibration{"none", "none", "none", "none"};
+    // [keyboard]: keys of each keyboard & mouse action ("Return | Space").
+    std::array<std::string, KeyActionCount> keys = DefaultKeys();
+    static std::array<std::string, KeyActionCount> DefaultKeys()
+    {
+        std::array<std::string, KeyActionCount> keys;
+        for (std::size_t n = 0; n < KeyActionCount; ++n) keys[n] = kKeyActions[n].defaults;
+        return keys;
+    }
     int deadzone = 15;
     bool rumble = true;
     std::string sensor_bar = "bottom"; // controls.sensor_bar: bottom | top (sensor bar / DolphinBar position)
