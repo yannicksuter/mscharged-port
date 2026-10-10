@@ -1924,6 +1924,20 @@ private:
             SDL_OpenURL("https://github.com/yannicksuter/mscharged-decomp");
         EndCard();
 
+        BeginCard("##thanks", "Special thanks", nullptr, Icon::Check);
+        TextWrappedColored(CurrentFonts().body, color::text,
+            "To the contributors of the decompilation, who helped bring it over the last miles:");
+        ImGui::Dummy({0, Dp(2)});
+        {
+            const char* contributors[] = {"Jasu14", "vZylev", "GoldenPalazzo", "neemyako"};
+            for (int i = 0; i < 4; ++i)
+            {
+                if (i) ImGui::SameLine(0, Dp(8));
+                Chip(contributors[i], color::accent);
+            }
+        }
+        EndCard();
+
         BeginCard("##licenses", "Credits & licenses", nullptr, Icon::Check);
         TextWrappedColored(CurrentFonts().caption, color::muted,
             "Original port code, tools and documentation: CC0 1.0. Header artwork: SteamGridDB hero 8926 by Jiquita. "
