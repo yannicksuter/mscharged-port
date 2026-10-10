@@ -11,6 +11,7 @@
 #include "launcher/ui_kit.h"
 #include "launcher/ui_metrics.h"
 #include "mscharged/build_version.h"
+#include "platform/parse_float.h"
 #include "platform/disc.h"
 #include "platform/app_icon.h"
 #include "platform/path.h"
@@ -2220,7 +2221,7 @@ int main(int argc, char** argv)
             else if (arg == "--pip-expand")
             {
                 float seconds = 0;
-                const auto parsed = std::from_chars(value.data(), value.data() + value.size(), seconds);
+                const auto parsed = FromCharsFloat(value.data(), value.data() + value.size(), seconds);
                 if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()
                     || !std::isfinite(seconds) || seconds <= 0 || seconds > 60)
                 { std::cerr << "PIP expansion must be between 0 and 60 seconds (exclusive of zero).\n"; return 2; }
