@@ -173,6 +173,8 @@ function(mscharged_add_nod)
     set(CORROSION_BUILD_TESTS OFF)
     set(NOD_ENABLE_INSTALL OFF)
     add_subdirectory("${MSCHARGED_NOD_PREPARED}" "${CMAKE_CURRENT_BINARY_DIR}/extern/nod")
+    include(cmake/MacOSLinkLibraries.cmake)
+    mscharged_remove_macos_implicit_system_library(nod-static)
 endfunction()
 mscharged_add_nod()
 add_dependencies(_cargo-build_nod verify_prepared)
@@ -313,7 +315,8 @@ endif()
 
 message(STATUS "Configured development tools (launcher: ${MSCHARGED_BUILD_LAUNCHER}, experimental startup: ${MSCHARGED_BUILD_GAME_STARTUP}, independent GX check: ${MSCHARGED_BUILD_GX_CHECK}, static asset preview: ${MSCHARGED_BUILD_SCENE_PREVIEW}); playable game remains pending")
 
-# Last: GCC-only suppressions for console idioms in the original headers, added
-# to the project targets defined above (third-party subdirectories untouched).
+# Last: platform-specific diagnostics for console idioms, after every original
+# source consumer is defined (third-party subdirectories untouched).
 include(cmake/OriginalSourceWarnings.cmake)
 mscharged_apply_gnu_original_warning_policy()
+mscharged_apply_macos_original_warning_policy()
