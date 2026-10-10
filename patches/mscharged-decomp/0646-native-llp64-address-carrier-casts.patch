@@ -7,9 +7,9 @@ The game stores addresses and pointer-sized contexts in unsigned long: hashes
 and timer keys of Variant/Fuzzy/Desire code, world drawable IDs, emission
 owner keys, resource markers, the reset clock parameter and scene callback
 contexts. These are 64-bit on Linux and macOS. On 64-bit Windows (LLP64) they
-are 32-bit, and the direct casts do not compile. mscharged.exe is linked
-without large-address awareness, so the whole process stays below 2 GB and
-the carriers remain lossless; natively each flagged cast goes through
+are 32-bit, and the direct casts do not compile. The Windows build keeps all
+game memory (arenas, game DLLs) below 2 GB, so the carriers remain lossless;
+natively each flagged cast goes through
 __UINTPTR_TYPE__ (no change on LP64). Variant's LP64 assertion is replaced by
 that guarantee on Windows. Console spellings remain behind MSCHARGED_NATIVE.
 
@@ -96,8 +96,8 @@ index 374769b..f7b1910 100644
  #if defined(MSCHARGED_NATIVE)
  #include "platform/variant_numeric_abi.h"
 +#if defined(_WIN32)
-+// 64-bit Windows is LLP64; mscharged.exe is linked without large-address
-+// awareness, so every address stays below 2 GB and fits these carriers.
++// 64-bit Windows is LLP64; the Windows build keeps game memory below 2 GB
++// (Aurora arenas, game DLL bases), so these addresses fit the carriers.
 +#else
  static_assert(sizeof(unsigned long) == sizeof(void*), "Variant pointer hashes require the current LP64 carrier");
  #endif

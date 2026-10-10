@@ -367,13 +367,15 @@ function(mscharged_link_original_main_credits target)
     elseif(WIN32)
         # Host services for the game DLLs: mscharged.exe exports its symbols and
         # its import library is what the modules link against.
-        # Not large-address-aware: Windows keeps the whole process below 2 GB,
-        # so the game's 32-bit unsigned long address carriers stay lossless on
-        # LLP64 (they are 64-bit on Linux and macOS).
+        # The game keeps addresses in 32-bit unsigned long carriers on LLP64
+        # (64-bit on Linux and macOS). Game memory stays below 2 GB: the Wii
+        # arenas are placed low (Aurora 0079), the game DLLs use low image bases
+        # and allocations go bottom-up without high-entropy ASLR. The process
+        # stays large-address-aware for drivers and Vulkan layers.
         # No --gc-sections: host services that only the game DLLs call would be
         # discarded before --export-all-symbols could offer them.
         target_link_options(${target} PRIVATE -Wl,--export-all-symbols
-            -Wl,-Xlink=-largeaddressaware:no -Wl,-Xlink=-highentropyva:no
+            -Wl,-Xlink=-highentropyva:no
             -Wl,--image-base,0x400000
             # The modules carry the original zlib; the host's zlib-ng internals
             # must not be offered to them.
