@@ -120,15 +120,7 @@ enum class NoticeKind { Info, Success, Warning, Error };
 
 // Region branches follow original Game/main.cpp; the native runtime currently
 // supports the USA release only.
-const char* RegionName(const std::string& id)
-{
-    if (id.size() == 6 && id[3] == 'E') return "USA";
-    if (id.size() == 6 && id[3] == 'P') return "Europe";
-    if (id.size() == 6 && id[3] == 'J') return "Japan";
-    return "Unknown region";
-}
-
-bool SupportedRelease(const DiscInfo& info) { return info.game_id == "R4QE01" && info.revision == 1; }
+const char* RegionName(const std::string& id) { return DiscRegionName(id); }
 
 std::string FileUrl(const fs::path& path)
 {
@@ -474,7 +466,11 @@ private:
         {
             auto result = future_.get();
             pending_ = false;
-            if (result.selection == DiscSelection()) check_ = std::move(result);
+            if (result.selection == DiscSelection())
+            {
+                check_ = std::move(result);
+                region_prompt_ = check_.info && !SupportedRelease(*check_.info);
+            }
         }
     }
 
@@ -542,7 +538,7 @@ private:
         if (!check_.info || check_.selection != DiscSelection())
             return check_.error.empty() ? "Check your disc on the Game page." : check_.error;
         if (!SupportedRelease(*check_.info))
-            return "This build runs the USA release of Mario Strikers Charged (R4QE01, revision 1).";
+            return "Only the USA version of Mario Strikers Charged (R4QE01, revision 1) is supported for now.";
         const auto settings = EffectiveLaunch().settings;
         if (settings.aspect != "auto" && settings.aspect != "4:3" && settings.aspect != "16:9")
             return "Choose Automatic, 4:3 or 16:9 as the aspect ratio on the Display page.";
@@ -607,6 +603,7 @@ private:
         DrawMain({sidebar, 0}, {size.x - sidebar, size.y}, quit);
         DrawClosePrompt(quit);
         DrawPlayPrompt(quit);
+        DrawRegionPrompt();
         ImGui::End();
     }
 
@@ -936,6 +933,48 @@ private:
         if (text.x > limit && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", notice_.c_str());
     }
 
+    // Why a readable Charged disc cannot play yet.
+    std::string UnsupportedDiscReason(const DiscInfo& info) const
+    {
+        if (info.game_id != "R4QE01")
+            return std::string("Your disc is the ") + RegionName(info.game_id) + " version (" + info.game_id + ").";
+        if (info.revision != 1)
+            return "Your disc is the USA version, but revision " + std::to_string(unsigned(info.revision))
+                + "; the port needs revision 1.";
+        return "Your disc's game program (main.dol) differs from the original USA release, e.g. a modified image.";
+    }
+
+    // Shown once after a check finds a readable but unsupported disc.
+    void DrawRegionPrompt()
+    {
+        if (region_prompt_)
+        {
+            ImGui::OpenPopup("Unsupported version");
+            region_prompt_ = false;
+        }
+        const auto& fonts = CurrentFonts();
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, {0.5f, 0.5f});
+        ImGui::SetNextWindowSize({Dp(520), 0});
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Dp(28, 24));
+        if (ImGui::BeginPopupModal("Unsupported version", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            TextColored(fonts.heading, color::text, "Only the USA version is supported for now");
+            ImGui::Dummy({0, Dp(4)});
+            if (check_.info) TextWrappedColored(fonts.body, color::muted, UnsupportedDiscReason(*check_.info).c_str());
+            ImGui::Dummy({0, Dp(4)});
+            TextWrappedColored(fonts.body, color::text,
+                "The port currently runs Mario Strikers Charged for the USA (R4QE01, revision 1). The European, "
+                "Japanese and Korean versions need their own decompilation work and should follow soon.");
+            ImGui::Dummy({0, Dp(10)});
+            if (PrimaryButton("region_ok", "OK", Dp(120, 42), true) || ImGui::IsKeyPressed(ImGuiKey_Escape)
+                || ImGui::IsKeyPressed(ImGuiKey_Enter))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar();
+    }
+
     void DrawPlayPrompt(bool& quit)
     {
         if (play_prompt_)
@@ -1094,7 +1133,7 @@ private:
                 + "  -  " + info.format + "  -  " + std::to_string(info.file_count) + " files");
             line(fonts.caption, Dp(60), supported ? color::accent : color::warning,
                  supported ? "Supported release. Ready to play."
-                           : "Readable, but this build runs the USA release (R4QE01 revision 1) only.");
+                           : "Not supported yet: only the USA release (R4QE01, revision 1) runs for now.");
         }
         else if (!check_.error.empty())
         {
@@ -2073,6 +2112,7 @@ private:
     int page_ = PagePlay;
     bool close_requested_ = false;
     bool pending_ = false;
+    bool region_prompt_ = false;
     DiscCheck check_;
     std::future<DiscCheck> future_;
     std::vector<std::string> displays_;
