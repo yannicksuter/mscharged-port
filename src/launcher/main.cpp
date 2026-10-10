@@ -178,6 +178,7 @@ public:
         if (ImGui::GetCurrentContext()) ImGui::DestroyContext();
         if (gamepad_) SDL_CloseGamepad(gamepad_);
         if (header_) SDL_DestroyTexture(header_);
+        if (aurora_logo_) SDL_DestroyTexture(aurora_logo_);
         if (renderer_) SDL_DestroyRenderer(renderer_);
         if (window_) SDL_DestroyWindow(window_);
         SDL_Quit();
@@ -218,6 +219,15 @@ public:
         header_ = SDL_CreateTextureFromSurface(renderer_, surface.get());
         Require(header_ != nullptr, "Cannot create header texture");
         SDL_SetTextureScaleMode(header_, SDL_SCALEMODE_LINEAR);
+        // Aurora's logo (from its pinned source) is optional decoration.
+        if (auto logo = std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)>(
+                SDL_LoadPNG(PathUtf8(resources / "aurora.png").c_str()), SDL_DestroySurface))
+        {
+            aurora_logo_width_ = float(logo->w);
+            aurora_logo_height_ = float(logo->h);
+            aurora_logo_ = SDL_CreateTextureFromSurface(renderer_, logo.get());
+            if (aurora_logo_) SDL_SetTextureScaleMode(aurora_logo_, SDL_SCALEMODE_LINEAR);
+        }
         font_path_ = PathUtf8(resources / "Roboto-Medium.ttf");
         if (!fs::exists(resources / "Roboto-Medium.ttf"))
             throw std::runtime_error("Missing launcher font; rebuild to restore resources");
@@ -1962,8 +1972,24 @@ private:
         TextWrappedColored(CurrentFonts().caption, color::muted,
             "You need your own copy of the game. Unofficial project, not affiliated with Nintendo or Next Level Games.");
         ImGui::Dummy({0, Dp(4)});
-        if (SecondaryButton("decomp_link", "Decompilation project", Dp(230, 40), true, Icon::Link))
+        if (SecondaryButton("decomp_link", "Decompilation project", Dp(230, 40), true, Icon::GitHub))
             SDL_OpenURL("https://github.com/yannicksuter/mscharged-decomp");
+        EndCard();
+
+        BeginCard("##aurora", "Powered by Aurora", nullptr, Icon::Display);
+        if (aurora_logo_)
+        {
+            const float width = Dp(180);
+            ImGui::Image(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(aurora_logo_)),
+                         {width, width * aurora_logo_height_ / aurora_logo_width_});
+            ImGui::Dummy({0, Dp(4)});
+        }
+        TextWrappedColored(CurrentFonts().body, color::text,
+            "Aurora by Luke Street provides the GameCube/Wii platform layer the game runs on: GX graphics on "
+            "modern GPUs, plus windowing, input and system services.");
+        ImGui::Dummy({0, Dp(4)});
+        if (SecondaryButton("aurora_link", "Aurora on GitHub", Dp(230, 40), true, Icon::GitHub))
+            SDL_OpenURL("https://github.com/encounter/aurora");
         EndCard();
 
         BeginCard("##thanks", "Special thanks", nullptr, Icon::Check);
@@ -2005,6 +2031,8 @@ private:
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
     SDL_Texture* header_ = nullptr;
+    SDL_Texture* aurora_logo_ = nullptr;
+    float aurora_logo_width_ = 1, aurora_logo_height_ = 1;
     SDL_Gamepad* gamepad_ = nullptr;
     std::vector<std::string> gamepad_names_;
     // Wii Remote / DolphinBar detection for the Controls page (non-blocking).

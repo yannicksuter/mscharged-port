@@ -141,6 +141,17 @@ void DrawIcon(ImDrawList* draw, Icon icon, ImVec2 c, float s, ImU32 color)
     switch (icon)
     {
     case Icon::None: break;
+    case Icon::GitHub:
+    {
+        // Simplified GitHub mark: the Octocat's head, ears, neck and tail in a ring.
+        draw->AddCircle(c, 0.46f * s, color, 0, t);
+        draw->AddEllipseFilled(p(0.0f, -0.03f), ImVec2{0.22f * s, 0.18f * s}, color);
+        draw->AddTriangleFilled(p(-0.21f, -0.09f), p(-0.19f, -0.32f), p(-0.06f, -0.19f), color);
+        draw->AddTriangleFilled(p(0.21f, -0.09f), p(0.19f, -0.32f), p(0.06f, -0.19f), color);
+        draw->AddRectFilled(p(-0.08f, 0.10f), p(0.08f, 0.44f), color);
+        draw->AddBezierQuadratic(p(-0.08f, 0.27f), p(-0.27f, 0.30f), p(-0.29f, 0.12f), color, t);
+        break;
+    }
     case Icon::Back:
     {
         const ImVec2 arrow[] = {p(0.10f, -0.32f), p(-0.24f, 0.0f), p(0.10f, 0.32f)};
