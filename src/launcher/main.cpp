@@ -716,8 +716,6 @@ private:
             ImGui::SameLine(0, gap);
             SummaryCard("##language_card", "Language & audio", Icon::Audio, width, PageAudio, LanguageSummary());
         }
-        draw->AddText(fonts.caption, FontSize(fonts.caption), {origin.x + pad, origin.y + size.y - footer},
-                      Col(color::dim), "Work in progress: the original menus run; full matches are not playable yet.");
     }
 
     void DrawPlayStatus(const std::string& blocker)
