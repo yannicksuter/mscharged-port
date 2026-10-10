@@ -495,6 +495,10 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         if(frontend)
             axModuleMemory=std::make_unique<mscharged::platform::NativeAXModuleMemory>(modulePath);
         auto* module=mscharged::platform::LoadNativeModule(modulePath);
+        // MSCHARGED_DEBUG_LAYERS_OFF (frontend module only): diagnostic layer switches.
+        if(auto* layers=reinterpret_cast<void(*)()>(mscharged::platform::FindNativeModuleSymbol(
+               module,"charged_apply_debug_layer_toggles")))
+            layers();
         if(axModuleMemory)axModuleMemory->ConfirmLoaded(module);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)

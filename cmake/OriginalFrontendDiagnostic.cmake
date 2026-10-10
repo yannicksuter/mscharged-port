@@ -113,6 +113,8 @@ function(mscharged_add_original_frontend_diagnostic)
     mscharged_select_original_frontend_fe_models(mscharged_original_frontend_module)
     # Last selection: copies the module's final settings for the original CreditScene.
     mscharged_select_original_frontend_credits(mscharged_original_frontend_module)
+    # MSCHARGED_DEBUG_LAYERS_OFF: switch the game's own rendering layers off.
+    target_sources(mscharged_original_frontend_module PRIVATE src/platform/debug_layer_toggles.cpp)
     # dynamic_lookup defers unfinished methods, but missing game vtable/VTT
     # data must be detected before the owner tries to load this module.
     set(_vtable_check "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_original_module_vtables.py")
