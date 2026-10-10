@@ -74,3 +74,4 @@
 0078-gx-shaders-strict-math.patch
 0079-windows-low-wii-arenas.patch
 0080-diagnostic-fog-switches.patch
+0081-diagnostic-inline-fifo.patch
