@@ -15,6 +15,42 @@ the original game runs unchanged, modern systems provide the rest.
 > European and Japanese discs need their own complete decompilation before they
 > can run glitch free.
 
+## Download and play
+
+You don't need to build anything: ready-made builds for **Windows, Linux and
+macOS** are available.
+
+1. Open the latest successful
+   [**Build binaries** run of `stable`](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
+   and download the package for your system under **Artifacts** (GitHub
+   requires you to be signed in to download artifacts):
+
+   | System | Artifact |
+   | --- | --- |
+   | Windows 10/11, 64-bit | `mscharged-windows-x86_64-…` |
+   | Linux, x86_64 | `mscharged-linux-x86_64-…` |
+   | macOS, Apple Silicon (M1 or newer) | `mscharged-macos-arm64-…` |
+
+2. Unpack it. The download is a `.zip` holding the package (`.zip` on Windows,
+   `.tar.gz` on Linux and macOS); unpack that too, into a folder of your choice.
+   Keep all its files together.
+3. Start **`mscharged.exe`** (Windows) or **`mscharged`** (Linux, macOS).
+4. In the launcher, choose your own **USA disc image** (ISO or RVZ, see
+   [game data](#game-data)) and press **Play**.
+
+The builds are not signed, so the system asks once on the first start:
+
+- **Windows:** if SmartScreen warns, choose *More info → Run anyway*.
+- **macOS:** allow the app under *System Settings → Privacy & Security*, or run
+  `xattr -dr com.apple.quarantine <unpacked folder>`. Controllers also need
+  the **Input Monitoring** permission
+  ([details](docs/BUILDING_MACOS.md#controllers)).
+- **Linux:** a current distribution (the package is built on Ubuntu 26.04)
+  and a Vulkan driver (Mesa or your GPU vendor's driver) are needed.
+
+Settings and saves are kept beside the program, so the folder can live anywhere
+you like. See [GitHub builds](docs/BUILDING_GITHUB.md) for details.
+
 ## Status
 
 **Every offline feature of the original game works**: all modes, up to four
@@ -44,23 +80,6 @@ workflow (badge above: latest `stable` build).
 | Linux x86_64 | Ubuntu 26.04, GCC 15, Vulkan | `.tar.gz` | Tested, playable |
 | Windows x86_64 | Cross-compiled with LLVM-MinGW, Vulkan | `.zip` | Playable; tested on Windows |
 | macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; tested on Apple Silicon |
-
-On macOS, controllers need the **Input Monitoring** permission
-([details](docs/BUILDING_MACOS.md#controllers)).
-
-## Download
-
-Builds of the reviewed `stable` branch are attached to each successful
-[**Build binaries** run](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
-under *Artifacts* (Linux x86_64, Windows x86_64 and macOS Apple Silicon).
-Extract the archive, keep its files together and start `mscharged`
-(`mscharged.exe` on Windows); the launcher guides you through the rest.
-
-The builds are not signed. On **Windows**, SmartScreen may warn on first start:
-choose *More info → Run anyway*. On **macOS**, allow the app once under
-*System Settings → Privacy & Security*, or run
-`xattr -dr com.apple.quarantine <extracted folder>`. See
-[GitHub builds](docs/BUILDING_GITHUB.md) for details.
 
 ## Game data
 
