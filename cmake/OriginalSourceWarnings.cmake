@@ -70,4 +70,13 @@ function(mscharged_apply_macos_original_warning_policy)
         "${MSCHARGED_PREPARED}/src/Game/Render/BirdoEgg.cpp"
         "${MSCHARGED_PREPARED}/src/Game/Render/KoopaShellObject.cpp"
         APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-uninitialized>")
+
+    # These assignments copy/read the next wide character and test its value.
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/MSL/wstring.c"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-parentheses>")
+    # Preserve the original member-function guard and volatile retrace counter.
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/NL/glx/glxTexture.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-tautological-undefined-compare>")
+    set_property(SOURCE "${MSCHARGED_PREPARED}/src/NL/glx/glxSwap.cpp"
+        APPEND PROPERTY COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-volatile>")
 endfunction()
