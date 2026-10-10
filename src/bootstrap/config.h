@@ -53,6 +53,7 @@ struct Settings
     int monitor = 0;                  // display.monitor: 0 = default display, N = Nth connected display
     bool graphics_validation = false; // advanced.graphics_validation: backend graphics debug layers (off: fastest)
     std::string log_level = "info";   // advanced.log_level: error | warning | info | debug
+    bool verbose_console = false;     // advanced.verbose_console: development traces and game debug output
     std::string ui_scale = "auto";    // launcher.ui_scale: auto or a percentage (75 to 200)
 };
 

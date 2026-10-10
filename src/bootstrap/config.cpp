@@ -54,7 +54,9 @@ Values Encode(const Settings& s)
             {"display.show_fps", s.show_fps ? "true" : "false"},
             {"display.monitor", std::to_string(s.monitor)},
             {"advanced.graphics_validation", s.graphics_validation ? "true" : "false"},
-            {"advanced.log_level", s.log_level}, {"launcher.ui_scale", s.ui_scale}};
+            {"advanced.log_level", s.log_level},
+            {"advanced.verbose_console", s.verbose_console ? "true" : "false"},
+            {"launcher.ui_scale", s.ui_scale}};
     for (std::size_t n = 0; n < KeyActionCount; ++n)
         values.emplace(std::string("keyboard.") + kKeyActions[n].key, s.keys[n]);
     return values;
@@ -167,6 +169,7 @@ Settings Decode(const Values& values)
     number("display.monitor", s.monitor, 0, 15);
     boolean("advanced.graphics_validation", s.graphics_validation);
     choice("advanced.log_level", s.log_level, {"error", "warning", "info", "debug"});
+    boolean("advanced.verbose_console", s.verbose_console);
     choice("launcher.ui_scale", s.ui_scale, {"auto", "75", "100", "125", "150", "175", "200"});
     return s;
 }

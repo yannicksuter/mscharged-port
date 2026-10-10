@@ -85,8 +85,11 @@ shake_nunchuk = Q
 # Backend graphics debug layers (slower; turn on for bug reports). WebGPU
 # validation and robust buffer access stay enabled in both modes.
 # Log detail: error, warning, info or debug.
+# Verbose console: also print development traces and the game's own debug
+# output (bug reports). Off keeps settings, devices, warnings and errors.
 graphics_validation = false
 log_level = info
+verbose_console = false
 
 [launcher]
 # Launcher interface size: auto, or a percentage from 75 to 200.

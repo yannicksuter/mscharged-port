@@ -1907,12 +1907,15 @@ private:
         BeginCard("##diagnostics", "Diagnostics", nullptr, Icon::Info);
         if (BeginRows("##diagnostic_rows"))
         {
-            Row("Log detail", "How much the game prints to its console log.");
+            Row("Log detail", "Which messages reach the console: errors, warnings, info or debug.");
             const char* values[] = {"error", "warning", "info", "debug"};
             int level = 2;
             for (int i = 0; i < 4; ++i) if (draft_.log_level == values[i]) level = i;
             if (Segmented("##log_level", &level, {"Errors", "Warnings", "Info", "Debug"}, ImGui::GetContentRegionAvail().x))
             { draft_.log_level = values[level]; dirty_ = true; }
+
+            Row("Verbose console", "Also prints development traces and the game's own debug output. Useful for bug reports.");
+            if (Toggle("##verbose_console", &draft_.verbose_console)) dirty_ = true;
 
             const std::string settings_path = PathUtf8(file_.path);
             Row("Settings file", settings_path.c_str());
