@@ -43,12 +43,10 @@ workflow (badge above: latest `stable` build).
 | --- | --- | --- | --- |
 | Linux x86_64 | Ubuntu 26.04, GCC 15, Vulkan | `.tar.gz` | Tested, playable |
 | Windows x86_64 | Cross-compiled with LLVM-MinGW, Vulkan | `.zip` | Playable; tested on Windows |
-| macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; known issue below |
+| macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; tested on Apple Silicon |
 
 Known issues:
 
-- **macOS:** during matches the 3D field and stadium are rendered noticeably
-  darker than on the other systems. Menus, the HUD and replays look right.
 - macOS needs **Input Monitoring** permission for controllers
   ([details](docs/BUILDING_MACOS.md#controllers)).
 

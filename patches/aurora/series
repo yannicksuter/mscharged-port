@@ -76,3 +76,4 @@
 0080-diagnostic-fog-switches.patch
 0081-diagnostic-inline-fifo.patch
 0082-diagnostic-draw-dump.patch
+0083-spot-attenuation-unset-direction.patch
