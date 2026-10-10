@@ -139,7 +139,9 @@ def cargo_packages(build, cache):
     if not target:
         raise PackageError("Missing configured Rust target for the locked nod dependency inventory.")
     cargo = cache.get("CORROSION_TOOLS_CARGO") or "cargo"
-    command = [cargo, "tree", "--package", "nod-ffi", "--locked", "--offline",
+    # --color never: CI sets CARGO_TERM_COLOR=always, which would put escape
+    # codes into the lines parsed below.
+    command = [cargo, "tree", "--color", "never", "--package", "nod-ffi", "--locked", "--offline",
                "--manifest-path", str(regular_file(build, "prepared/nod/source/nod-ffi/Cargo.toml")),
                "--no-default-features", "--target", target, "--prefix", "none",
                "--format", "{p}", "--edges", "normal,build"]
