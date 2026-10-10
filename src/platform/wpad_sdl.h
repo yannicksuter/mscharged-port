@@ -46,5 +46,10 @@ std::size_t WpadSDLConnectedChannels();
 // source: SDL reports physical Wii Remotes without IR data. nullptr withdraws
 // it. Call from the SDL owner; original DPD enable/disable still applies.
 void SetNativeWpadSharedPointer(const NativeDpdObservation* observation);
+// The desktop mouse alongside a controller (controls.mouse_pointer): on WPAD
+// channel `channel` its camera observation replaces the controller's while
+// `observation` is non-null, and the mouse buttons add A and B. -1 ends it.
+// Call from the SDL owner; original DPD enable/disable still applies.
+void SetNativeWpadMousePlayer(int channel, const NativeDpdObservation* observation, bool a, bool b);
 
 } // namespace mscharged::platform

@@ -232,6 +232,14 @@ void InitializeNativeHardwareInput(SDL_Window* window, WpadSDLSettings settings,
             reserved = 1u << players.keyboard;
         } else {
             desktop.keyboard = desktop.mouse = desktop.nunchuk = desktop.share_mouse_with_remotes = false;
+            // Only for a single player 1 on a controller.
+            int playing = 0;
+            for (const int channel : players.remotes) playing += channel >= 0;
+            for (const int channel : players.gamepads) playing += channel >= 0;
+            if (players.mouse_with_controller && playing == 1) {
+                desktop.mouse = true;
+                desktop.mouse_player_channel = 0;
+            }
         }
         for (const int channel : players.remotes)
             if (channel >= 0) reserved |= 1u << channel;

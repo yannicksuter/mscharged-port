@@ -90,6 +90,10 @@ struct Hardware {
     // with the mouse while its buttons, stick and motion stay its own.
     bool shared_pointer = false;
     mscharged::platform::NativeDpdObservation shared_pointer_observation{};
+    // The mouse alongside a controller player (SetNativeWpadMousePlayer).
+    int mouse_channel = -1;
+    bool mouse_pointer = false, mouse_a = false, mouse_b = false;
+    mscharged::platform::NativeDpdObservation mouse_observation{};
     // Player assignment of native providers: joysticks with a fixed channel,
     // and the channels kept free for them.
     std::vector<std::pair<SDL_JoystickID, int>> fixed_channels;
@@ -264,6 +268,15 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
         report.err = WPAD_ERR_OK;
         report.button = channel.buttons;
         CopyDpdObservation(channel, report);
+        if (int(&channel - state.channels.data()) == state.mouse_channel) {
+            if (state.mouse_a) report.button |= WPAD_BUTTON_A;
+            if (state.mouse_b) report.button |= WPAD_BUTTON_B;
+            if (state.mouse_pointer && channel.dpd_command != WPAD_DPD_DISABLE)
+                for (std::size_t n = 0; n < state.mouse_observation.size(); ++n) {
+                    const auto& object = state.mouse_observation[n];
+                    report.obj[n] = {object.x, object.y, object.size, object.trace_id};
+                }
+        }
         CopyNunchukObservation(channel, report);
         // Retail WPADiExcludeButton removes opposite right/down bits.
         if ((report.button & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) ==
@@ -385,6 +398,23 @@ NativeDpdSource AttachNativeWpadDpdSource(std::uint32_t joystick_id) {
     slot->source = {joystick_id, ++state.dpd_generation};
     state.dpd_owner = std::this_thread::get_id();
     return slot->source;
+}
+void SetNativeWpadMousePlayer(int channel, const NativeDpdObservation* observation, bool a, bool b) {
+    RequireOwner();
+    if (channel < -1 || channel >= WPAD_MAX_CONTROLLERS)
+        throw std::invalid_argument("Mouse player outside Wii hardware ports");
+    if (observation)
+        for (const auto& object : *observation)
+            if (object.size && (object.x < 0 || object.x >= WPAD_MAX_DPD_X ||
+                                object.y < 0 || object.y >= WPAD_MAX_DPD_Y))
+                throw std::invalid_argument("Mouse pointer observation exceeds its raw sensor domain");
+    auto& state = State();
+    std::lock_guard lock(state.reports);
+    state.mouse_channel = channel;
+    state.mouse_pointer = channel >= 0 && observation;
+    state.mouse_observation = state.mouse_pointer ? *observation : NativeDpdObservation{};
+    state.mouse_a = channel >= 0 && a;
+    state.mouse_b = channel >= 0 && b;
 }
 void SetNativeWpadSharedPointer(const NativeDpdObservation* observation) {
     RequireOwner();

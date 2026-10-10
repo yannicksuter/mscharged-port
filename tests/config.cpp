@@ -91,6 +91,9 @@ int main()
         Require(LoadConfig(path).settings.players[0] == "gamepad1", "Gamepad player loads");
         std::ofstream(path) << "[controls]\nplayer1 = gamepad1\nplayer2 = gamepad1\n";
         Reject([&] { LoadConfig(path); });
+        Require(Settings{}.mouse_pointer, "Mouse pointer default");
+        std::ofstream(path) << "[controls]\nmouse_pointer = false\n";
+        Require(!LoadConfig(path).settings.mouse_pointer, "Mouse pointer off loads");
         // [keyboard]: one or two key names per action.
         Require(Settings{}.keys[mscharged::KeyActionA] == "Return | Space", "Default keys");
         std::ofstream(path) << "[keyboard]\na = F1\nb = Escape | Left Shift\n";

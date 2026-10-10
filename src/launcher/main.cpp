@@ -1601,6 +1601,14 @@ private:
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
+        // Single player on a Wii Remote or gamepad only.
+        if (players[0] != "keyboard" && players[1] == "off" && BeginRows("##mouse_rows"))
+        {
+            Row("Mouse pointer", "The mouse also points for player 1: left click is A, right click is B. "
+                "The controller keeps working. Only when player 1 plays alone.");
+            if (Toggle("##mouse_pointer", &draft_.mouse_pointer)) dirty_ = true;
+            EndRows();
+        }
         if ((bar || draft_.sensor_bar != "bottom") && BeginRows("##sensor_rows"))
         {
             Row("Sensor bar", "Where your DolphinBar sits. The game aims the Wii Remote pointer from it.");

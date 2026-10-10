@@ -44,6 +44,9 @@ player1 = keyboard
 player2 = off
 player3 = off
 player4 = off
+# When player 1 is a Wii Remote or gamepad and plays alone, the mouse also
+# points for it (left click A, right click B); the controller keeps working.
+mouse_pointer = true
 # Pointer calibration of the Wii Remote in each DolphinBar slot, made on the
 # launcher's Controls page (none = uncalibrated).
 remote1_calibration = none

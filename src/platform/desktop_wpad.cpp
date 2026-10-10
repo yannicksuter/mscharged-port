@@ -73,6 +73,7 @@ struct State {
     bool mouse_known{}, mouse_inside{};
     float mouse_x{}, mouse_y{};
     Uint32 mouse_buttons{};
+    Clock::time_point mouse_used{};
     bool owns_background_hint{}, had_background_hint{};
     std::string background_hint;
 };
@@ -261,6 +262,7 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
                        event->motion.which != SDL_TOUCH_MOUSEID && event->motion.which != SDL_PEN_MOUSEID) {
                 state.mouse_x = event->motion.x;
                 state.mouse_y = event->motion.y;
+                state.mouse_used = Clock::now();
                 state.mouse_position_source = event->motion.which;
                 state.mouse_known = state.focused;
                 state.mouse_inside = state.focused;
@@ -279,6 +281,7 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
                     }
                 }
                 RebuildMouseButtons(state);
+                state.mouse_used = Clock::now();
                 state.mouse_x = event->button.x;
                 state.mouse_y = event->button.y;
                 state.mouse_position_source = event->button.which;
@@ -437,6 +440,9 @@ void InitializeDesktopWpad(SDL_Window* window, DesktopWpadSettings settings) {
         throw std::invalid_argument("The desktop Nunchuk requires the keyboard profile");
     if (settings.share_mouse_with_remotes && !settings.mouse)
         throw std::invalid_argument("Sharing the mouse camera requires the mouse profile");
+    if (settings.mouse_player_channel < -1 || settings.mouse_player_channel >= WPAD_MAX_CONTROLLERS ||
+        (settings.mouse_player_channel >= 0 && (!settings.mouse || settings.keyboard)))
+        throw std::invalid_argument("The mouse joins a controller player only without keyboard & mouse playing");
     if (settings.keyboard_channel < -1 || settings.keyboard_channel >= WPAD_MAX_CONTROLLERS)
         throw std::invalid_argument("Keyboard & mouse player outside Wii hardware ports");
     for (const int channel : settings.gamepad_channels)
@@ -473,7 +479,7 @@ void InitializeDesktopWpad(SDL_Window* window, DesktopWpadSettings settings) {
         throw std::runtime_error(SDL_GetError());
     }
     try {
-        if (settings.keyboard || settings.mouse) AttachKeyboard(state);
+        if (settings.keyboard || (settings.mouse && settings.mouse_player_channel < 0)) AttachKeyboard(state);
     }
     catch (...) {
         Retire(state.keyboard);
@@ -528,6 +534,7 @@ void ServiceDesktopWpad() {
     bool focused, mouse_known, mouse_inside;
     float mouse_x, mouse_y;
     Uint32 mouse_buttons;
+    Clock::time_point mouse_used;
     std::array<bool, SDL_SCANCODE_COUNT> keys;
     std::array<unsigned, ShakeCount> shake_requests;
     {
@@ -543,6 +550,7 @@ void ServiceDesktopWpad() {
         mouse_x = state.mouse_x;
         mouse_y = state.mouse_y;
         mouse_buttons = state.mouse_buttons;
+        mouse_used = state.mouse_used;
     }
     NativeDpdObservation observation{};
     if (state.settings.mouse) {
@@ -563,6 +571,15 @@ void ServiceDesktopWpad() {
         if (state.settings.share_mouse_with_remotes) SetNativeWpadSharedPointer(&observation);
     }
     const auto now = Clock::now();
+    if (state.settings.mouse_player_channel >= 0) {
+        // The mouse points while it is in use; otherwise the controller does.
+        const bool held = focused && (mouse_buttons & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK));
+        const bool active = held || (focused && mouse_used != Clock::time_point{} &&
+                                     now - mouse_used < std::chrono::seconds(3));
+        SetNativeWpadMousePlayer(state.settings.mouse_player_channel, active ? &observation : nullptr,
+                                 focused && (mouse_buttons & SDL_BUTTON_LMASK),
+                                 focused && (mouse_buttons & SDL_BUTTON_RMASK));
+    }
     if (state.keyboard) {
         auto buttons = focused && state.settings.keyboard ? KeyboardButtons(keys, state.settings.keys) : std::array<bool, 11>{};
         // Mouse buttons are independent raw Wii A/B signals; source KPAD and
@@ -609,6 +626,7 @@ void ShutdownDesktopWpad() {
     }
     SDL_RemoveEventWatch(Watch, nullptr);
     if (state.settings.share_mouse_with_remotes) SetNativeWpadSharedPointer(nullptr);
+    if (state.settings.mouse_player_channel >= 0) SetNativeWpadMousePlayer(-1, nullptr, false, false);
     Retire(state.keyboard);
     for (auto& pad : state.pads) Retire(pad);
     RestoreBackgroundHint();

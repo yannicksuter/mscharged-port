@@ -45,6 +45,8 @@ struct Settings
     }
     int deadzone = 15;
     bool rumble = true;
+    // The mouse also points for player 1 on a Wii Remote or gamepad playing alone.
+    bool mouse_pointer = true;
     std::string sensor_bar = "bottom"; // controls.sensor_bar: bottom | top (sensor bar / DolphinBar position)
     // Host presentation and diagnostics (never game behaviour).
     bool show_fps = true;             // display.show_fps: frame rate in the game window title

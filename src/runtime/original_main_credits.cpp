@@ -455,6 +455,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         mscharged::platform::NativePlayers players{};
         players.fixed = true;
         players.keyboard = -1;
+        players.mouse_with_controller = launch.settings.mouse_pointer;
         for (int player = 0; player < 4; ++player) {
             const auto& device = launch.settings.players[player];
             if (device == "keyboard") players.keyboard = player;

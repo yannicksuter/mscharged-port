@@ -40,6 +40,9 @@ struct NativePlayers {
     std::array<int, 4> remotes{-1, -1, -1, -1};
     // WPAD channel of the n-th connected standard gamepad, or -1.
     std::array<int, 4> gamepads{-1, -1, -1, -1};
+    // controls.mouse_pointer: the mouse also points for player 1 when that
+    // player is a Wii Remote or gamepad and plays alone.
+    bool mouse_with_controller = false;
     // Pointer calibration of the Wii Remote in each DolphinBar slot.
     std::array<std::optional<WiimoteCalibration>, 4> calibrations{};
 };

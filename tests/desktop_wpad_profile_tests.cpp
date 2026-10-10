@@ -283,6 +283,52 @@ void GamepadPlayerCycle() {
     mscharged::platform::ShutdownDesktopWpad();
     WPADShutdown();
 }
+// controls.mouse_pointer: the mouse adds A/B (and its pointer) to a gamepad player 1.
+bool WholeWindow(void*, SDL_Window* target, mscharged::platform::DesktopDpdProjection* projection) {
+    int w = 0, h = 0;
+    SDL_GetWindowSize(target, &w, &h);
+    *projection = {1, 0.0f, 0.0f, float(w), float(h)};
+    return true;
+}
+void MouseButton(Uint8 button, bool down) {
+    SDL_Event e{};
+    e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+    e.button.windowID = SDL_GetWindowID(window);
+    e.button.which = 1;
+    e.button.button = button;
+    e.button.down = down;
+    e.button.x = 320; e.button.y = 224;
+    Check(SDL_PushEvent(&e), "Actual SDL event queue rejected mouse input");
+}
+void MousePlayerCycle() {
+    mscharged::platform::ConfigureWpadSDL({0,3,false,false});
+    mscharged::platform::DesktopWpadSettings settings{};
+    settings.gamepads = settings.gamepad_players = true;
+    settings.gamepad_channels = {0, -1, -1, -1};
+    settings.mouse = true;
+    settings.pointer_projection = WholeWindow;
+    settings.mouse_player_channel = 0;
+    GenericPad pad;
+    mscharged::platform::InitializeDesktopWpad(window, settings);
+    WPADInit();
+    for (int n = 0; n != 4; ++n) WPADSetConnectCallback(n, Connect);
+    Event(SDL_EVENT_WINDOW_FOCUS_GAINED);
+    WPADDeviceType type{};
+    Until([&] { return WPADProbe(0, &type) == WPAD_ERR_OK; }, "Gamepad did not connect as player 1");
+    Check(WPADProbe(1, &type) != WPAD_ERR_OK, "The mouse brought its own remote");
+    MouseButton(SDL_BUTTON_LEFT, true);
+    Until([&] { return Report().button == WPAD_BUTTON_A; }, "Left click did not press player 1's A");
+    MouseButton(SDL_BUTTON_LEFT, false);
+    MouseButton(SDL_BUTTON_RIGHT, true);
+    Until([&] { return Report().button == WPAD_BUTTON_B; }, "Right click did not press player 1's B");
+    MouseButton(SDL_BUTTON_RIGHT, false);
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_EAST, true);
+    Until([&] { return Report().button == WPAD_BUTTON_B; }, "The gamepad stopped working beside the mouse");
+    SDL_SetJoystickVirtualButton(pad.joystick, SDL_GAMEPAD_BUTTON_EAST, false);
+    Until([&] { return Report().button == 0; }, "Mouse or gamepad release kept a button");
+    mscharged::platform::ShutdownDesktopWpad();
+    WPADShutdown();
+}
 void NunchukCycle() {
     connects = samples = extension_count = 0;
     mscharged::platform::ConfigureWpadSDL({0,3,false,false});
@@ -403,9 +449,10 @@ int main() {
         }
         // With the generic pad above gone, this test's pad is gamepad 1.
         GamepadPlayerCycle();
+        MousePlayerCycle();
         SDL_DestroyWindow(window); window = nullptr;
         SDL_Quit();
-        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players, custom keys, gamepad players and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
+        std::printf("Raw keyboard-first WPAD profile: %u checks; selected keyboard, keyboard Nunchuk, fixed players, custom keys, gamepad players, mouse beside a controller and retained generic profile pass. No original FE lifecycle/game acceptance.\n", checks);
         return 0;
     } catch (const std::exception& e) {
         try { mscharged::platform::ShutdownDesktopWpad(); } catch (...) {}
