@@ -536,7 +536,13 @@ private:
     void Play(bool& quit)
     {
         if (!PlayBlocker().empty()) return;
-        if (dirty_ && !Save()) return; // Keep the user's choices for the next start.
+        // Unsaved changes: ask whether to start with or without them.
+        if (dirty_) { play_prompt_ = true; return; }
+        Start(quit);
+    }
+
+    void Start(bool& quit)
+    {
         frontend_launch_ = EffectiveLaunch();
         quit = true;
     }
@@ -580,6 +586,7 @@ private:
         DrawSidebar(sidebar, size.y);
         DrawMain({sidebar, 0}, {size.x - sidebar, size.y}, quit);
         DrawClosePrompt(quit);
+        DrawPlayPrompt(quit);
         ImGui::End();
     }
 
@@ -907,6 +914,43 @@ private:
         ImGui::SetCursorScreenPos({text_x, center - text.y * 0.5f});
         ImGui::InvisibleButton("##notice", {std::min(text.x, limit), text.y});
         if (text.x > limit && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", notice_.c_str());
+    }
+
+    void DrawPlayPrompt(bool& quit)
+    {
+        if (play_prompt_)
+        {
+            ImGui::OpenPopup("Start with changes?");
+            play_prompt_ = false;
+        }
+        const auto& fonts = CurrentFonts();
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, {0.5f, 0.5f});
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Dp(28, 24));
+        if (ImGui::BeginPopupModal("Start with changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize
+            | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove))
+        {
+            TextColored(fonts.heading, color::text, "Save your changes before playing?");
+            TextColored(fonts.body, color::muted, "Your settings have unsaved changes.");
+            ImGui::Dummy({0, Dp(8)});
+            if (PrimaryButton("save_play", "Save and play", Dp(170, 42), true, Icon::Play))
+            {
+                ImGui::CloseCurrentPopup();
+                if (Save() && PlayBlocker().empty()) Start(quit);
+            }
+            ImGui::SameLine(0, Dp(10));
+            if (SecondaryButton("discard_play", "Discard and play", Dp(170, 42)))
+            {
+                ImGui::CloseCurrentPopup();
+                // Back to the saved settings; start only if they can still play.
+                Reload();
+                if (config_ok_ && PlayBlocker().empty()) Start(quit);
+            }
+            ImGui::SameLine(0, Dp(10));
+            if (SecondaryButton("cancel_play", "Cancel", Dp(100, 42)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar();
     }
 
     void DrawClosePrompt(bool& quit)
@@ -1932,6 +1976,7 @@ private:
     Settings draft_;
     bool config_ok_ = false;
     bool dirty_ = false;
+    bool play_prompt_ = false;
     NoticeKind notice_kind_ = NoticeKind::Info;
     std::string notice_;
     int page_ = PagePlay;
