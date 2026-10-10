@@ -1,0 +1,40 @@
+Subject: Share original font page ordering and slot completion
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Extract original source page order and slot completion for checked native
+staged file ownership. Leave the Matching fontmanager.cpp translation unit
+unchanged. Native decode completion is distinct from original graphics-resource
+registration and manager readiness.
+
+diff --git a/include/Game/Font/FontLoadSteps.h b/include/Game/Font/FontLoadSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Font/FontLoadSteps.h
+@@ -0,0 +1,26 @@
++#ifndef GAME_FONT_FONT_LOAD_STEPS_H
++#define GAME_FONT_FONT_LOAD_STEPS_H
++#include "NL/nlFont.h"
++
++// Original FontDescriptionLoadComplete page ordering. Callback storage and
++// binary decoding remain explicit responsibilities of each owner.
++template<class Font, class Load>
++void FontLoadTextureOrder(const Font& font, Load load)
++{
++    for (unsigned long i = 0; i < font.m_PageCount; i++)
++    {
++        load(font.m_TextureHandles[i]);
++        if (font.m_TextureType == SplitFX)
++            load(font.m_EffectTextureHandles[i]);
++    }
++}
++template<class State>
++bool FontLoadSlotsComplete(const State* states, unsigned count)
++{
++    for (unsigned i = 0; i < count; i++)
++    {
++        if (!states[i].bComplete) return false;
++    }
++    return true;
++}
++#endif

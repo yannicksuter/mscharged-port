@@ -1,6 +1,11 @@
+#if defined(MSCHARGED_GAME_MODULE)
+#error "The original game module must compile the complete original NL/nlFile.cpp"
+#endif
+
 #include "NL/nlFile.h"
 #include "NL/nlFileGC.h"
 #include "NL/MemAlloc.h"
+#include "runtime/whole_file.h"
 #include "NL/nlMemory.h"
 #include <cstdint>
 #include <limits>
@@ -62,6 +67,8 @@ void Cancel(nlFile*, void*, unsigned int, nlFileAsyncParam context, ReadAsyncCal
     // a caller-supplied buffer remains the caller's responsibility throughout.
 }
 }
+
+bool mscharged::WholeFileLoadPending(unsigned handle) { return loads.find(handle) != loads.end(); }
 
 unsigned int nlLoadEntireFileAsync(const char* filename, LoadAsyncCallback callback,
     void* user, unsigned int alignment, eAllocType type, void* buffer,

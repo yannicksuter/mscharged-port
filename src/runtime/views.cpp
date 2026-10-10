@@ -6,6 +6,7 @@
 #include "NL/gl/glState.h"
 #include "NL/gl/glStruct.h"
 #include "NL/gl/glPlat.h"
+#include "NL/gl/glStartupStages.h"
 #include "NL/glx/glxTarget.h"
 #include "NL/glx/glxMatrix.h"
 #include "NL/platvmath.h"
@@ -18,6 +19,7 @@ namespace
 bool views_live = false, rendering = false;
 mscharged::OriginalViews* active_views = nullptr;
 void (*shutdown_layers)() = nullptr;
+void (*shutdown_frames)() = nullptr;
 PlatformViewport viewport{};
 void Packet(GLView* view, unsigned long flags, const glModelPacket* packet)
 {
@@ -39,6 +41,13 @@ PlatformViewport* glplatGetViewport() { return &viewport; }
 
 namespace mscharged
 {
+bool OriginalViewsReady() { return views_live; }
+void SetViewFrameShutdown(void (*shutdown)())
+{
+    if (shutdown && (!views_live || shutdown_frames))
+        throw std::logic_error("Invalid graphics frame ownership");
+    shutdown_frames = shutdown;
+}
 void SetViewLayerShutdown(void (*shutdown)())
 {
     if (shutdown && (!views_live || shutdown_layers))
@@ -54,8 +63,7 @@ OriginalViews::OriginalViews(unsigned width, unsigned height, void (*drain)())
     try
     {
         InitializeNativeTargets(width, height, drain);
-        gl_TargetStartup();
-        gl_ViewStartup();
+        gl_StartupViews();
         active_views = this;
         SetGraphicsViewShutdown([] { active_views->Release(); });
         views_live = live_ = true;
@@ -72,6 +80,7 @@ void OriginalViews::Release()
 {
     if (!live_) return;
     if (rendering) throw std::logic_error("Cannot shut down views during rendering");
+    if (shutdown_frames) shutdown_frames();
     if (shutdown_layers) shutdown_layers();
     gl_ViewShutdown(); // Release game-arena slot blocks before targets and graphics memory.
     gl_TargetShutdown();
@@ -87,14 +96,14 @@ void ViewMatrices::GetInverseViewMatrix(nlMatrix4& out) const
 }
 void ViewMatrices::GetViewProjectionMatrix(nlMatrix4& out) const { nlMultMatrices(out, view, projection); }
 
-void RenderOriginalViews(float time, const GameLighting& lighting)
+void DispatchOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position)
 {
     if (!views_live || rendering) throw std::logic_error("Invalid or nested GL view dispatch");
     rendering = true;
     glNativeSetViewDispatch(true);
     struct Finish
     {
-        ~Finish() { rendering = false; glNativeSetViewDispatch(false); gl_ViewReset(); }
+        ~Finish() { rendering = false; glNativeSetViewDispatch(false); }
     } finish;
     for (GLViewIterator iterator(&gRootView); !iterator.IsDone(); iterator.Next())
     {
@@ -113,12 +122,22 @@ void RenderOriginalViews(float time, const GameLighting& lighting)
         if (view->m_ClearColour || view->m_ClearDepth || view->m_Unknown32)
             pair.target->ClearBuffers(view->m_ClearColour, view->m_ClearDepth, view->m_Unknown32);
         if (!view->m_Visible) continue;
-        MaterialPreviewScope environment(*view->m_Interface->GetViewMatrix(), time, lighting);
+        const auto* matrices = dynamic_cast<const ViewMatrices*>(view->m_Interface);
+        const auto* material_camera = matrices && matrices->material_camera ? &*matrices->material_camera : camera_position;
+        MaterialPreviewScope environment(*view->m_Interface->GetViewMatrix(), time, lighting, material_camera);
         view->Iterate(Packet);
         if (view->m_Target == 8 || view->m_Target == 9 || view->m_Target == 10)
             pair.target->CopyToTexture(view->m_Target != 8, view->m_Target == 10);
         else if (view->m_Target != GLViewTarget_None)
             throw std::invalid_argument("Unsupported GL view target copy mode");
     }
+}
+void RenderOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position)
+{
+    // Standalone material diagnostics still own their own frame reset.
+    // Nested dispatch must reject before installing a reset guard.
+    if (!views_live || rendering) throw std::logic_error("Invalid or nested GL view dispatch");
+    struct Reset { ~Reset() { gl_ViewReset(); } } reset;
+    DispatchOriginalViews(time, lighting, camera_position);
 }
 }

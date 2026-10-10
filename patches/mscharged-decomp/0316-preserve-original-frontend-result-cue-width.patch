@@ -1,0 +1,24 @@
+From: mscharged native port
+Subject: [PATCH] Preserve the Wii32 frontend result-stream cue case on LP64
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+The original int cast becomes unsigned long modulo 32 bits on Wii.
+Convert that authored hash through unsigned int on the native target before
+the unsigned-long switch conversion. Keep the original console expression
+and every cue, selector, branch and state operation unchanged.
+
+diff --git a/src/Game/FE/feMusic.cpp b/src/Game/FE/feMusic.cpp
+--- a/src/Game/FE/feMusic.cpp
++++ b/src/Game/FE/feMusic.cpp
+@@ -30,7 +30,11 @@
+ {
+     switch (FEMusic::mCurrentMusicCue)
+     {
++#if defined(MSCHARGED_NATIVE)
++    case (unsigned int)0xAE597F5E:
++#else
+     case (int)0xAE597F5E:
++#endif
+     case 0x2341D569:
+     case 0x2447F290:
+     case 0x244A44AE:

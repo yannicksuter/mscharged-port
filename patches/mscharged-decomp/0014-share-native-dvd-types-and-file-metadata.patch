@@ -1,12 +1,13 @@
 Subject: Share Aurora DVD declarations with the original NL file layer
 
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
 Use the actual native DVD API and its field names while retaining the console
 header branch. Canonical fixed-width 64-bit types permit both SDK headers on
 LP64 hosts. State aliases name Aurora equivalents; they do not implement absent
 Wii services.
 
+diff --git a/libs/RVL_SDK/include/revolution/types.h b/libs/RVL_SDK/include/revolution/types.h
 --- a/libs/RVL_SDK/include/revolution/types.h
 +++ b/libs/RVL_SDK/include/revolution/types.h
 @@ -7,11 +7,11 @@
@@ -23,6 +24,7 @@ Wii services.
  
  typedef volatile u8 vu8;
  typedef volatile u16 vu16;
+diff --git a/libs/RVL_SDK/include/revolution/dvd/dvd.h b/libs/RVL_SDK/include/revolution/dvd/dvd.h
 --- a/libs/RVL_SDK/include/revolution/dvd/dvd.h
 +++ b/libs/RVL_SDK/include/revolution/dvd/dvd.h
 @@ -1,5 +1,14 @@
@@ -40,12 +42,13 @@ Wii services.
  #include <revolution/types.h>
  #ifdef __cplusplus
  extern "C" {
-@@ -121,4 +130,5 @@
+@@ -122,4 +131,5 @@
  #ifdef __cplusplus
  }
  #endif
 +#endif // MSCHARGED_NATIVE
  #endif
+diff --git a/src/NL/nlFileGC.cpp b/src/NL/nlFileGC.cpp
 --- a/src/NL/nlFileGC.cpp
 +++ b/src/NL/nlFileGC.cpp
 @@ -11,6 +11,15 @@

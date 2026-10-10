@@ -13,11 +13,18 @@ std::size_t ParameterSize(std::uint32_t program)
 {
     switch (program)
     {
+    case 0x09609a35: return 36; // MaskedDetailBlend
+    case 0xf2d57ac6: return 60; // ScrollingMaskedDetailBlend
+    case 0x845cad59: return 60; // ScrollingCameraOverlay
+    case 0x32bc21e8: return 48; // CameraScrolledOverlay
+    case 0x3eccd955: return 60; // ScrollingSpecular
+    case 0x112ab470: return 68; // SpecularDetailBlend
     case 0x386ecbdd: return 12; // ShadowVolume
     case 0x32475c7d: return 48; // MaskedSpecularFresnel
     case 0x2169db5c: return 36; // ScrollingDiffuse
-    case 0x21db4385: case 0xd3e572da: return 8;
-    default: throw std::runtime_error("Unsupported RLG material program in static preview");
+    case 0xee9d919d: return 24; // ConstantColour
+    case 0x21db4385: case 0xd3e572da: case 0x19065bf6: return 8;
+    default: throw UnsupportedResource("Unsupported RLG material program in static preview");
     }
 }
 bool PrimitiveCount(std::uint8_t kind, std::size_t size)
@@ -33,7 +40,7 @@ bool PrimitiveCount(std::uint8_t kind, std::size_t size)
     }
 }
 struct Budget { std::size_t vertices = 0, indices = 0; };
-void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<StaticModel>& result, Budget& budget, std::optional<std::uint32_t> selected, std::set<std::uint32_t>& ids)
+void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<StaticModel>& result, Budget& budget, std::optional<std::uint32_t> selected, std::set<std::uint32_t>& ids, ModelCoordinates coordinates, bool effects = false)
 {
     std::map<std::uint32_t, Bytes> chunks;
     unsigned count = 0;
@@ -63,7 +70,11 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
         const auto n = U32(models, m * 12 + 4);
         Require(n && next_packet <= packet_count && n <= packet_count - next_packet, "Invalid RLG model packet range");
         if (selected && *selected != model.id) { next_packet += n; continue; }
-        Require(chunks.size() == 7, "Selected RLG group contains unsupported skinning or vertex animation");
+        if (!effects) Require(chunks.size() == 7, "Selected RLG group contains unsupported skinning or vertex animation");
+        else for (const auto& [id,payload] : chunks)
+            Require(id == 0x1b016 || id == 0x1b007 || id == 0x1b006 || id == 0x1b005
+                || id == 0x1b004 || id == 0x1b002 || id == 0x1b003 || id == 0x8001b008 || id == 0x8001b200,
+                "Unsupported effects model chunk");
         for (std::size_t p = next_packet; p < next_packet + n; ++p)
         {
             const auto record = Slice(packets, p * 48, 48);
@@ -75,15 +86,114 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             const auto parameters = Slice(params, U32(record, 32), ParameterSize(material.program));
             const bool masked = material.program == 0x32475c7d, scrolling = material.program == 0x2169db5c;
             const bool shadow = material.program == 0x386ecbdd;
-            for (unsigned i = 0; i < (masked ? 3u : 1u); ++i)
+            const bool detail = material.program == 0x112ab470;
+            const bool scrolling_masked_detail = material.program == 0xf2d57ac6;
+            const bool masked_detail = material.program == 0x09609a35 || scrolling_masked_detail;
+            const bool scrolling_overlay = material.program == 0x845cad59;
+            const bool overlay = material.program == 0x32bc21e8 || scrolling_overlay;
+            const bool scrolling_specular = material.program == 0x3eccd955;
+            const bool constant_colour = material.program == 0xee9d919d;
+            if (constant_colour)
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.specular_colour[i] = F32(parameters, 8 + i * 4);
+                    Require(material.specular_colour[i] >= 0 && material.specular_colour[i] <= 1,
+                        "Invalid constant material colour");
+                }
+            for (unsigned i = 0; i < (detail ? 4u : (masked || overlay || masked_detail) ? 3u : scrolling_specular ? 2u : 1u); ++i)
             {
                 material.textures[i] = {U32(parameters, i * 8), parameters[i * 8 + 6]};
                 Require(!(material.textures[i].flags & ~3u) && !parameters[i * 8 + 7], "Unsupported RLG texture binding flags");
+            }
+            if (masked_detail)
+            {
+                const unsigned blend_offset = scrolling_masked_detail ? 48 : 24;
+                material.scalars[0] = F32(parameters, blend_offset);
+                Require(material.scalars[0] >= 0 && material.scalars[0] <= 1, "Invalid masked detail blend amount");
+                for (unsigned i = 0; i < 2; ++i)
+                {
+                    material.switches[i] = U32(parameters, blend_offset + 4 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
+                if (scrolling_masked_detail)
+                    for (unsigned texture = 0; texture < 3; ++texture)
+                        for (unsigned axis = 0; axis < 2; ++axis)
+                        {
+                            const float speed = F32(parameters, 24 + texture * 8 + axis * 4);
+                            Require(std::abs(speed) <= 1e4f, "Excessive masked detail scroll speed");
+                            material.scroll_speeds[texture][axis] = speed;
+                        }
             }
             if (shadow)
             {
                 material.switches[0] = U32(parameters, 8);
                 Require(material.switches[0] <= 1, "Invalid shadow material boolean");
+            }
+            if (overlay)
+            {
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.scalars[i] = F32(parameters, 24 + i * 4);
+                    Require(std::abs(material.scalars[i]) <= 1e4f, "Excessive camera overlay scalar");
+                    material.switches[i] = U32(parameters, scrolling_overlay && i == 2 ? 52 : 36 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
+                Require((material.scalars[0] == 0 || std::isfinite(1.f / material.scalars[0]))
+                    && material.scalars[2] >= 0 && material.scalars[2] <= 1, "Invalid camera overlay scale/amount");
+                if (scrolling_overlay)
+                {
+                    Require(material.scalars[0] != 0, "Scrolling camera overlay scale cannot be zero");
+                    material.switches[3] = U32(parameters, 56);
+                    Require(material.switches[3] <= 1, "Invalid material boolean");
+                    for (unsigned axis = 0; axis < 2; ++axis)
+                    {
+                        const float speed = F32(parameters, 44 + axis * 4);
+                        Require(std::abs(speed) <= 1e4f, "Excessive camera overlay scroll speed");
+                        material.scroll_speeds[0][axis] = speed;
+                    }
+                }
+            }
+            if (scrolling_specular)
+            {
+                const unsigned offsets[] = {16,20,40,44};
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.scalars[i] = F32(parameters, offsets[i]);
+                    Require(std::abs(material.scalars[i]) <= 1e4f, "Excessive scrolling specular scalar");
+                }
+                Require(material.scalars[0] >= 0 && material.scalars[0] <= 1 && material.scalars[1] >= 0,
+                    "Invalid scrolling specular level/exponent");
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.specular_colour[i] = F32(parameters, 24 + i * 4);
+                    Require(material.specular_colour[i] >= 0 && material.specular_colour[i] <= 1,
+                        "Invalid scrolling specular colour");
+                }
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.switches[i] = U32(parameters, 48 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
+            }
+            if (detail)
+            {
+                for (unsigned i = 0; i < 3; ++i)
+                {
+                    material.scalars[i] = F32(parameters, 32 + i * 4);
+                    Require(material.scalars[i] >= 0 && material.scalars[i] <= (i == 2 ? 1e4f : 1.f),
+                        "Invalid detail blend/specular scalar");
+                }
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    material.specular_colour[i] = F32(parameters, 44 + i * 4);
+                    Require(material.specular_colour[i] >= 0 && material.specular_colour[i] <= 1,
+                        "Invalid detail specular colour");
+                }
+                for (unsigned i = 0; i < 2; ++i)
+                {
+                    material.switches[i] = U32(parameters, 60 + i * 4);
+                    Require(material.switches[i] <= 1, "Invalid material boolean");
+                }
             }
             if (masked || scrolling)
             {
@@ -119,9 +229,12 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             Require(record[11] >= 2 && record[11] <= 16, "Invalid RLG stream count");
             // Material programs bind streams by ordinal; reject mismatched layouts.
             const std::vector<unsigned> layout = shadow ? std::vector<unsigned>{1,3,4}
-                : masked ? std::vector<unsigned>{1,2,4,4,4,3}
+                : detail ? std::vector<unsigned>{1,2,4,4,4,4,3}
+                : (masked || overlay || masked_detail) ? std::vector<unsigned>{1,2,4,4,4,3}
+                : scrolling_specular ? std::vector<unsigned>{1,2,4,4,3}
                 : scrolling ? std::vector<unsigned>{1,2,4,3}
-                : material.program == 0xd3e572da ? std::vector<unsigned>{1,4,3} : std::vector<unsigned>{1,4};
+                : material.program == 0xd3e572da || material.program == 0x19065bf6
+                    ? std::vector<unsigned>{1,4,3} : std::vector<unsigned>{1,4};
             Require(record[11] == layout.size(), "RLG stream count does not match the material");
             std::vector<Bytes> stream_bytes;
             std::vector<unsigned> strides;
@@ -130,7 +243,7 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
                 const auto stream = Slice(stream_data, i * 8, 8);
                 const auto stride = stream[5], id = stream[6];
                 const unsigned expected = id == 1 ? 12 : id == 2 ? 3
-                    : id == 4 && (material.program == 0x21db4385 || shadow) ? 8 : 4;
+                    : id == 4 && (material.program == 0x21db4385 || material.program == 0x19065bf6 || shadow) ? 8 : 4;
                 Require(id == layout[i] && stride == expected && !stream[7], "RLG stream layout does not match the material");
                 stream_bytes.push_back(Slice(vertices, U32(stream, 0), std::size_t(unique) * stride));
                 strides.push_back(stride);
@@ -140,6 +253,8 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
             std::array<float, 16> matrix;
             for (std::size_t i = 0; i < 16; ++i) matrix[i] = F32(matrices, std::size_t(matrix_index) * 64 + i * 4);
             Require(matrix[3] == 0 && matrix[7] == 0 && matrix[11] == 0 && matrix[15] == 1, "Nonaffine RLG matrix is unsupported");
+            if (coordinates == ModelCoordinates::Local)
+                matrix = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
             for (std::size_t i = 0; i < unique; ++i)
             {
                 const float x = F32(stream_bytes[0], i * 12), y = F32(stream_bytes[0], i * 12 + 4), z = F32(stream_bytes[0], i * 12 + 8);
@@ -156,10 +271,10 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
                     if (layout[stream] == 3) std::copy_n(bytes.begin() + i * 4, 4, v.colour.begin());
                     else if (layout[stream] == 4)
                     {
-                        auto& uv = coordinate == 0 ? v.uv : coordinate == 1 ? v.uv1 : v.uv2;
+                        auto& uv = coordinate == 0 ? v.uv : coordinate == 1 ? v.uv1 : coordinate == 2 ? v.uv2 : v.uv3;
                         for (unsigned axis = 0; axis < 2; ++axis)
                             uv[axis] = stride == 8 ? F32(bytes, i * 8 + axis * 4)
-                                : std::bit_cast<std::int16_t>(U16(bytes, i * 4 + axis * 2)) / 1024.0f;
+                                : std::bit_cast<std::int16_t>(U16(bytes, i * 4 + axis * 2)) / (constant_colour ? 4096.0f : 1024.0f);
                         ++coordinate;
                     }
                     else if (layout[stream] == 2)
@@ -195,7 +310,7 @@ void ReadGroup(Bytes file, std::size_t start, std::size_t end, std::vector<Stati
     Require(next_packet == packet_count, "Unreferenced RLG packets");
 }
 
-std::vector<StaticModel> ReadModels(Bytes data, std::size_t offset, std::size_t end, std::optional<std::uint32_t> selected)
+std::vector<StaticModel> ReadModels(Bytes data, std::size_t offset, std::size_t end, std::optional<std::uint32_t> selected, ModelCoordinates coordinates)
 {
     Require(data.size() <= MaximumAssetBytes, "RLG exceeds the static preview size limit");
     const auto root = ReadChunk(data, offset, end);
@@ -205,7 +320,7 @@ std::vector<StaticModel> ReadModels(Bytes data, std::size_t offset, std::size_t 
     std::vector<StaticModel> result;
     Budget budget;
     std::set<std::uint32_t> ids;
-    if (root.id == 0x8001b000) ReadGroup(data, root_start, root_end, result, budget, selected, ids);
+    if (root.id == 0x8001b000) ReadGroup(data, root_start, root_end, result, budget, selected, ids, coordinates);
     else if (root.id == 0x8001b100)
     {
         for (auto offset = root_start; offset < root_end;)
@@ -213,7 +328,7 @@ std::vector<StaticModel> ReadModels(Bytes data, std::size_t offset, std::size_t 
             const auto group = ReadChunk(data, offset, root_end);
             Require(group.id == 0x8001b000, "Unsupported RLG model collection member");
             const auto start = static_cast<std::size_t>(group.payload.data() - data.data());
-            ReadGroup(data, start, start + group.payload.size(), result, budget, selected, ids);
+            ReadGroup(data, start, start + group.payload.size(), result, budget, selected, ids, coordinates);
             Require(group.next <= root_end, "RLG group padding exceeds collection");
             offset = group.next;
         }
@@ -226,9 +341,84 @@ std::vector<StaticModel> ReadModels(Bytes data, std::size_t offset, std::size_t 
 } // namespace
 std::vector<StaticModel> ReadStaticModels(Bytes data, std::optional<std::uint32_t> selected)
 {
-    return ReadModels(data, 0, data.size(), selected);
+    return ReadModels(data, 0, data.size(), selected, ModelCoordinates::BakedPacket);
 }
-StaticWorldModel ReadStaticWorldModel(Bytes data, std::uint32_t selected)
+EffectsGeometry ReadEffectsGeometry(Bytes data)
+{
+    Require(data.size() <= MaximumAssetBytes, "Effects geometry exceeds its budget");
+    const auto root = ReadChunk(data, 0, data.size());
+    Require(root.id == 0x80000001 && root.next == data.size(), "Invalid effects geometry bundle");
+    const auto start = std::size_t(root.payload.data() - data.data()), end = start + root.payload.size();
+    EffectsGeometry result;
+    Budget budget;
+    std::size_t animated_vertices = 0;
+    std::set<std::uint32_t> ids;
+    for (auto at = start; at < end;)
+    {
+        const auto group = ReadChunk(data, at, end);
+        Require(group.id == 0x8001b000 && group.next <= end, "Unsupported effects geometry child");
+        const auto payload = std::size_t(group.payload.data() - data.data());
+        const auto previous = result.models.size(), group_end = payload + group.payload.size();
+        ReadGroup(data, payload, group_end, result.models, budget, {}, ids, ModelCoordinates::Local, true);
+        for(auto child=payload;child<group_end;)
+        {
+            const auto chunk=ReadChunk(data,child,group_end);
+            Require(chunk.next<=group_end,"Effects model child padding is invalid");
+            if(chunk.id==0x8001b008)
+            {
+                Require(result.models.size()==previous+1,"Effects skin metadata needs one associated model");
+                for(auto part=std::size_t(chunk.payload.data()-data.data()),stop=part+chunk.payload.size();part<stop;)
+                {
+                    const auto field=ReadChunk(data,part,stop);
+                    Require(field.next<=stop&&(field.id==0x1b00a||field.id==0x1b00b||field.id==0x1b00c||field.id==0x1b009),
+                        "Unknown effects skin metadata child");
+                    part=field.next;
+                }
+                result.skin_metadata.emplace(result.models.back().id,std::vector<std::uint8_t>(data.begin()+child,data.begin()+chunk.next));
+            }
+            if(chunk.id==0x8001b200)
+            {
+                for(auto part=std::size_t(chunk.payload.data()-data.data()),stop=part+chunk.payload.size();part<stop;)
+                {
+                    const auto field=ReadChunk(data,part,stop);const auto b=field.payload;
+                    Require(field.id==0x1b201&&field.next<=stop&&b.size()>=28,"Invalid effects vertex animation record");
+                    EffectsVertexAnimation animation{U32(b,0),U32(b,4),U32(b,8),U32(b,12),U32(b,16),{}, {}};
+                    Require(animation.frames&&animation.frames<=4096&&animation.vertices&&animation.vertices<=1024*1024,
+                        "Effects vertex animation dimensions exceed their budget");
+                    if(U32(b,20)!=1||U32(b,24)!=1||animation.stride!=12)
+                        throw UnsupportedResource("Effects vertex animation requires the position-only source profile");
+                    const std::uint64_t values=std::uint64_t(animation.frames)*animation.vertices;
+                    Require(values<=1024*1024&&28+values*12==b.size(),"Invalid effects vertex animation extent");
+                    Require(values <= 1024 * 1024 - animated_vertices, "Effects animation collection exceeds its budget");
+                    animated_vertices += values;
+                    const auto model=std::find_if(result.models.begin()+previous,result.models.end(),[&](const auto& m){return m.id==animation.model;});
+                    Require(model!=result.models.end(),"Effects vertex animation model is absent");
+                    std::size_t vertices=0;for(const auto& packet:model->packets)vertices+=packet.vertices.size();
+                    Require(vertices==animation.vertices,"Effects animation vertices differ from its packet layout");
+                    Require(std::none_of(result.animations.begin(),result.animations.end(),[&](const auto& a){return a.model==animation.model;}),
+                        "Duplicate effects vertex animation");
+                    animation.streams.push_back(1);animation.positions.reserve(values);
+                    for(std::size_t vertex=0;vertex<values;++vertex)
+                    {
+                        std::array<float,3> position;
+                        for(unsigned axis=0;axis<3;++axis)
+                        {
+                            position[axis]=F32(b,28+vertex*12+axis*4);
+                            Require(std::abs(position[axis])<=1e7f,"Excessive effects animated position");
+                        }
+                        animation.positions.push_back(position);
+                    }
+                    result.animations.push_back(std::move(animation));part=field.next;
+                }
+            }
+            child=chunk.next;
+        }
+        at = group.next;
+    }
+    Require(!result.models.empty(), "Empty effects geometry bundle");
+    return result;
+}
+StaticWorldModel ReadStaticWorldModel(Bytes data, std::uint32_t selected, ModelCoordinates coordinates)
 {
     Require(data.size() <= MaximumAssetBytes, "World asset exceeds its budget");
     const auto root = ReadChunk(data, 0, data.size());
@@ -255,7 +445,7 @@ StaticWorldModel ReadStaticWorldModel(Bytes data, std::uint32_t selected)
         offset = chunk.next;
     }
     Require(models && !textures.empty(), "World resource needs models and textures");
-    auto result = ReadModels(data, models->first, models->second, selected);
+    auto result = ReadModels(data, models->first, models->second, selected, coordinates);
     Require(result.size() == 1, "World selection must resolve one static model");
     return {std::move(result.front()), textures};
 }

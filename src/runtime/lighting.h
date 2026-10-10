@@ -2,6 +2,7 @@
 #include "Game/GameObjectLightingData.h"
 #include <array>
 #include <cstdint>
+#include <optional>
 
 class LightingLookup;
 
@@ -9,6 +10,8 @@ namespace mscharged
 {
 // Inputs to the original object-lighting routines. Scene/character/effect
 // managers will supply these records when their own startup paths are linked.
+// GameObjectLight::useWorldPosition selects position vs authored angles; the
+// enabled flag below controls lighting for the complete selected draw.
 struct ShadowLighting
 {
     const LightingLookup* lookup = nullptr;
@@ -18,6 +21,13 @@ struct ShadowLighting
     bool clamp = true;
 };
 
+struct CharacterLightInputs
+{
+    // Explicit diagnostic inputs to the original character-light consumer.
+    // Camera-relative/game/effect-manager selection remains unavailable.
+    std::array<GameObjectLight, 6> lights{};
+    unsigned light_count = 0;
+};
 struct GameLighting
 {
     bool enabled = false;
@@ -28,6 +38,7 @@ struct GameLighting
     unsigned light_count = 0;
     std::uint32_t ramp_texture = UINT32_MAX;
     ShadowLighting shadow;
+    std::optional<CharacterLightInputs> character;
 };
 
 // The selected decomp's original default stadium key/fill angles and intensities.

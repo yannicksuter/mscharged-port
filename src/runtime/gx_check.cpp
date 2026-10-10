@@ -1,6 +1,7 @@
-// Independent GX/Vulkan check with generated geometry and tiled RGBA8 pixels.
+// Independent native GX check with generated geometry and tiled RGBA8 pixels.
 #include "mscharged/build_version.h"
 #include "platform/path.h"
+#include "platform/graphics_backend.h"
 #include <aurora/aurora.h>
 #include <aurora/event.h>
 #include <aurora/gfx.h>
@@ -11,6 +12,10 @@
 #include <dolphin/vi.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#ifdef WEBGPU_DAWN
+#include <dawn/native/DawnNative.h>
+#include <webgpu/gpu.hpp>
+#endif
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -142,10 +147,10 @@ int main(int argc, char** argv)
         std::filesystem::create_directories(directory);
         const auto path = mscharged::PathUtf8(directory);
         AuroraConfig config{};
-        config.appName = "Mario Strikers Charged | GX Vulkan check";
+        config.appName = "Mario Strikers Charged | native GX check";
         config.userPath = config.cachePath = path.c_str();
         config.resourcesPath = base;
-        config.desiredBackend = BACKEND_VULKAN;
+        config.desiredBackend = mscharged::platform::NativeGraphicsBackend;
         config.windowWidth = 800; config.windowHeight = 600;
         config.windowPosX = config.windowPosY = -1;
         config.logLevel = LOG_INFO; config.logCallback = Log;
@@ -154,8 +159,19 @@ int main(int argc, char** argv)
         Session session;
         const auto info = aurora_initialize(argc, argv, &config);
         session.live = true;
-        if (!info.window || info.backend != BACKEND_VULKAN)
-            throw std::runtime_error("Requested Vulkan is unavailable; the diagnostic cannot pass on a fallback backend");
+        if (!info.window || info.backend != mscharged::platform::NativeGraphicsBackend)
+            throw std::runtime_error(std::string("Requested ") + mscharged::platform::NativeGraphicsBackendName
+                + " is unavailable; the diagnostic cannot pass on a fallback backend");
+#ifdef WEBGPU_DAWN
+        // Exercise the actual requested device in both debug-layer modes.
+        // Disabling backend debug layers must retain WebGPU validation and
+        // robust buffer/shader access in Release as well as Debug builds.
+        for (const char* toggle : dawn::native::GetTogglesUsed(aurora::webgpu::g_device.Get())) {
+            const std::string_view name(toggle);
+            if (name == "skip_validation" || name == "disable_robustness")
+                throw std::runtime_error("Unsafe graphics device policy: " + std::string(name));
+        }
+#endif
         OSInit();
         VIInit();
         VIConfigure(&GXNtsc480IntDf);
@@ -179,7 +195,7 @@ int main(int argc, char** argv)
             }
             if (exiting) break;
             if (!interactive && std::chrono::steady_clock::now()-start > std::chrono::seconds(30))
-                throw std::runtime_error("Timed out waiting for the Vulkan diagnostic frames");
+                throw std::runtime_error("Timed out waiting for the native GX diagnostic frames");
             if (!aurora_begin_frame()) { SDL_Delay(1); continue; }
             Draw(texture, GXNtsc480IntDf.fbWidth, GXNtsc480IntDf.efbHeight);
             // GXPeekZ uses the configured console EFB coordinates even when
@@ -201,7 +217,7 @@ int main(int argc, char** argv)
             throw std::runtime_error("GX check incomplete: frames=" + std::to_string(rendered)
                 + ", draws=" + std::to_string(draws) + ", depth=" + std::to_string(depth)
                 + ", resize=" + std::to_string(resized) + ", errors=" + std::to_string(errors.load()));
-        std::cout << "Vulkan GX check passed: " << rendered << " frames, " << draws
+        std::cout << mscharged::platform::NativeGraphicsBackendName << " GX check passed: " << rendered << " frames, " << draws
                   << " draw calls, geometry depth " << depth << ", resize events " << resize_events << '\n';
         return 0;
     }

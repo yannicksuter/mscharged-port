@@ -1,0 +1,118 @@
+From: mscharged-port contributors
+Subject: [PATCH] Share original font fallback and bounded text escape parsing
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Extract the original first-match/first-registered font fallback for native
+lookup without modifying the Matching fontmanager.cpp translation unit.
+Add a separate escape parser helper for native diagnostic fixtures, leaving
+the original nlTextEscape.cpp constructor intact. Diagnostic callers
+prevalidate their qualified grammar; actual source ABI keys are adapted by0143.
+
+diff --git a/include/Game/Font/FontLookupSteps.h b/include/Game/Font/FontLookupSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Font/FontLookupSteps.h
+@@ -0,0 +1,23 @@
++#ifndef GAME_FONT_FONT_LOOKUP_STEPS_H
++#define GAME_FONT_FONT_LOOKUP_STEPS_H
++#include "NL/nlDLRing.h"
++// Original first match, then first registered font after warning. Registration
++// means successful FontDescriptionLoadComplete order, not texture completion.
++template<class Font, class Entry, class Hash, class Warn>
++Font* FrontendFindLoadedFont(Entry* head, Entry* entry, unsigned long hash, Hash fontHash, Warn warn)
++{
++    Entry* first = entry;
++    while (entry != 0)
++    {
++        Font* font = entry->entry;
++        if (hash == fontHash(font))
++            return font;
++        if (nlDLRingIsEnd(head, entry) || entry == 0)
++            entry = 0;
++        else
++            entry = entry->m_next;
++    }
++    warn(hash);
++    return first != 0 ? first->entry : 0;
++}
++#endif
+diff --git a/include/NL/FrontendTextEscapeSteps.h b/include/NL/FrontendTextEscapeSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/NL/FrontendTextEscapeSteps.h
+@@ -0,0 +1,75 @@
++#ifndef NL_FRONTEND_TEXT_ESCAPE_STEPS_H
++#define NL_FRONTEND_TEXT_ESCAPE_STEPS_H
++#include "NL/nlTextEscape.h"
++// The original parser assumes a terminated escape. Native callers prevalidate
++// bounded strings before entering; currently only exact {p} is qualified.
++template<class State, class Lookup>
++void FrontendParseTextEscape(State& state, const unsigned short* str, Lookup lookup)
++{
++    char Seq[4] = { 0, 0, 0, 0 };
++    const unsigned short* ExtendedStart = 0;
++    const unsigned short* p = str;
++    char* pSeq = Seq;
++    unsigned long Char = 0;
++    unsigned long key;
++    ESCAPE_TYPE type;
++
++    while (true)
++    {
++        unsigned long ch = p[1];
++
++        if (ch == '}')
++        {
++            break;
++        }
++
++        if (ch == ':')
++        {
++            const unsigned short* pExtended = str;
++            pExtended += Char;
++            ExtendedStart = pExtended + 2;
++            break;
++        }
++
++        if (Char < 4)
++        {
++            *pSeq = (char)ch;
++        }
++
++        p++;
++        pSeq++;
++        Char++;
++    }
++
++    if (ExtendedStart != 0)
++    {
++        State* pSelf = &state;
++
++        for (Char = 0; Char < 15; Char++)
++        {
++            unsigned long ch = ExtendedStart[Char];
++            if (ch == '}')
++            {
++                break;
++            }
++
++            pSelf->m_Extended[Char] = (unsigned short)ch;
++        }
++    }
++
++    state.m_Extended[Char] = 0;
++    state.m_pEnd = (ExtendedStart ? ExtendedStart : str + 1) + Char + 1;
++
++#if defined(MSCHARGED_NATIVE)
++    // Source key is the four big-endian bytes, never a host unsigned long load.
++    key = ((unsigned long)(unsigned char)Seq[0] << 24)
++        | ((unsigned long)(unsigned char)Seq[1] << 16)
++        | ((unsigned long)(unsigned char)Seq[2] << 8)
++        | (unsigned char)Seq[3];
++#else
++    key = *(unsigned long*)Seq;
++#endif
++    type = lookup(key);
++    state.m_Type = type;
++}
++#endif

@@ -1,51 +1,74 @@
-# Shared, explicitly selected original core, allocator and Wii/NL file services.
+# Legacy diagnostics use the same real core services as the original source.
+# Keep their extracted entry and setup/check helpers out of the core library.
 include_guard(GLOBAL)
-add_library(charged_sanim_decode STATIC
-    "${MSCHARGED_PREPARED}/src/Game/SAnimDecode.cpp"
-    src/runtime/sanim_decode.cpp)
-add_dependencies(charged_sanim_decode verify_prepared)
-target_include_directories(charged_sanim_decode PUBLIC "${MSCHARGED_PREPARED}/include"
-    PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
-target_compile_definitions(charged_sanim_decode PUBLIC MSCHARGED_NATIVE=1)
-target_compile_features(charged_sanim_decode PRIVATE cxx_std_17)
-
-add_library(charged_native_allocator STATIC "${MSCHARGED_PREPARED}/src/NL/MemAlloc.cpp")
-add_dependencies(charged_native_allocator verify_prepared)
-target_include_directories(charged_native_allocator PUBLIC "${MSCHARGED_PREPARED}/include"
-    PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
-target_compile_definitions(charged_native_allocator PRIVATE MSCHARGED_NATIVE=1)
-target_compile_features(charged_native_allocator PRIVATE cxx_std_17)
-
+include(cmake/NativeAI.cmake)
+include(cmake/NativeSTM.cmake)
+include(cmake/NativeHardwareOwner.cmake)
+include(cmake/NativeVideo.cmake)
+if(MSCHARGED_BUILD_GX_CHECK)
+    include(cmake/NativeVideoOutput.cmake)
+endif()
+include(cmake/NativeDSPMailbox.cmake)
+include(cmake/NativeDSPMemory.cmake)
+include(cmake/NativeDSPBacking.cmake)
+include(cmake/NativeDSPInstructions.cmake)
+include(cmake/NativeDSPControl.cmake)
+include(cmake/NativeAXBootstrap.cmake)
+include(cmake/NativeAXInitialization.cmake)
+include(cmake/NativeAXStoppedVoice.cmake)
+include(cmake/NativeAXActiveVoice.cmake)
+include(cmake/NativeAXFrameCommands.cmake)
+include(cmake/NativeDSPROM.cmake)
+include(cmake/NativeDSPBootMemory.cmake)
+include(cmake/NativeOSAudioBoot.cmake)
+include(cmake/NativeAXNormalCommand.cmake)
+include(cmake/NativeAXNativeFilter.cmake)
+include(cmake/NativeAXFunctional.cmake)
+include(cmake/NativeAXTHPMode1.cmake)
+include(cmake/NativeGXFifo.cmake)
+include(cmake/OriginalAX.cmake)
+include(cmake/OriginalOSMessages.cmake)
+include(cmake/NativeThreadLifecycle.cmake)
+include(cmake/OriginalFS.cmake)
+include(cmake/OriginalNAND.cmake)
+include(cmake/OriginalIPCMemory.cmake)
+include(cmake/NativeIPCBootBuffer.cmake)
+include(cmake/NativeFilesystem.cmake)
+include(cmake/NativeFilesystemBoot.cmake)
+include(cmake/OriginalNANDInit.cmake)
+include(cmake/OriginalFlash.cmake)
+include(cmake/OriginalSaveData.cmake)
+include(cmake/OriginalAXWords.cmake)
+include(cmake/NativeAXTransport.cmake)
+include(cmake/NativeAXCommandService.cmake)
+include(cmake/OriginalCore.cmake)
+include(cmake/NativeAXOutput.cmake)
+include(cmake/NativeClock.cmake)
+include(cmake/OriginalStringStorage.cmake)
+include(cmake/OriginalAllocation.cmake)
+include(cmake/OriginalFontTextures.cmake)
+include(cmake/OriginalTextureResources.cmake)
+include(cmake/OriginalGraphics.cmake)
+include(cmake/OriginalViews.cmake)
+include(cmake/OriginalTiming.cmake)
+include(cmake/OriginalTweaks.cmake)
+include(cmake/OriginalTaskFlow.cmake)
+include(cmake/OriginalEvents.cmake)
+include(cmake/OriginalGameModule.cmake)
 add_library(charged_decomp_startup STATIC
     "${MSCHARGED_PREPARED}/src/Game/Startup.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlInit.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/plat/nlMemory.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlTicker.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlTime.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlMemory.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/gl/glPlatPreStartup.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlFileGC.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlFileBasic.cpp"
     src/runtime/startup_animation.cpp
     src/runtime/startup_memory.cpp
-    src/runtime/function_memory.cpp
     src/runtime/startup_files.cpp
-    src/runtime/whole_file.cpp
-    src/runtime/startup_os.cpp
-    src/runtime/startup_context.cpp
-)
+    src/runtime/startup_context.cpp)
 add_dependencies(charged_decomp_startup verify_prepared)
-target_include_directories(charged_decomp_startup PUBLIC
-    "${MSCHARGED_PREPARED}/include"
-    PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include" "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_compile_definitions(charged_decomp_startup PUBLIC MSCHARGED_NATIVE=1)
+target_link_libraries(charged_decomp_startup PUBLIC charged_original_core
+    PRIVATE aurora::os aurora::dvd SDL3::SDL3)
+target_compile_definitions(charged_decomp_startup PRIVATE TARGET_PC=1)
 target_compile_features(charged_decomp_startup PRIVATE cxx_std_17)
-target_link_libraries(charged_decomp_startup PRIVATE charged_foundation charged_native_allocator
-    charged_sanim_decode aurora::dvd aurora::os aurora::vi aurora::core)
+target_include_directories(charged_decomp_startup PRIVATE "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_decomp_startup PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
-    target_compile_options(charged_native_allocator PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
-    target_compile_options(charged_sanim_decode PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
 endif()
-
 include(cmake/GraphicsMemory.cmake)
+include(cmake/EffectsVertex.cmake)

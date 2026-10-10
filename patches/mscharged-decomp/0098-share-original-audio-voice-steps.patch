@@ -1,0 +1,123 @@
+Subject: Retain legacy diagnostic audio helpers without rewriting original source
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+The existing diagnostic helper snapshots remain for explicitly selected preview
+consumers. Complete original game/SDK methods, headers, enum definitions and
+retail state transitions are no longer delegated to these copies. No AX/DSP
+readiness, native game audio manager or new source behavior is provided.
+
+diff --git a/include/Game/Audio/AudioVoiceSteps.h b/include/Game/Audio/AudioVoiceSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/AudioVoiceSteps.h
+@@ -0,0 +1,109 @@
++#ifndef GAME_AUDIO_AUDIO_VOICE_STEPS_H
++#define GAME_AUDIO_AUDIO_VOICE_STEPS_H
++// Shared original source states. Voice adapters own real platform output;
++// the native resident profile rejects loops and unsupported address operations.
++template<class Source> void AudioSourceStateStep(Source& source)
++{
++    if (source.m_Unknown10 == 5)
++    {
++        source.m_Unknown04 = 3;
++    }
++    else
++    {
++        source.m_Unknown04 = source.m_Unknown10;
++    }
++    if (source.m_Unknown04 == 6 && source.HasVoice() && !source.WasVoiceDropped())
++        source.ReleaseVoice(true);
++}
++template<class Source> bool AudioSamplePrepareStep(Source& source)
++{
++    source.m_Unknown10 = 3;
++    return false;
++}
++template<class Source> bool AudioSamplePlayStep(Source& source, unsigned int value)
++{
++    source.m_PlayCount = value;
++    source.m_Unknown10 = 5;
++    return true;
++}
++template<class Source, class Voice> void AudioSampleUpdateStep(Source& source, Voice& voice)
++{
++    switch (source.m_Unknown10)
++    {
++    case 5:
++        if (source.m_PlayCount == 1)
++        {
++            voice.SetLoop(false);
++        }
++        else
++        {
++            voice.SetLoop(true);
++            voice.SetLoopAddress(voice.CurrentAddress());
++        }
++        voice.Start();
++        source.m_Unknown10 = 4;
++        break;
++    case 4:
++        if (voice.Stopped())
++        {
++            source.m_Unknown10 = 6;
++        }
++        else
++        {
++            unsigned int address = voice.CurrentAddress();
++            if (address < source.m_Unknown18)
++            {
++                ++source.m_Unknown14_0C;
++                bool canLoop = source.m_Unknown14_0C < source.m_PlayCount || source.m_PlayCount == 0xFFFF;
++                if (!canLoop)
++                {
++                    voice.SetLoop(false);
++                    voice.SetLoopAddress(voice.SilenceAddress());
++                }
++            }
++            source.m_Unknown18 = address;
++        }
++        break;
++    case 6:
++        source.m_Unknown10 = 1;
++        break;
++    case 0:
++        return;
++    case 1:
++    case 3:
++    case 7:
++        break;
++    }
++}
++template<class Source, class Voice> void AudioSampleStopStep(Source& source, Voice& voice)
++{
++    switch (source.m_Unknown10)
++    {
++    case 4:
++    {
++        voice.StopAtSilence();
++        break;
++    }
++    case 3:
++    case 7:
++        source.m_Unknown10 = 6;
++        source.m_Unknown04 = 6;
++        break;
++    }
++}
++// Original backend order, independent of native resource/slot representation.
++template<class Source, class Info, class Registry>
++Source* AudioInitializeAndPublishSource(Source* source, Info* info, Registry& registry)
++{
++    source->Initialize(info);
++    registry.Add(source);
++    registry.LastCreated(source);
++    return source;
++}
++template<class Source, class Registry>
++void AudioRemoveAndDestroySource(Source* source, Registry& registry)
++{
++    registry.Remove(source);
++    registry.Destroy(source);
++}
++#endif

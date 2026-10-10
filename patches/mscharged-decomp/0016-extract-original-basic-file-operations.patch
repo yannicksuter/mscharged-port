@@ -1,12 +1,13 @@
 Subject: Select original basic and synchronous whole-file operations
 
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
 Extract the existing base file and synchronous whole-file wrappers unchanged.
 The full source includes the prefix; the prototype selects that prefix alone.
 Advanced whole-file async loading and compressed InflateStream resources remain
 outside the selected native source. Do not build both entry units together.
 
+diff --git a/src/NL/nlFile.cpp b/src/NL/nlFile.cpp
 --- a/src/NL/nlFile.cpp
 +++ b/src/NL/nlFile.cpp
 @@ -28,92 +28,7 @@
@@ -103,6 +104,8 @@ outside the selected native source. Do not build both entry units together.
  
  static void nlLoadEntireFileAsyncCallback(nlFile*, void*, unsigned int, unsigned long userParam)
  {
+diff --git a/src/NL/nlFileBasic.cpp b/src/NL/nlFileBasic.cpp
+new file mode 100644
 --- /dev/null
 +++ b/src/NL/nlFileBasic.cpp
 @@ -0,0 +1,91 @@

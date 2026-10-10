@@ -1,0 +1,313 @@
+Subject: Retain legacy diagnostic audio helpers without rewriting original source
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+The existing diagnostic helper snapshots remain for explicitly selected preview
+consumers. Complete original game/SDK methods, headers, enum definitions and
+retail state transitions are no longer delegated to these copies. No AX/DSP
+readiness, native game audio manager or new source behavior is provided.
+
+diff --git a/include/Game/Audio/AudioCuePlaybackSteps.h b/include/Game/Audio/AudioCuePlaybackSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/AudioCuePlaybackSteps.h
+@@ -0,0 +1,299 @@
++#ifndef GAME_AUDIO_CUE_PLAYBACK_STEPS_H
++#define GAME_AUDIO_CUE_PLAYBACK_STEPS_H
++// Original event, instance and cue control flow with typed retained owners.
++enum SoundInstanceState
++{
++    SOUND_INSTANCE_STATE_INITIAL = 0,
++    SOUND_INSTANCE_STATE_PENDING = 1,
++    SOUND_INSTANCE_STATE_PREPARING = 2,
++    SOUND_INSTANCE_STATE_PREPARED = 3,
++    SOUND_INSTANCE_STATE_PLAYING = 4,
++    SOUND_INSTANCE_STATE_PAUSED = 5,
++    SOUND_INSTANCE_STATE_FAILED = 6,
++    SOUND_INSTANCE_STATE_STOPPING = 7,
++    SOUND_INSTANCE_STATE_STOPPED = 8
++};
++template<class Event> void AudioPlaybackPrepareStep(Event& event)
++{
++    event.source->Prepare();
++    event.state = 2;
++}
++template<class Event> void AudioPlaybackStopStep(Event& event)
++{
++    event.source->Stop();
++    event.state = 7;
++    event.flags = 0;
++}
++template<class Event> int AudioPlaybackUpdateStep(Event& event)
++{
++    if (event.source != 0)
++        event.source->UpdateState();
++
++    switch (event.state)
++    {
++    case 2:
++        if (event.source->GetState() == 3)
++            event.state = 3;
++        break;
++    case 4:
++        if (event.source->GetState() == 1)
++        {
++            event.state = 8;
++            event.flags = 0;
++        }
++        break;
++    case 7:
++        if (event.source->GetState() == 1)
++        {
++            event.state = 8;
++            event.flags = 0;
++        }
++        break;
++    case 5:
++        return event.state;
++    default:
++        break;
++    }
++
++    if (event.flags == 0)
++        return event.state;
++
++    bool condition = event.owner->soundInstance->previousTime < event.startTime
++                  && event.owner->soundInstance->currentTime >= event.startTime;
++    if (condition)
++        event.StartPlayback();
++    if (event.state != 4)
++        return event.state;
++    event.UpdatePlaybackParameters(false);
++    return event.state;
++}
++template<class Event> void AudioPlaybackPlayStep(Event& event)
++{
++        event.flags = 1;
++        event.Update(0.0f);
++    }
++template<class Sequence> void AudioSequencePlayStep(Sequence& sequence)
++{
++    for (auto* event = sequence.events; event != 0;
++        event = event->next)
++    {
++        event->Play();
++    }
++    if (sequence.next != 0)
++        sequence.next->Play();
++}
++template<class Sequence> void AudioSequencePrepareStep(Sequence& sequence)
++{
++    for (auto* event = sequence.events; event != 0;
++        event = event->next)
++    {
++        event->Prepare();
++    }
++    if (sequence.next != 0)
++        sequence.next->Prepare();
++}
++template<class Sequence> void AudioSequenceStopStep(Sequence& sequence)
++{
++    sequence.stopped = true;
++    for (auto* event = sequence.events; event != 0;
++        event = event->next)
++    {
++        if ((unsigned int)(event->state - 2) <= 3)
++            event->Stop();
++    }
++    if (sequence.next != 0)
++        sequence.next->Stop();
++}
++template<class Sequence> int AudioSequenceUpdateStep(Sequence& sequence, float time)
++{
++    int result = 9;
++    for (auto* event = sequence.events; event != 0;
++        event = event->next)
++    {
++        if (!sequence.stopped || event->state != 0)
++        {
++            int state = event->Update(time);
++            result = (result < state ? result : state);
++        }
++    }
++    if (sequence.next != 0)
++    {
++        int state = sequence.next->Update(time);
++        result = (result < state ? result : state);
++    }
++    return result;
++}
++template<class Instance> void AudioInstancePlayStep(Instance& instance)
++{
++    instance.volume.Update(0.0f, 1.0f);
++    instance.pitch.Update(0.0f, 1.0f);
++    if (instance.voices != 0)
++        instance.voices->Play();
++    instance.state = SOUND_INSTANCE_STATE_PLAYING;
++}
++template<class Instance> void AudioInstanceStopStep(Instance& instance, void* force)
++{
++    if (instance.state != SOUND_INSTANCE_STATE_PLAYING
++        || force != 0 || instance.activeRpc == 0)
++    {
++        instance.activeRpc = 0;
++        if (instance.voices != 0)
++            instance.voices->Stop();
++    }
++    instance.state = SOUND_INSTANCE_STATE_STOPPING;
++}
++template<class Instance> void AudioInstanceClockStep(Instance& instance, float dt)
++{
++    if (instance.state == SOUND_INSTANCE_STATE_PLAYING || instance.state == SOUND_INSTANCE_STATE_STOPPING)
++    {
++        instance.volume.Update(dt, 1.0f);
++        instance.pitch.Update(dt, 1.0f);
++        instance.previousTime = instance.currentTime;
++        instance.currentTime += dt;
++    }
++}
++template<class Instance, class Cleanup> void AudioInstanceStateStep(Instance& instance, int voiceState, Cleanup cleanup)
++{
++    switch (instance.state)
++    {
++    case SOUND_INSTANCE_STATE_PLAYING:
++        if (voiceState == SOUND_INSTANCE_STATE_STOPPED)
++        {
++            cleanup();
++            instance.state = SOUND_INSTANCE_STATE_STOPPED;
++        }
++        break;
++    case SOUND_INSTANCE_STATE_STOPPING:
++        if (voiceState == SOUND_INSTANCE_STATE_STOPPED)
++        {
++            cleanup();
++            instance.state = SOUND_INSTANCE_STATE_STOPPED;
++        }
++        break;
++    case SOUND_INSTANCE_STATE_PREPARING:
++        if (voiceState == SOUND_INSTANCE_STATE_PREPARED)
++            instance.state = SOUND_INSTANCE_STATE_PREPARED;
++        break;
++    case SOUND_INSTANCE_STATE_FAILED:
++        instance.state = SOUND_INSTANCE_STATE_STOPPED;
++        break;
++    case SOUND_INSTANCE_STATE_INITIAL:
++    case SOUND_INSTANCE_STATE_PENDING:
++    case SOUND_INSTANCE_STATE_PREPARED:
++    case SOUND_INSTANCE_STATE_PAUSED:
++    case SOUND_INSTANCE_STATE_STOPPED:
++        break;
++    }
++}
++template<class Cue> bool AudioCuePlayStep(Cue& cue, bool callbackEnabled)
++{
++    switch (cue.m_State)
++    {
++    case 1:
++        cue.bits.playWhenPrepared = true;
++        cue.Prepare(callbackEnabled);
++        return false;
++    case 2:
++    case 5:
++        cue.bits.playWhenPrepared = true;
++        return false;
++    case 3:
++        cue.instance->Play(0.0f);
++        cue.m_State = cue.instance->state;
++        return cue.m_State == 4;
++    case 4:
++        break;
++    case 6:
++        return false;
++    default:
++        break;
++    }
++    return false;
++}
++template<class Cue> bool AudioCuePrepareStep(Cue& cue, bool callbackEnabled)
++{
++    if (cue.m_State == 6)
++        return false;
++    cue.m_CallbackEnabled = callbackEnabled;
++    cue.instance->Prepare();
++    cue.m_State = 2;
++    return true;
++}
++template<class Cue> void AudioCueStopStep(Cue& cue, unsigned char callbackEnabled, void* force)
++{
++    switch (cue.m_State)
++    {
++    case 7:
++        if (force != 0)
++            cue.instance->Stop(force);
++        break;
++    case 8:
++        break;
++    default:
++        cue.instance->Stop(force);
++        break;
++    }
++    cue.m_CallbackEnabled = callbackEnabled;
++    cue.m_State = 7;
++    cue.bits.flag8000 = true;
++}
++template<class Cue> void AudioCueUpdateStep(Cue& cue, float dt)
++{
++    if (cue.m_State == 4)
++    {
++        cue.m_PreviousTime = cue.m_CurrentTime;
++        cue.m_CurrentTime += dt;
++    }
++    if (cue.m_State == 6)
++        cue.m_State = 8;
++
++    if (cue.m_State != 8 && cue.m_State != 5 && cue.m_State != 9)
++    {
++        if (cue.definition->useSlider)
++            cue.UpdateSlider(dt);
++        cue.instance->Update(dt);
++
++        if (cue.m_State != 9)
++        {
++            if (cue.m_State == 2)
++            {
++                if (cue.instance->state == 3)
++                {
++                    cue.m_State = 3;
++                    if (cue.bits.playWhenPrepared)
++                    {
++                        cue.instance->Play(0.0f);
++                        cue.m_State = cue.instance->state;
++                    }
++                }
++            }
++            else if (cue.instance->nextInstance != 0)
++                cue.m_State = 4;
++            else
++                cue.m_State = cue.instance->state;
++        }
++    }
++
++    if (cue.m_State == 8 && cue.m_CallbackEnabled)
++        cue.Release();
++}
++template<class Cue> void AudioCueReleaseStep(Cue& cue)
++{
++    cue.m_State = 9;
++}
++template<class Definition> void AudioCueRetainCount(Definition& definition) { definition.activeCount++; }
++template<class Definition> void AudioCueReleaseCount(Definition& definition) { definition.activeCount--; }
++inline bool AudioFrontendFinishedStep(int state)
++{
++    switch (state)
++    {
++    case 2:
++    case 3:
++    case 4:
++    case 5:
++        return false;
++    default:
++        return true;
++    }
++}
++#endif

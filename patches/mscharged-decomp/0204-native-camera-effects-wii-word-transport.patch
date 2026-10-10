@@ -1,0 +1,30 @@
+Subject: Preserve the original camera transition fabs expression on native hosts
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Upstream now owns the Thwomp event as ThwompObject* plus eThwompState,
+produces it from thwomp->mState and consumes THWOMP_STATE_FALLING. Retire
+the superseded opaque pointer/copied-word adaptation and its helper include.
+Keep those original typed event declarations, producer, handlers and lifetime.
+
+Supply the MWCC __fabs operation with the explicit standard double overload,
+retaining the original float subtraction and float result. Keep the original
+expression on console; no camera transition, timing or behavior is changed.
+
+This source-only refresh does not establish camera-event/runtime readiness.
+
+diff --git a/src/Game/Camera/GameplayCameraEffects.cpp b/src/Game/Camera/GameplayCameraEffects.cpp
+--- a/src/Game/Camera/GameplayCameraEffects.cpp
++++ b/src/Game/Camera/GameplayCameraEffects.cpp
+@@ -412,7 +412,11 @@
+ 
+     mTransitionBlend
+         = nlMinEquals(nlMaxEquals(mTransitionBlend, 0.0f), 1.0f);
++#ifdef MSCHARGED_NATIVE
++    mTransitionBlend = (float)std::fabs(static_cast<double>(1.0f - mTransitionBlend));
++#else
+     mTransitionBlend = (float)__fabs(1.0f - mTransitionBlend);
++#endif
+     if (mTransitionBlend != 0.0f)
+     {
+         mTransitionScale = Interpolate(

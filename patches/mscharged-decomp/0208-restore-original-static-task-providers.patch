@@ -1,0 +1,444 @@
+Subject: [PATCH] restore original frontend pointer task and native static providers
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Restore literal feDPD source and isolate pointer/timing extracts from the original
+module. Use one native SDK GX/VI/DVD declaration ABI, retain genuine Wii
+power/reset requests, and declare unavailable IPC MMIO instead of allocating
+fake registers. Keep Wii class-size assertions on the console ABI and transport
+the original BeginFrameTask view pointer through its existing native enum carrier.
+No task/game decisions, initialization requests, visibility or behavior changes.
+
+The new owning vi_fwd.h uses the same canonical native VI service as vi.h.
+Original console enum prototypes remain literal; no Title method or SDK body changes.
+
+diff --git a/src/Game/FE/feDPD.cpp b/src/Game/FE/feDPD.cpp
+--- a/src/Game/FE/feDPD.cpp
++++ b/src/Game/FE/feDPD.cpp
+@@ -6,7 +6,6 @@
+ #include "NL/plat/WiiFreestylePad.h"
+ 
+ #include "Game/FE/feDPD.h"
+-#include "Game/FE/FrontendPointerHostSteps.h"
+ 
+ #include "Game/FE/feInput.h"
+ #include "Game/PadActions.h"
+@@ -28,7 +27,20 @@
+ 
+ static inline void ClampPointerPosition(int pad, nlVector2 position, int width, int height)
+ {
+-    gFEPointerPositions[pad] = FrontendClampPointerPosition(position, width, height);
++    int maxX = width / 2 - 20;
++    int minX = -width / 2 + 20;
++    int maxY = height / 2 - 5;
++    int minY = -height / 2 + 5;
++
++    if (position.x <= maxX && position.x >= minX)
++        gFEPointerPositions[pad].x = position.x;
++    else
++        gFEPointerPositions[pad].x = (float)(position.x > maxX ? maxX : minX);
++
++    if (position.y <= maxY && position.y >= minY)
++        gFEPointerPositions[pad].y = position.y;
++    else
++        gFEPointerPositions[pad].y = (float)(position.y > maxY ? maxY : minY);
+ }
+ 
+ FEDPDTask::FEDPDTask()
+@@ -109,7 +121,8 @@
+         if (data->mValidFlag > 0)
+         {
+             data->GetPosition(&position, angle);
+-            FrontendDPDToAssetPosition(position, width, height);
++            position.x = -1.0f * (position.x * (float)width / 2.0f);
++            position.y = position.y * (float)height / 2.0f;
+             *valid = true;
+ 
+             ClampPointerPosition(pad, position, width, height);
+diff --git a/include/Game/FE/FrontendPointerHostSteps.h b/include/Game/FE/FrontendPointerHostSteps.h
+--- a/include/Game/FE/FrontendPointerHostSteps.h
++++ b/include/Game/FE/FrontendPointerHostSteps.h
+@@ -1,5 +1,8 @@
+ #ifndef FRONTEND_POINTER_HOST_STEPS_H
+ #define FRONTEND_POINTER_HOST_STEPS_H
++#if defined(MSCHARGED_GAME_MODULE)
++#error "Original modules must execute the source frontend pointer methods"
++#endif
+ #include "NL/nlMath.h"
+ 
+ // Original feDPD arithmetic. The desktop adapter supplies an explicit absolute
+diff --git a/src/Game/Debug/FrameTiming.cpp b/src/Game/Debug/FrameTiming.cpp
+--- a/src/Game/Debug/FrameTiming.cpp
++++ b/src/Game/Debug/FrameTiming.cpp
+@@ -1,3 +1,7 @@
++#if defined(MSCHARGED_GAME_MODULE)
++#error "Original modules must compile the complete source FrameCounter.cpp"
++#endif
++
+ // Original timing/history and histogram bodies selected without debug drawing.
+ #include "Game/Debug/FrameCounter.h"
+ #include "Game/Debug/TimeRegions.h"
+diff --git a/libs/RVL_SDK/include/revolution/gx.h b/libs/RVL_SDK/include/revolution/gx.h
+--- a/libs/RVL_SDK/include/revolution/gx.h
++++ b/libs/RVL_SDK/include/revolution/gx.h
+@@ -4,6 +4,9 @@
+ 
+ #ifndef RVL_SDK_PUBLIC_GX_H
+ #define RVL_SDK_PUBLIC_GX_H
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx.h>
++#else
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -34,4 +37,5 @@
+ #ifdef __cplusplus
+ }
+ #endif
++#endif // MSCHARGED_NATIVE
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/dvd.h b/libs/RVL_SDK/include/revolution/dvd.h
+--- a/libs/RVL_SDK/include/revolution/dvd.h
++++ b/libs/RVL_SDK/include/revolution/dvd.h
+@@ -4,6 +4,9 @@
+ 
+ #ifndef RVL_SDK_PUBLIC_DVD_H
+ #define RVL_SDK_PUBLIC_DVD_H
++#if defined(MSCHARGED_NATIVE)
++#include <revolution/dvd/dvd.h>
++#else
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -19,4 +22,5 @@
+ #ifdef __cplusplus
+ }
+ #endif
++#endif // MSCHARGED_NATIVE
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/ipc.h b/libs/RVL_SDK/include/revolution/ipc.h
+--- a/libs/RVL_SDK/include/revolution/ipc.h
++++ b/libs/RVL_SDK/include/revolution/ipc.h
+@@ -9,8 +9,14 @@
+ {
+ #endif
+ 
++#if defined(MSCHARGED_NATIVE)
++    // Retain declarations only: native execution cannot use Wii MMIO arrays.
++    extern volatile u32 IPC_HW_REGS_PPC[];
++    extern volatile u32 IPC_HW_REGS[];
++#else
+     volatile u32 IPC_HW_REGS_PPC[] AT_ADDRESS(0xCD000000);
+     volatile u32 IPC_HW_REGS[] AT_ADDRESS(0xCD800000);
++#endif
+ 
+     typedef enum IPCHwReg
+     {
+diff --git a/libs/RVL_SDK/include/revolution/os.h b/libs/RVL_SDK/include/revolution/os.h
+--- a/libs/RVL_SDK/include/revolution/os.h
++++ b/libs/RVL_SDK/include/revolution/os.h
+@@ -4,6 +4,17 @@
+ #ifdef MSCHARGED_NATIVE
+ #include <stdarg.h>
+ #include <dolphin/os.h>
++// These Wii requests are absent from the GameCube SDK header facade.
++// Declarations preserve source calls; genuine native providers are required.
++#include <revolution/os/OSReset.h>
++#include <revolution/os/OSStateTM.h>
++#ifdef __cplusplus
++extern "C" {
++#endif
++void OSSleepTicks(OSTime ticks);
++#ifdef __cplusplus
++}
++#endif
+ #define OS_BUS_CLOCK_SPEED __OSBusClock
+ #else
+ 
+diff --git a/include/Game/World/WorldAnimObjects.h b/include/Game/World/WorldAnimObjects.h
+--- a/include/Game/World/WorldAnimObjects.h
++++ b/include/Game/World/WorldAnimObjects.h
+@@ -73,9 +73,11 @@
+ void InitializeWorldPhysicsDrawable(WorldPhysicsDrawable* pDrawable,
+     WorldObjectLoadContext* pContext);
+ 
++#if !defined(MSCHARGED_NATIVE)
+ typedef char WorldDrawable_size_check[
+     sizeof(WorldDrawable) == 0x70 ? 1 : -1];
+ typedef char WorldPhysicsDrawable_size_check[
+     sizeof(WorldPhysicsDrawable) == 0x90 ? 1 : -1];
++#endif
+ 
+ #endif // GAME_WORLD_WORLD_ANIM_OBJECTS_H
+diff --git a/src/Game/Task/BeginFrameTask.cpp b/src/Game/Task/BeginFrameTask.cpp
+--- a/src/Game/Task/BeginFrameTask.cpp
++++ b/src/Game/Task/BeginFrameTask.cpp
+@@ -243,7 +243,11 @@
+     q.m_uv[3].y = 0.0f;
+ 
+     q.SetColour(0xFF, 0xFF, 0xFF, 0xFF);
++#if defined(MSCHARGED_NATIVE)
++    q.Attach(static_cast<eGLView>(reinterpret_cast<glViewHandle>(GetLayerView(eCLV_CoPlanar))), 0);
++#else
+     q.Attach((eGLView)GetLayerView(eCLV_CoPlanar), 0);
++#endif
+ }
+ 
+ static inline void SetTextureBinding(glTextureBinding* binding, u32 texture)
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXTypes.h b/libs/RVL_SDK/include/revolution/gx/GXTypes.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXTypes.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXTypes.h
+@@ -1,5 +1,10 @@
+ #ifndef RVL_SDK_GX_TYPES_H
+ #define RVL_SDK_GX_TYPES_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXEnum.h>
++#include <dolphin/gx/GXStruct.h>
++#else
+ #include <revolution/types.h>
+ #include <revolution/gx/GXTextureTypes.h>
+ #include <revolution/gx/GXPublicTypes.h>
+@@ -1014,3 +1019,4 @@
+ }
+ #endif
+ #endif
++#endif // MSCHARGED_NATIVE
+diff --git a/libs/RVL_SDK/include/revolution/vi.h b/libs/RVL_SDK/include/revolution/vi.h
+--- a/libs/RVL_SDK/include/revolution/vi.h
++++ b/libs/RVL_SDK/include/revolution/vi.h
+@@ -1,8 +1,14 @@
+ #ifndef REVOLUTION_VI_H
+ #define REVOLUTION_VI_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/vi.h>
++#else
+ 
+ #include <revolution/gx.h>
+ #include <revolution/vi/vi.h>
+ #include <revolution/vi/vihardware.h>
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif // REVOLUTION_VI_H
+diff --git a/libs/RVL_SDK/include/revolution/vi_fwd.h b/libs/RVL_SDK/include/revolution/vi_fwd.h
+--- a/libs/RVL_SDK/include/revolution/vi_fwd.h
++++ b/libs/RVL_SDK/include/revolution/vi_fwd.h
+@@ -1,7 +1,13 @@
+ #ifndef REVOLUTION_VI_FWD_H
+ #define REVOLUTION_VI_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/vi.h>
++#else
+ 
+ #include <revolution/vi/vitypes.h>
+ #include <revolution/vi/vi_fwd.h>
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/vi/vi.h b/libs/RVL_SDK/include/revolution/vi/vi.h
+--- a/libs/RVL_SDK/include/revolution/vi/vi.h
++++ b/libs/RVL_SDK/include/revolution/vi/vi.h
+@@ -1,9 +1,15 @@
+ #ifndef _RVL_SDK_VI_H
+ #define _RVL_SDK_VI_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/vi.h>
++#else
+ 
+ #include <revolution/gx/GXFrameBuf.h>
+ #include <revolution/types.h>
+ #include <revolution/vi/vitypes.h>
+ #include <revolution/vi/vi_fwd.h>
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/vi/vi_fwd.h b/libs/RVL_SDK/include/revolution/vi/vi_fwd.h
+--- a/libs/RVL_SDK/include/revolution/vi/vi_fwd.h
++++ b/libs/RVL_SDK/include/revolution/vi/vi_fwd.h
+@@ -1,5 +1,9 @@
+ #ifndef RVL_SDK_VI_API_FWD_H
+ #define RVL_SDK_VI_API_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/vi.h>
++#else
+ 
+ #include <revolution/gx/GXRenderModeObj.h>
+ #include <revolution/vi/viPublicTypes.h>
+@@ -36,4 +40,6 @@
+ }
+ #endif
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXFrameBuf_fwd.h b/libs/RVL_SDK/include/revolution/gx/GXFrameBuf_fwd.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXFrameBuf_fwd.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXFrameBuf_fwd.h
+@@ -1,5 +1,9 @@
+ #ifndef RVL_SDK_GX_FRAMEBUF_FWD_H
+ #define RVL_SDK_GX_FRAMEBUF_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXFrameBuffer.h>
++#else
+ 
+ #include <revolution/gx/GXRenderModeObj.h>
+ #include <revolution/gx/GXPublicTypes.h>
+@@ -18,4 +22,6 @@
+ }
+ #endif
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXPublicTypes.h b/libs/RVL_SDK/include/revolution/gx/GXPublicTypes.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXPublicTypes.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXPublicTypes.h
+@@ -1,5 +1,10 @@
+ #ifndef RVL_SDK_GX_PUBLIC_TYPES_H
+ #define RVL_SDK_GX_PUBLIC_TYPES_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXEnum.h>
++#include <dolphin/gx/GXStruct.h>
++#else
+ 
+ typedef unsigned char GXBool;
+ 
+@@ -32,4 +37,6 @@
+     GX_COLOR_NULL = 255
+ } GXChannelID;
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif // RVL_SDK_GX_PUBLIC_TYPES_H
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXFifo_fwd.h b/libs/RVL_SDK/include/revolution/gx/GXFifo_fwd.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXFifo_fwd.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXFifo_fwd.h
+@@ -1,5 +1,9 @@
+ #ifndef RVL_SDK_GX_FIFO_FWD_H
+ #define RVL_SDK_GX_FIFO_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXFifo.h>
++#else
+ 
+ #include <revolution/gx/GXPublicTypes.h>
+ 
+@@ -14,4 +18,6 @@
+ }
+ #endif
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXLight_fwd.h b/libs/RVL_SDK/include/revolution/gx/GXLight_fwd.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXLight_fwd.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXLight_fwd.h
+@@ -1,5 +1,9 @@
+ #ifndef RVL_SDK_GX_LIGHT_FWD_H
+ #define RVL_SDK_GX_LIGHT_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXLighting.h>
++#else
+ 
+ #include <revolution/gx/GXPublicTypes.h>
+ 
+@@ -14,4 +18,6 @@
+ }
+ #endif
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXMisc_fwd.h b/libs/RVL_SDK/include/revolution/gx/GXMisc_fwd.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXMisc_fwd.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXMisc_fwd.h
+@@ -1,5 +1,18 @@
+ #ifndef RVL_SDK_GX_MISC_FWD_H
+ #define RVL_SDK_GX_MISC_FWD_H
++
++#if defined(MSCHARGED_NATIVE)
++#ifdef __cplusplus
++extern "C" {
++#endif
++#include <dolphin/gx/GXManage.h>
++#include <dolphin/gx/GXCpu2Efb.h>
++// The original draw-sync read remains an external hardware requirement.
++unsigned short GXReadDrawSync(void);
++#ifdef __cplusplus
++}
++#endif
++#else
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -20,4 +33,6 @@
+ }
+ #endif
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif
+diff --git a/libs/RVL_SDK/include/revolution/vi/viPublicTypes.h b/libs/RVL_SDK/include/revolution/vi/viPublicTypes.h
+--- a/libs/RVL_SDK/include/revolution/vi/viPublicTypes.h
++++ b/libs/RVL_SDK/include/revolution/vi/viPublicTypes.h
+@@ -1,5 +1,9 @@
+ #ifndef RVL_SDK_VI_PUBLIC_TYPES_H
+ #define RVL_SDK_VI_PUBLIC_TYPES_H
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/vi.h>
++#endif
+ 
+ // Merge format/mode to one value for TV info (see GXRenderModeObj)
+ #define VI_TV_INFO(format, mode) (((format) << 2) + (mode))
+@@ -44,6 +48,9 @@
+ #define VI_HD720 8
+ #define VI_TVMODE_HD720_PROG ((VITVMode)VI_TVMODE(VI_HD720, VI_PROGRESSIVE))
+ 
++#if defined(MSCHARGED_NATIVE)
++#define VI_TVMODE_MPAL_PROG ((VITVMode)10)
++#else
+ typedef enum {
+     VI_TVMODE_NTSC_INT = 0, // VI_TVMODE(VI_NTSC, VI_INTERLACE),
+     VI_TVMODE_NTSC_DS = 1, // VI_TVMODE(VI_NTSC, VI_NON_INTERLACE),
+@@ -65,6 +72,7 @@
+     VI_TVMODE_DEBUG_PAL_INT = 16, // VI_TVMODE(VI_DEBUG_PAL, VI_INTERLACE),
+     VI_TVMODE_DEBUG_PAL_DS = 17, // VI_TVMODE(VI_DEBUG_PAL, VI_NON_INTERLACE)
+ } VITVMode;
++#endif
+ 
+ typedef enum {
+     VI_TV_FMT_NTSC,
+@@ -84,15 +92,22 @@
+     VI_SCAN_MODE_PROG
+ } VIScanMode;
+ 
++#if defined(MSCHARGED_NATIVE)
++#define VI_XFB_MODE_SF VI_XFBMODE_SF
++#define VI_XFB_MODE_DF VI_XFBMODE_DF
++#else
+ typedef enum VIXFBMode {
+     VI_XFB_MODE_SF,
+     VI_XFB_MODE_DF,
+ } VIXFBMode;
++#endif
+ 
++#if !defined(MSCHARGED_NATIVE)
+ typedef enum _VITimeToDIM {
+     VI_DM_DEFAULT = 0,
+     VI_DM_10M,
+     VI_DM_15M
+ } VITimeToDIM;
++#endif
+ 
+ #endif

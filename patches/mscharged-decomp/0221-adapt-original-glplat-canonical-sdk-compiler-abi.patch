@@ -1,0 +1,112 @@
+From: mscharged-port native source preparation
+Subject: [PATCH] Adapt original glPlat canonical SDK compiler ABI
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+Classification: permanent host compiler/platform/data ABI adaptation.
+
+diff --git a/src/NL/gl/glPlat.cpp b/src/NL/gl/glPlat.cpp
+--- a/src/NL/gl/glPlat.cpp
++++ b/src/NL/gl/glPlat.cpp
+@@ -1,9 +1,15 @@
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx.h>
++#include <dolphin/vi.h>
++#include <revolution/os/OSError_fwd.h>
++#else
+ #include <revolution/gx/GXPixel.h>
+ #include <revolution/gx/GXFrameBuf.h>
+ #include <revolution/vi/vi_fwd.h>
+ #include <revolution/gx/GXMisc_fwd.h>
+ #include <revolution/os/OSError_fwd.h>
+ #include <revolution/gx/GXTransform.h>
++#endif
+ 
+ #include "Game/TweakQuery.h"
+ #include "NL/nlDebug.h"
+@@ -28,8 +33,10 @@
+ extern "C"
+ {
+     void DCFlushRange(void* address, u32 length);
++#if !defined(MSCHARGED_NATIVE)
+     void GXSetMisc(s32 token, s32 value);
+     void* GXInit(void* fifo, u32 size);
++#endif
+ 
+     void SCInit();
+     u32 SCCheckStatus();
+@@ -37,10 +44,16 @@
+     u8 SCGetEuRgb60Mode();
+ 
++#if !defined(MSCHARGED_NATIVE)
+     void GXInitFifoLimits(void* fifo, u32 highWatermark, u32 lowWatermark);
++#endif
+ }
+ 
+ static GXRenderModeObj glPal480IntDf = {
++#if defined(MSCHARGED_NATIVE)
++    static_cast<VITVMode>(4),
++#else
+     4,
++#endif
+     640,
+     480,
+     542,
+@@ -48,7 +61,11 @@
+     16,
+     640,
+     542,
++#if defined(MSCHARGED_NATIVE)
++    static_cast<VIXFBMode>(1),
++#else
+     1,
++#endif
+     0,
+     0,
+     { 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6 },
+@@ -96,7 +113,11 @@
+ {
+     for (int i = 0; i < glx_FBSize; i += 4)
+     {
++#if defined(MSCHARGED_NATIVE)
++        *(u32*)((uintptr_t)xfb + i) = glx_ClearPixel;
++#else
+         *(u32*)((u32)xfb + i) = glx_ClearPixel;
++#endif
+     }
+     DCFlushRange(xfb, glx_FBSize);
+ }
+@@ -104,7 +125,11 @@
+ static void glx_InitGX()
+ {
+     gxInit();
++#if defined(MSCHARGED_NATIVE)
++    GXSetMisc(static_cast<GXMiscToken>(1), 8);
++#else
+     GXSetMisc(1, 8);
++#endif
+     GXRenderModeObj& mode = glx_rmode;
+     GXSetViewport(0.0f, 0.0f, (f32)mode.fbWidth, (f32)mode.efbHeight, 0.0f, 1.0f);
+     GXSetScissor(0, 0, mode.fbWidth, mode.efbHeight);
+@@ -234,7 +259,11 @@
+         return false;
+     }
+     glx_FIFO = GXInit(glx_FIFOMem, glx_FIFOSize);
++#if defined(MSCHARGED_NATIVE)
++    GXInitFifoLimits(static_cast<GXFifoObj*>(glx_FIFO), glx_FIFOSize - 0x10000, glx_FIFOSize - 0x40000);
++#else
+     GXInitFifoLimits(glx_FIFO, glx_FIFOSize - 0x10000, glx_FIFOSize - 0x40000);
++#endif
+ 
+     u32 fbSize = ((glx_rmode.fbWidth + 15) & 0xFFF0) * glx_rmode.xfbHeight * 2;
+     if (fbSize < 0x9F600)
+@@ -255,7 +284,11 @@
+     glxSwapSetBlack(true);
+     VIFlush();
+     VIWaitForRetrace();
++#if defined(MSCHARGED_NATIVE)
++    if ((glx_rmode.viTVmode & 1) != 0)
++#else
+     if ((glx_rmode.tvInfo & 1) != 0)
++#endif
+     {
+         VIWaitForRetrace();
+     }

@@ -4,12 +4,14 @@
 #include "NL/nlMemory.h"
 #include <aurora/aurora.h>
 #include <dolphin/os.h>
+#include <revolution/os/OS_fwd.h>
 #include <SDL3/SDL.h>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace
 {
@@ -26,9 +28,10 @@ int main(int argc, char** argv)
 {
     try
     {
-        const char* base = SDL_GetBasePath();
-        Require(base != nullptr, "Cannot find test data directory");
-        const std::string path = std::string(base) + "memory-test-data";
+        const char* sdl_base = SDL_GetBasePath();
+        Require(sdl_base != nullptr, "Cannot find test data directory");
+        const std::string base(sdl_base); // SDL's borrowed pointer expires on shutdown.
+        const std::string path = base + "memory-test-data";
         std::filesystem::create_directories(mscharged::PathFromUtf8(path));
         // The 128 MiB branch leaves the original 64 MiB reserve. Repeated
         // initialization must restore arenas and remove stale SDK heap pointers.
@@ -37,7 +40,7 @@ int main(int argc, char** argv)
             AuroraConfig config{};
             config.appName = "Charged native memory check";
             config.userPath = config.cachePath = path.c_str();
-            config.resourcesPath = base;
+            config.resourcesPath = base.c_str();
             config.desiredBackend = BACKEND_NULL;
             config.windowWidth = 320; config.windowHeight = 240;
             config.windowPosX = config.windowPosY = -1;

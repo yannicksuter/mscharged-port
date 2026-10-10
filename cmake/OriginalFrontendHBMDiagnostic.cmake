@@ -1,0 +1,48 @@
+include_guard(GLOBAL)
+include(cmake/OriginalARC.cmake)
+include(cmake/OriginalHBMArcResources.cmake)
+include(cmake/NativeHBMDebug.cmake)
+include(cmake/OriginalHBMFontTransport.cmake)
+include(cmake/OriginalTPL.cmake)
+include(cmake/OriginalHBMAnimationTransport.cmake)
+include(cmake/OriginalHBMLayoutProviders.cmake)
+include(cmake/OriginalHBMLayoutTransport.cmake)
+include(cmake/NativeHBMColor.cmake)
+include(cmake/OriginalHBMSoundProviders.cmake)
+
+# Admit only the original AsyncLoading HBM resource services26/27. The real
+# source owns construction, language-selected requests, six NL completions and
+# finalization. This does not initialize/display the HBM library or admit menus.
+option(MSCHARGED_DIAGNOSTIC_FRONTEND_HBM
+    "Admit original HBM resource services in the selected frontend diagnostic" OFF)
+function(mscharged_select_original_frontend_hbm target)
+    if(NOT MSCHARGED_DIAGNOSTIC_FRONTEND_HBM)
+        return()
+    endif()
+    if(NOT MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+        message(FATAL_ERROR "HBM resource admission requires the named original frontend sequence")
+    endif()
+    get_target_property(_type "${target}" TYPE)
+    if(NOT _type STREQUAL "MODULE_LIBRARY")
+        message(FATAL_ERROR "Original HBM providers belong to the isolated game module")
+    endif()
+    target_compile_definitions("${target}" PRIVATE
+        MSCHARGED_DIAGNOSTIC_FRONTEND_HBM=1)
+    get_target_property(_existing "${target}" SOURCES)
+    set(_hbm_source "${MSCHARGED_PREPARED}/src/Game/HBMManager.cpp")
+    if(NOT _hbm_source IN_LIST _existing)
+        target_sources("${target}" PRIVATE "${_hbm_source}")
+    endif()
+    mscharged_select_original_hbm_text_transport("${target}")
+    mscharged_add_original_arc("${target}")
+    mscharged_select_original_hbm_arc_resources("${target}")
+    mscharged_select_original_hbm_debug("${target}")
+    mscharged_select_original_hbm_font_transport("${target}")
+    mscharged_add_original_tpl("${target}")
+    mscharged_select_original_hbm_layout_providers("${target}")
+    mscharged_select_original_hbm_layout_transport("${target}")
+    mscharged_select_original_hbm_sound_providers("${target}")
+    mscharged_link_original_hbm_sound_host(charged_original_main_credits_host)
+    # SaveLoad and HOME share the same native binder/ARC byte registry.
+    # Original TPLGet is selected once; HBMManager source remains unmodified.
+endfunction()

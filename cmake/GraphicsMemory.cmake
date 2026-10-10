@@ -6,17 +6,17 @@ add_library(charged_graphics_memory STATIC
     "${MSCHARGED_PREPARED}/src/NL/gl/glMemoryNames.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxMemory.cpp"
     "${MSCHARGED_PREPARED}/src/Game/GL/GLInventoryStatic.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLTextureAnim.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glTextureManagerStatic.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlAVLTree.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlSlotPool.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glModelMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glState.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glStat.cpp"
     "${MSCHARGED_PREPARED}/src/NL/gl/glHash.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxModelMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/glx/glxMatrix.cpp"
     "${MSCHARGED_PREPARED}/src/NL/nlMath.cpp"
-    "${MSCHARGED_PREPARED}/src/NL/nlString.cpp"
     "${MSCHARGED_PREPARED}/src/NL/math.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plane.cpp"
     "${MSCHARGED_PREPARED}/src/NL/plat/platvmath.cpp"
@@ -30,7 +30,25 @@ target_include_directories(charged_graphics_memory PUBLIC src
 target_compile_features(charged_graphics_memory PRIVATE cxx_std_17)
 set_target_properties(charged_graphics_memory PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
 target_compile_definitions(charged_graphics_memory PRIVATE TARGET_PC=1)
+# Every legacy graphics consumer must see the same diagnostic GLView layout,
+# including material units below the view library in the dependency graph.
+# Original source object targets use their independent, unextended view ABI.
+target_compile_definitions(charged_graphics_memory PUBLIC
+    MSCHARGED_DIAGNOSTIC_VIEWS=1 MSCHARGED_DIAGNOSTIC_TASKS=1
+    MSCHARGED_DIAGNOSTIC_TEXTURES=1 MSCHARGED_DIAGNOSTIC_EVENTS=1
+    MSCHARGED_DIAGNOSTIC_GL_STATE=1 MSCHARGED_DIAGNOSTIC_MATRICES=1
+    MSCHARGED_DIAGNOSTIC_GRAPHICS_MEMORY=1)
+# Original resource object targets compile without the legacy pool policies.
+target_compile_definitions(charged_graphics_memory PRIVATE
+    MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS=1)
 target_link_libraries(charged_graphics_memory PUBLIC charged_decomp_startup aurora::mtx)
+# Charged's selected mtx44.c owns the projection entry points. Aurora's mtx.c
+# also contains them alongside the 3x4 skin operations now needed by the port.
+# Give the selected Charged providers distinct names and propagate that choice
+# to their consumers. Aurora-only diagnostics retain their original provider.
+# This does not depend on static archive order or weak symbols.
+target_compile_definitions(charged_graphics_memory PUBLIC
+    C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
     target_compile_options(charged_graphics_memory PRIVATE -ffp-contract=off -fno-strict-aliasing -fsigned-char -Wno-unknown-pragmas)
 endif()

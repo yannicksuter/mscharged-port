@@ -1,6 +1,6 @@
 Subject: Select native arithmetic for original graphics matrix helpers
 
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
 Compile the original NL math/vector helpers and RVL 4x4 matrix TU. Retain its
 portable projection and inverse bodies, add scalar native implementations of
@@ -13,7 +13,6 @@ are not Wii frsqrte bit-pattern emulation; full floating-point/gameplay parity
 remains a separate gate. These helpers currently drive the diagnostic camera.
 
 diff --git a/src/NL/math.cpp b/src/NL/math.cpp
-index 59f60ba..0fe420e 100644
 --- a/src/NL/math.cpp
 +++ b/src/NL/math.cpp
 @@ -1,4 +1,7 @@
@@ -24,7 +23,7 @@ index 59f60ba..0fe420e 100644
  
  nlMatrix4& nlMakeRotationMatrixAxisAngle(
      nlMatrix4& out, const nlVector3& v3RotationAxis, float ang_rad)
-@@ -7,7 +10,11 @@ nlMatrix4& nlMakeRotationMatrixAxisAngle(
+@@ -7,7 +10,11 @@
      nlVector3 axis = v3RotationAxis;
      float fSin;
      float fCos;
@@ -37,25 +36,21 @@ index 59f60ba..0fe420e 100644
      float oneMinusCos = 1.0f - fCos;
      result.m11 = oneMinusCos * (axis.x * axis.x) + fCos;
 diff --git a/src/NL/nlMath.cpp b/src/NL/nlMath.cpp
-index ac09438..562ff4d 100644
 --- a/src/NL/nlMath.cpp
 +++ b/src/NL/nlMath.cpp
-@@ -4,8 +4,14 @@
+@@ -3,6 +3,11 @@
+ #include "types.h"
  
  #include <math.h>
- 
 +#if defined(MSCHARGED_NATIVE)
 +#include "runtime/graphics_math.h"
 +#include <limits>
 +#define __frsqrte(value) mscharged::NativeReciprocalSqrtEstimate(value)
-+#else
- extern int __float_nan[];
- extern int __float_huge[];
 +#endif
  
  struct nlATanCoefficients
  {
-@@ -14,12 +20,20 @@ struct nlATanCoefficients
+@@ -11,12 +16,20 @@
  
  static inline float nlFAbs(float value)
  {
@@ -76,7 +71,7 @@ index ac09438..562ff4d 100644
  }
  
  float nlSqrt(float x, bool accurate)
-@@ -37,13 +51,25 @@ float nlSqrt(float x, bool accurate)
+@@ -34,13 +47,25 @@
      }
      else if (x < 0.0)
      {
@@ -92,8 +87,9 @@ index ac09438..562ff4d 100644
 +        if (std::isnan(x))
 +#else
          if (__fpclassifyf(x) == 1)
+-        {
 +#endif
-         {
++        {
 +#if defined(MSCHARGED_NATIVE)
 +            return std::numeric_limits<float>::quiet_NaN();
 +#else
@@ -102,7 +98,7 @@ index ac09438..562ff4d 100644
          }
          return x;
      }
-@@ -62,11 +88,19 @@ float nlRecipSqrt(float x, bool accurate)
+@@ -59,11 +84,19 @@
      }
      else if (x != zero)
      {
@@ -122,7 +118,7 @@ index ac09438..562ff4d 100644
      }
  }
  
-@@ -228,11 +262,19 @@ int nlACos(float x)
+@@ -225,11 +258,19 @@
          float zero = 0.0f;
          if (radicand != zero)
          {
@@ -143,10 +139,9 @@ index ac09438..562ff4d 100644
      }
  
 diff --git a/src/NL/nlString.cpp b/src/NL/nlString.cpp
-index bcaa97e..a81cc2f 100644
 --- a/src/NL/nlString.cpp
 +++ b/src/NL/nlString.cpp
-@@ -29,6 +29,9 @@ u32 nlStringLowerHash(const char* str)
+@@ -28,6 +28,9 @@
  
  void nlZeroMemory(void* ptr, unsigned long numBytes)
  {
@@ -156,35 +151,25 @@ index bcaa97e..a81cc2f 100644
      if (numBytes >= 0x80)
      {
          unsigned long address = (unsigned long)ptr;
-@@ -57,4 +60,5 @@ void nlZeroMemory(void* ptr, unsigned long numBytes)
+@@ -56,4 +59,5 @@
      {
          memset(ptr, 0, numBytes);
      }
 +#endif
  }
 diff --git a/src/NL/plat/platqmath.cpp b/src/NL/plat/platqmath.cpp
-index 58f4d64..77b13eb 100644
 --- a/src/NL/plat/platqmath.cpp
 +++ b/src/NL/plat/platqmath.cpp
-@@ -1,5 +1,8 @@
- #include "NL/nlMath.h"
- 
+@@ -1,4 +1,8 @@
 +#if defined(MSCHARGED_NATIVE)
 +#include <dolphin/mtx.h>
 +#else
- struct Quaternion;
- 
- extern "C"
-@@ -9,6 +12,7 @@ extern "C"
-     void C_QUATSlerp(const Quaternion* p, const Quaternion* q,
-         Quaternion* r, float t);
- }
+ #include <revolution/mtx.h>
 +#endif
  
- void nlQuatSlerp(
-     nlQuaternion& out, const nlQuaternion& q1, const nlQuaternion& q2, float t)
+ #include "NL/nlMath.h"
+ 
 diff --git a/src/NL/plat/platvmath.cpp b/src/NL/plat/platvmath.cpp
-index 2271167..ac68f04 100644
 --- a/src/NL/plat/platvmath.cpp
 +++ b/src/NL/plat/platvmath.cpp
 @@ -1,6 +1,10 @@
@@ -198,7 +183,7 @@ index 2271167..ac68f04 100644
  
  #define qr0 0
  
-@@ -25,7 +29,14 @@ nlMatrix4& nlTransposeMatrix(nlMatrix4& out, const nlMatrix4& in)
+@@ -25,7 +29,14 @@
  
  nlMatrix4& nlInvertMatrix(nlMatrix4& out, const nlMatrix4& in)
  {
@@ -213,7 +198,7 @@ index 2271167..ac68f04 100644
      return out;
  }
  
-@@ -35,6 +46,15 @@ void nlMultVectorMatrix(nlVector2& out, const nlVector2& in, const nlMatrix3& m)
+@@ -35,6 +46,15 @@
      out.y = m.e[1] * in.x + m.e[4] * in.y + m.e[7];
  }
  
@@ -229,7 +214,7 @@ index 2271167..ac68f04 100644
  // clang-format off
  void nlMultPosVectorMatrix(register nlVector3& result, register const nlVector3& pos, register const nlMatrix4& transformMatrix)
  {
-@@ -62,6 +82,7 @@ void nlMultPosVectorMatrix(register nlVector3& result, register const nlVector3&
+@@ -62,6 +82,7 @@
      }
  }
  // clang-format on
@@ -237,7 +222,7 @@ index 2271167..ac68f04 100644
  
  void nlMultVectorMatrix(nlVector4& out, const nlVector4& in, const nlMatrix4& m)
  {
-@@ -71,6 +92,15 @@ void nlMultVectorMatrix(nlVector4& out, const nlVector4& in, const nlMatrix4& m)
+@@ -71,6 +92,15 @@
      out.w = m.e2[0][3] * in.x + m.e2[1][3] * in.y + m.e2[2][3] * in.z + m.e2[3][3] * in.w;
  }
  
@@ -253,7 +238,7 @@ index 2271167..ac68f04 100644
  // clang-format off
  void nlMultDirVectorMatrix(register nlVector3& result, register const nlVector3& direction, register const nlMatrix4& transformMatrix)
  {
-@@ -94,13 +124,18 @@ void nlMultDirVectorMatrix(register nlVector3& result, register const nlVector3&
+@@ -94,13 +124,18 @@
      }
  }
  // clang-format on
@@ -264,51 +249,55 @@ index 2271167..ac68f04 100644
      f32 sn;
      f32 cs;
  
+-    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#if defined(MSCHARGED_NATIVE)
 +    nlSinCos(&sn, &cs, mscharged::NativeFixedAngle16(theta));
 +#else
-     nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
++    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#endif
      PSMTX44Identity(out.e2);
      out.e2[1][1] = cs;
      out.e2[1][2] = sn;
-@@ -114,7 +149,11 @@ nlMatrix4& nlMakeRotationMatrixY(nlMatrix4& out, float theta)
+@@ -114,7 +149,11 @@
      f32 sn;
      f32 cs;
  
+-    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#if defined(MSCHARGED_NATIVE)
 +    nlSinCos(&sn, &cs, mscharged::NativeFixedAngle16(theta));
 +#else
-     nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
++    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#endif
      PSMTX44Identity(out.e2);
      out.e2[0][0] = cs;
      out.e2[0][2] = -sn;
-@@ -128,7 +167,11 @@ nlMatrix4& nlMakeRotationMatrixZ(nlMatrix4& out, float theta)
+@@ -128,7 +167,11 @@
      f32 sn;
      f32 cs;
  
+-    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#if defined(MSCHARGED_NATIVE)
 +    nlSinCos(&sn, &cs, mscharged::NativeFixedAngle16(theta));
 +#else
-     nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
++    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#endif
      PSMTX44Identity(out.e2);
      out.e2[0][0] = cs;
      out.e2[0][1] = sn;
-@@ -142,7 +185,11 @@ nlMatrix3& nlMakeRotationMatrixZ(nlMatrix3& out, float theta)
+@@ -142,7 +185,11 @@
      f32 sn;
      f32 cs;
  
+-    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#if defined(MSCHARGED_NATIVE)
 +    nlSinCos(&sn, &cs, mscharged::NativeFixedAngle16(theta));
 +#else
-     nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
++    nlSinCos(&sn, &cs, (short)(RAD_TO_FIXED16 * theta));
 +#endif
      out.SetIdentity();
      out.e[0] = cs;
      out.e[1] = sn;
-@@ -160,9 +207,21 @@ nlMatrix4& nlMakeRotationMatrixEulerAngles(nlMatrix4& m, float pitch, float yaw,
+@@ -160,9 +207,21 @@
      f32 sinPitch;
      f32 cosPitch;
  
@@ -331,7 +320,6 @@ index 2271167..ac68f04 100644
      m.e2[2][3] = 0.0f;
      m.e2[1][3] = 0.0f;
 diff --git a/src/RVL_SDK/mtx/mtx44.c b/src/RVL_SDK/mtx/mtx44.c
-index 1850a1e..45d60f9 100644
 --- a/src/RVL_SDK/mtx/mtx44.c
 +++ b/src/RVL_SDK/mtx/mtx44.c
 @@ -1,4 +1,7 @@
@@ -342,7 +330,7 @@ index 1850a1e..45d60f9 100644
  #include <revolution/mtx.h>
  
  extern f64 tan(f64);
-@@ -83,6 +86,13 @@ void C_MTXOrtho(Mtx44 m, f32 t, f32 b, f32 l, f32 r, f32 n, f32 f)
+@@ -83,6 +86,13 @@
      m[3][3] = 1.0f;
  }
  
@@ -356,12 +344,13 @@ index 1850a1e..45d60f9 100644
  // clang-format off
  void PSMTX44Identity(register Mtx44 m)
  {
-@@ -103,7 +113,14 @@ void PSMTX44Identity(register Mtx44 m)
+@@ -103,7 +113,14 @@
      }
  }
  // clang-format on
+-
 +#endif
- 
++
 +#if defined(MSCHARGED_NATIVE)
 +void PSMTX44Copy(const Mtx44 src, Mtx44 dst)
 +{
@@ -371,12 +360,13 @@ index 1850a1e..45d60f9 100644
  // clang-format off
  asm void PSMTX44Copy(const register Mtx44 src, register Mtx44 dst)
  {
-@@ -127,7 +144,19 @@ asm void PSMTX44Copy(const register Mtx44 src, register Mtx44 dst)
+@@ -127,7 +144,19 @@
      blr
  }
  // clang-format on
+-
 +#endif
- 
++
 +#if defined(MSCHARGED_NATIVE)
 +void PSMTX44Concat(const Mtx44 a, const Mtx44 b, Mtx44 ab)
 +{
@@ -391,12 +381,13 @@ index 1850a1e..45d60f9 100644
  // clang-format off
  asm void PSMTX44Concat(const register Mtx44 a, const register Mtx44 b, register Mtx44 ab)
  {
-@@ -199,7 +228,17 @@ asm void PSMTX44Concat(const register Mtx44 a, const register Mtx44 b, register
+@@ -199,7 +228,17 @@
      blr
  }
  // clang-format on
+-
 +#endif
- 
++
 +#if defined(MSCHARGED_NATIVE)
 +void PSMTX44Transpose(const Mtx44 src, Mtx44 dst)
 +{
@@ -409,7 +400,7 @@ index 1850a1e..45d60f9 100644
  // clang-format off
  asm void PSMTX44Transpose(const register Mtx44 src, register Mtx44 xPose)
  {
-@@ -231,6 +270,7 @@ asm void PSMTX44Transpose(const register Mtx44 src, register Mtx44 xPose)
+@@ -231,6 +270,7 @@
      blr
  }
  // clang-format on
@@ -417,7 +408,7 @@ index 1850a1e..45d60f9 100644
  
  #define SWAP(a, b) \
      {              \
-@@ -307,6 +347,13 @@ u32 C_MTX44Inverse(const Mtx44 src, Mtx44 inv)
+@@ -307,6 +347,13 @@
      return 1;
  }
  
@@ -431,7 +422,7 @@ index 1850a1e..45d60f9 100644
  // clang-format off
  void PSMTX44Scale(register Mtx44 m, register f32 xS, register f32 yS, register f32 zS)
  {
-@@ -327,3 +374,4 @@ void PSMTX44Scale(register Mtx44 m, register f32 xS, register f32 yS, register f
+@@ -327,3 +374,4 @@
      }
  }
  // clang-format on

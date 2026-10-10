@@ -4,9 +4,8 @@
 [game]
 disc = game/R4QE01.rvz
 
-# These game preferences can be saved now. The game runtime does not use them yet.
-# Language selects game menus/text when supported by the release. Automatic
-# selection will follow the computer's language with a supported regional fallback.
+# Game text for the supported USA disc: auto, english, french, or spanish.
+# Automatic currently uses English. The original game selects localized resources.
 language = auto
 
 [display]
@@ -15,15 +14,83 @@ height = 720
 fullscreen = false
 vsync = true
 backend = auto
+# Game layout: auto (by window shape), 4:3 or 16:9.
 aspect = 16:9
+# Picture: soft (the original TV signal), clean (drawn straight into the window
+# without the TV flicker filter) or sharp (clean with square pixels).
+picture = sharp
+# Antialiasing of the game's 3D edges: off or 4x (more GPU time).
+antialiasing = 4x
+# Frames per second in the game window title.
+show_fps = true
+# Display the game window opens on: 0 = default, 1 = first display, 2 = second...
+monitor = 0
 
 [audio]
+# Host speaker volume (0-100) and mute. Music, effects and voice levels are in
+# the game's own Options menu.
 master_volume = 100
 music_volume = 100
 effects_volume = 100
 mute = false
 
 [controls]
-input = auto
+# Who plays: keyboard (keyboard & mouse), remote1-remote4 (the Wii Remote in
+# that DolphinBar slot), gamepad1-gamepad4 (the n-th connected Xbox,
+# PlayStation or other standard gamepad, played as Wii Remote + Nunchuk) or
+# off. Players fill in order and each device plays once. Without a DolphinBar
+# the Wii Remote players are left out and the others close up in order.
+player1 = keyboard
+player2 = off
+player3 = off
+player4 = off
+# When player 1 is a Wii Remote or gamepad and plays alone, the mouse also
+# points for it (left click A, right click B); the controller keeps working.
+mouse_pointer = true
+# Pointer calibration of the Wii Remote in each DolphinBar slot, made on the
+# launcher's Controls page (none = uncalibrated).
+remote1_calibration = none
+remote2_calibration = none
+remote3_calibration = none
+remote4_calibration = none
 deadzone = 15
 rumble = true
+# Where the sensor bar or DolphinBar sits: bottom or top of the screen.
+sensor_bar = bottom
+
+[keyboard]
+# Keys of the keyboard & mouse Wii Remote: one or two SDL key names per
+# action, separated by |. Change them on the launcher's Controls page.
+a = Return | Space
+b = Escape | Backspace
+one = Z
+two = X
+plus = Tab
+minus = -
+home = Home
+up = Up
+down = Down
+left = Left
+right = Right
+stick_up = W
+stick_left = A
+stick_down = S
+stick_right = D
+c = C
+z = V
+shake_remote = E
+shake_nunchuk = Q
+
+[advanced]
+# Backend graphics debug layers (slower; turn on for bug reports). WebGPU
+# validation and robust buffer access stay enabled in both modes.
+# Log detail: error, warning, info or debug.
+# Verbose console: also print development traces and the game's own debug
+# output (bug reports). Off keeps settings, devices, warnings and errors.
+graphics_validation = false
+log_level = info
+verbose_console = false
+
+[launcher]
+# Launcher interface size: auto, or a percentage from 75 to 200.
+ui_scale = auto

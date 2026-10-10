@@ -1,0 +1,50 @@
+Subject: Select original dispatch task and shared base header
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Upstream now owns the default nlTask::StateTransition inline in its header.
+Retain the original DispatchEventsTask::Run(true) path and diagnostic destructor
+selection without defining a second transition body.
+Native initialization uses the checked game-new overload with construction-failure
+cleanup. Reset cancels pending payloads before releasing blocks and preserves the
+original persistent task; the port supplies explicit final task destruction.
+The broader task manager, MoviePlay and original main loop remain unselected.
+
+diff --git a/src/Game/Task/DispatchEventsTask.cpp b/src/Game/Task/DispatchEventsTask.cpp
+--- a/src/Game/Task/DispatchEventsTask.cpp
++++ b/src/Game/Task/DispatchEventsTask.cpp
+@@ -8,15 +8,27 @@
+ 
+ void InitializeDispatchEventsTask()
+ {
++#ifdef MSCHARGED_NATIVE
++    CheckNativeEventThread();
++    if (gDispatchEventsTask) throw std::logic_error("Dispatch task is already initialized");
++    gDispatchEventsTask = new (8, false) DispatchEventsTask;
++#else
+     gDispatchEventsTask =
+         new (nlMalloc(sizeof(DispatchEventsTask), 8, false)) DispatchEventsTask;
++#endif
+ }
+ 
+ void fn_80115FB4()
+ {
++#ifdef MSCHARGED_NATIVE
++    CheckNativeEventThread();
++    if (!gDispatchEventsTask) throw std::logic_error("Dispatch task is not initialized");
++    gDispatchEventsTask->dispatcher.FreeBlocks(); // Cancels callbacks before freeing blocks; keeps the task alive.
++#else
+     gDispatchEventsTask->dispatcher.Clear();
+ 
+     gDispatchEventsTask->dispatcher.FreeBlocks();
++#endif
+ }
+ 
+ void DispatchEventsTask::Run(float)
+diff --git a/src/NL/TaskBase.cpp b/src/NL/TaskBase.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/NL/TaskBase.cpp
+@@ -0,0 +1,2 @@
++// The original default transition hook is inline in NL/nlTask.h.
++#include "NL/nlTask.h"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/system.h"
 #include <cstdint>
 #include <filesystem>
 #include <stdexcept>
@@ -7,6 +8,7 @@
 
 namespace mscharged
 {
+struct ResolvedLaunch;
 class StartupStopped : public std::runtime_error
 {
 public:
@@ -15,10 +17,12 @@ public:
 };
 
 [[noreturn]] void MissingStartupService(const char* symbol, const char* reason);
-void SetStartupSystemLanguage(std::uint8_t language);
 void InitializeStartupOS();
 void ResetStartupMemory();
 std::string StartupMemorySummary();
+std::string VerifyStartupBootLoading();
+std::string VerifyStartupParticleResources();
 // Returns 3 at an explicit unimplemented service, 1 for a startup error.
 int RunGameStartup(int argc, char** argv, const std::filesystem::path& config);
+int RunGameStartup(int argc, char** argv, const ResolvedLaunch& launch);
 }

@@ -1,0 +1,90 @@
+Subject: Select original graphics frame state and lifecycle
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Add separately selected diagnostic copies of the begin/end/send/discard/finish
+entry points and frame state. Leave the complete original gl.cpp state and
+function bodies unchanged. Native guards and counter checks apply only to these
+diagnostic copies, whose callers acquire host frames explicitly. Production must
+compile whole gl.cpp and provide native hardware services beneath glplat calls.
+This diagnostic does not execute original BeginFrameTask/EndFrameTask flow.
+
+diff --git a/src/NL/gl/glFrame.cpp b/src/NL/gl/glFrame.cpp
+new file mode 100644
+--- /dev/null
++++ b/src/NL/gl/glFrame.cpp
+@@ -0,0 +1,74 @@
++// Original frame state and entry points extracted from gl.cpp.
++#include "NL/gl/gl.h"
++#include "NL/gl/glPlat.h"
++#include "NL/gl/glView.h"
++#include "runtime/frames.h"
++#include <limits>
++#include <stdexcept>
++
++static int gl_frameCounter;
++static int gl_nDiscard;
++static int gl_state;
++
++int glGetCurrentFrame()
++{
++    return gl_frameCounter;
++}
++
++void glBeginFrame()
++{
++    mscharged::NativeFrameGuard nativeFrame(mscharged::FrameCall::Begin);
++    glplatBeginFrame();
++    gl_state = 1;
++}
++
++void glEndFrame()
++{
++    mscharged::NativeFrameGuard nativeFrame(mscharged::FrameCall::End);
++    glplatEndFrame();
++    gl_state = 2;
++}
++
++bool glIsFrameActive()
++{
++    return gl_state == 1;
++}
++
++void glSendFrame()
++{
++    mscharged::NativeFrameGuard nativeFrame(mscharged::FrameCall::Send);
++    if (gl_frameCounter == std::numeric_limits<int>::max())
++        throw std::overflow_error("Original graphics frame counter exhausted");
++    if (gl_nDiscard > 0)
++    {
++        glplatAbortFrame();
++        gl_nDiscard -= 1;
++    }
++    else
++    {
++        glplatSendFrame();
++    }
++
++    gl_ViewReset();
++    gl_state = 0;
++    gl_frameCounter += 1;
++}
++
++void glDiscardFrame(int nFrames)
++{
++    mscharged::NativeFrameGuard nativeFrame(mscharged::FrameCall::Discard);
++    if (nFrames > gl_nDiscard)
++        gl_nDiscard = nFrames;
++}
++
++void glFinish()
++{
++    mscharged::NativeFrameGuard nativeFrame(mscharged::FrameCall::Finish);
++    glplatFinish();
++}
++
++namespace mscharged
++{
++void ResetOriginalFrameState() { gl_frameCounter = gl_nDiscard = gl_state = 0; }
++void CancelOriginalFrameState() { gl_state = 0; }
++}

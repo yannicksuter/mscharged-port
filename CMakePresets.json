@@ -17,7 +17,69 @@
         "MSCHARGED_BUILD_AURORA_HOST": false,
         "MSCHARGED_BUILD_GAME_STARTUP": false,
         "MSCHARGED_BUILD_GX_CHECK": false,
-        "MSCHARGED_BUILD_SCENE_PREVIEW": false
+        "MSCHARGED_BUILD_SCENE_PREVIEW": false,
+        "MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC": false,
+        "MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC": false,
+        "MSCHARGED_BUILD_ORIGINAL_LOADING_DIAGNOSTIC": false
+      }
+    },
+    {
+      "name": "optimized",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "frontend-runtime",
+      "hidden": true,
+      "inherits": "optimized",
+      "cacheVariables": {
+        "MSCHARGED_BUILD_GX_CHECK": true,
+        "MSCHARGED_BUILD_LAUNCHER": true,
+        "MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC": true,
+        "MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC": true,
+        "MSCHARGED_BUILD_ORIGINAL_LOADING_DIAGNOSTIC": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_TITLE": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CAMERAS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_FLASH": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_SAVE_OWNERS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_HBM": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_MATERIALS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_SH_MENUS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_NIS_OWNER": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_AUDIO": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_BOOT_SCRIPT": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_BOOT_TO_FE": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CLEAN_BOOT": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_WORLD": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_WORLD_DRAW": true,
+        "MSCHARGED_DIAGNOSTIC_MAIN_NETWORK_OWNER": true,
+        "MSCHARGED_DIAGNOSTIC_MAIN_PRESENTATION_OWNER": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_MII_RESOURCES": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_FINALIZE": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_MENU_ENTRY": true,
+        "MSCHARGED_DIAGNOSTIC_GAME_AUDIO_OWNER": true,
+        "MSCHARGED_DIAGNOSTIC_GAME_AUDIO_INITIALIZE": true,
+        "MSCHARGED_DIAGNOSTIC_GAME_AUDIO_TASK": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_FIXED_INPUT": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_PLAT_PAD_TASK": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_MAIN_MENU": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_HALL_OF_FAME": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_OFFLINE_SCENES": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_DOMINATION": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CHALLENGES": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_BRIEFINGS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CUP": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_MATCH_LOADING": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CHALLENGE_PLAY": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_FE_MODELS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_CREDITS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_RESET": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_DVD_MESSAGES": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_DVD_ERRORS": true,
+        "MSCHARGED_DIAGNOSTIC_FRONTEND_INITIAL_LOADING_MESSAGE": true
       }
     },
     {
@@ -30,11 +92,13 @@
     },
     {
       "name": "release",
-      "inherits": "base",
-      "displayName": "Development build (Release)",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "inherits": "frontend-runtime",
+      "displayName": "Original frontend runtime (Release, incomplete game)"
+    },
+    {
+      "name": "launcher",
+      "inherits": "optimized",
+      "displayName": "Launcher and foundation only (Release)"
     },
     {
       "name": "aurora",
@@ -54,12 +118,18 @@
     },
     {
       "name": "graphics",
-      "inherits": "release",
+      "inherits": "optimized",
       "displayName": "Standalone GX/Vulkan diagnostic (Release, no game)",
       "cacheVariables": {
         "MSCHARGED_BUILD_GX_CHECK": true,
         "MSCHARGED_BUILD_LAUNCHER": false
       }
+    },
+    {
+      "name": "frontend",
+      "inherits": "frontend-runtime",
+      "displayName": "Original frontend sequence (Release, incomplete startup)",
+      "binaryDir": "${sourceDir}/build/graphics"
     },
     {
       "name": "scene",
@@ -73,12 +143,26 @@
   ],
   "buildPresets": [
     {
+      "name": "frontend",
+      "configurePreset": "frontend",
+      "targets": [
+        "mscharged"
+      ]
+    },
+    {
       "name": "debug",
       "configurePreset": "debug"
     },
     {
       "name": "release",
-      "configurePreset": "release"
+      "configurePreset": "release",
+      "targets": [
+        "mscharged"
+      ]
+    },
+    {
+      "name": "launcher",
+      "configurePreset": "launcher"
     },
     {
       "name": "aurora",
@@ -109,8 +193,8 @@
       }
     },
     {
-      "name": "release",
-      "configurePreset": "release",
+      "name": "launcher",
+      "configurePreset": "launcher",
       "output": {
         "outputOnFailure": true
       },
@@ -161,6 +245,19 @@
   ],
   "workflowPresets": [
     {
+      "name": "frontend",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "frontend"
+        },
+        {
+          "type": "build",
+          "name": "frontend"
+        }
+      ]
+    },
+    {
       "name": "debug",
       "steps": [
         {
@@ -187,10 +284,23 @@
         {
           "type": "build",
           "name": "release"
+        }
+      ]
+    },
+    {
+      "name": "launcher",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "launcher"
+        },
+        {
+          "type": "build",
+          "name": "launcher"
         },
         {
           "type": "test",
-          "name": "release"
+          "name": "launcher"
         }
       ]
     },

@@ -1,19 +1,18 @@
 Subject: Adapt original GL views, frame sorters and slot pools for native rendering
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
-Keep the original view traversal, per-layer AVL sorting, packet callback flags
-and pool algorithms. Allocate sorter tables lazily after game memory startup;
-release them before arena shutdown, reject cyclic/deep ownership graphs and
-expired frame packet lists. Sort using a 32-bit priority plus a complete native
-packet pointer. Preserve signed sort layers and defined Wii depth conversion.
-Select original projection/count helpers without the incomplete full startup.
+Original native GLView retains immediate sorter allocation, parent/child
+ownership, reset/compact, traversal and packet callbacks. Preview lazy storage,
+extra view fields and lifecycle/numeric guards require DIAGNOSTIC_VIEWS. Keep
+size_t/game-owned allocation compatibility and native pointer sort keys.
+The depth intrinsic, slot-pool changes and extracted projection/count helpers
+remain separately scoped adaptations; this patch is not blanket source approval.
 
 diff --git a/include/NL/gl/glRenderList.h b/include/NL/gl/glRenderList.h
-index b82bb96..5ecba05 100644
 --- a/include/NL/gl/glRenderList.h
 +++ b/include/NL/gl/glRenderList.h
 @@ -9,7 +9,11 @@
- class UnidentifiedPacketSorter
+ class GLPacketSorter
  {
  public:
 +#if defined(MSCHARGED_NATIVE)
@@ -24,32 +23,31 @@ index b82bb96..5ecba05 100644
      {
          return glFrameAlloc(size, GLM_Header);
      }
-@@ -19,7 +23,20 @@ public:
-     virtual void fn_10(GLView*, const glModelPacket*) = 0;
+@@ -19,7 +23,20 @@
+     virtual void AttachPacket(GLView*, const glModelPacket*) = 0;
  };
  
 +#if defined(MSCHARGED_NATIVE)
 +// Keep the original 32-bit priority followed by the entire native address.
-+struct UnidentifiedPacketSortKey
++struct GLPacketSortKey
 +{
 +    u32 priority;
 +    uintptr_t packet;
-+    bool operator==(const UnidentifiedPacketSortKey& b) const
++    bool operator==(const GLPacketSortKey& b) const
 +    { return priority == b.priority && packet == b.packet; }
-+    bool operator<(const UnidentifiedPacketSortKey& b) const
++    bool operator<(const GLPacketSortKey& b) const
 +    { return priority < b.priority || (priority == b.priority && packet < b.packet); }
 +};
 +#else
- typedef unsigned long long UnidentifiedPacketSortKey;
+ typedef unsigned long long GLPacketSortKey;
 +#endif
- typedef AVLTreeEntry<UnidentifiedPacketSortKey, const glModelPacket*> UnidentifiedPacketTreeEntry;
+ typedef AVLTreeEntry<GLPacketSortKey, const glModelPacket*> GLPacketTreeEntry;
  
  template <typename T>
 diff --git a/include/NL/gl/glView.h b/include/NL/gl/glView.h
-index e34503a..0622ac7 100644
 --- a/include/NL/gl/glView.h
 +++ b/include/NL/gl/glView.h
-@@ -63,7 +63,20 @@ enum GLViewTargetMode
+@@ -63,7 +63,22 @@
  class GLView
  {
  public:
@@ -59,22 +57,24 @@ index e34503a..0622ac7 100644
 +    static void* operator new(size_t size, int alignment, bool end) { return nlMalloc(size, alignment, end); }
 +    static void operator delete(void* ptr) { nlFree(ptr); }
 +    static void operator delete(void* ptr, int, bool) { nlFree(ptr); }
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    GLView(const GLView&) = delete;
 +    GLView& operator=(const GLView&) = delete;
 +    void ResetPackets();
 +    uint64_t m_NativeFrame = 0;
 +    bool m_NativeIterating = false;
++#endif
 +#else
      inline GLView();
 +#endif
      GLView(GLViewInterface*, const GLRenderPair&, GLViewSortMode);
      virtual ~GLView();
  
-@@ -79,14 +92,21 @@ public:
+@@ -79,14 +94,21 @@
          return m_Children.m_Head != 0;
      }
  
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    void AddChild(GLView* child);
 +#else
      void AddChild(GLView* child)
@@ -86,17 +86,17 @@ index e34503a..0622ac7 100644
  
      void SetParent(GLView* parent)
      {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        if (!parent) { if (m_Parent) m_Parent->RemoveChild(this); return; }
 +#endif
          parent->AddChild(this);
      }
  
-@@ -172,5 +192,10 @@ void glViewProjectPointToViewport(GLView* view, const nlVector3* world, nlVector
+@@ -172,5 +194,10 @@
  void glViewProjectPointBetweenViews(GLView* source, GLView* destination, const nlVector3* world, nlVector3* projected);
  void gl_ViewReset();
  void gl_ViewStartup();
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +void gl_ViewShutdown();
 +bool glNativeViewDispatchActive();
 +void glNativeSetViewDispatch(bool active);
@@ -104,7 +104,6 @@ index e34503a..0622ac7 100644
  
  #endif // NL_GL_GLVIEW_H
 diff --git a/include/NL/glx/glxMemory.h b/include/NL/glx/glxMemory.h
-index e8f69eb..d3684dd 100644
 --- a/include/NL/glx/glxMemory.h
 +++ b/include/NL/glx/glxMemory.h
 @@ -7,6 +7,7 @@
@@ -116,10 +115,9 @@ index e8f69eb..d3684dd 100644
  #else
  typedef unsigned long GLResourceMark;
 diff --git a/include/NL/nlAVLTree.h b/include/NL/nlAVLTree.h
-index b6f837e..90de373 100644
 --- a/include/NL/nlAVLTree.h
 +++ b/include/NL/nlAVLTree.h
-@@ -272,6 +272,9 @@ public:
+@@ -281,6 +281,9 @@
      virtual AVLTreeNode* AllocateEntry(void* key, void* value)
      {
          void* storage = m_Allocator.Allocate();
@@ -130,7 +128,6 @@ index b6f837e..90de373 100644
          newNode->node.left = 0;
          newNode->node.right = 0;
 diff --git a/src/NL/gl/glMemoryInit.cpp b/src/NL/gl/glMemoryInit.cpp
-index 6801388..05e5c74 100644
 --- a/src/NL/gl/glMemoryInit.cpp
 +++ b/src/NL/gl/glMemoryInit.cpp
 @@ -11,6 +11,7 @@
@@ -142,7 +139,6 @@ index 6801388..05e5c74 100644
      gl_MatrixShutdown();
      while (glGetResourcePools()) glDestroyResourcePool(glGetResourcePools());
 diff --git a/src/NL/gl/glRenderList.cpp b/src/NL/gl/glRenderList.cpp
-index 4130277..51134a7 100644
 --- a/src/NL/gl/glRenderList.cpp
 +++ b/src/NL/gl/glRenderList.cpp
 @@ -6,6 +6,18 @@
@@ -162,9 +158,9 @@ index 4130277..51134a7 100644
 +}
 +#endif
  
- unsigned long UnidentifiedPacketSorter_8052E2D8::fn_14(
+ unsigned long GLTexturePacketSorter::GetSortKey(
      GLView*, const glModelPacket* pPacket)
-@@ -23,7 +35,11 @@ unsigned long UnidentifiedPacketSorter_8052E2C0::fn_14(
+@@ -23,7 +35,11 @@
      nlMultPosVectorMatrix(pos, *view->m_Interface->GetViewMatrix());
      pos.z = nlMinEquals(0.0f, pos.z);
  
@@ -175,8 +171,8 @@ index 4130277..51134a7 100644
 +#endif
  }
  
- unsigned long UnidentifiedPacketSorter_8052E2A8::fn_14(
-@@ -34,8 +50,12 @@ unsigned long UnidentifiedPacketSorter_8052E2A8::fn_14(
+ unsigned long GLTransformedMatrixDepthPacketSorter::GetSortKey(
+@@ -34,8 +50,12 @@
      glGetMatrix(pPacket->matrix, packetMatrix);
      nlMultPosVectorMatrix(out, *(nlVector3*)&packetMatrix.e2[3][0],
          *view->m_Interface->GetViewMatrix());
@@ -188,57 +184,63 @@ index 4130277..51134a7 100644
 +#endif
  }
  
- const glModelPacket* UnidentifiedPacketSorter_802CCBBC::fn_08()
-@@ -58,9 +78,13 @@ const glModelPacket* UnidentifiedPacketSorter_802CCBBC::fn_0C()
- void UnidentifiedPacketSorter_802CCBBC::fn_10(
+ const glModelPacket* GLTreePacketSorter::First()
+@@ -58,9 +78,13 @@
+ void GLTreePacketSorter::AttachPacket(
      GLView* view, const glModelPacket* pPacket)
  {
 +#if defined(MSCHARGED_NATIVE)
-+    UnidentifiedPacketSortKey sortKey = {static_cast<u32>(fn_14(view, pPacket)), reinterpret_cast<uintptr_t>(pPacket)};
++    GLPacketSortKey sortKey = {static_cast<u32>(GetSortKey(view, pPacket)), reinterpret_cast<uintptr_t>(pPacket)};
 +#else
-     UnidentifiedPacketSortKey sortKey =
-         ((UnidentifiedPacketSortKey)fn_14(view, pPacket) << 32)
+     GLPacketSortKey sortKey =
+         ((GLPacketSortKey)GetSortKey(view, pPacket) << 32)
          | (unsigned long)pPacket;
 +#endif
      m_Tree.Add(sortKey, pPacket);
  }
  
 diff --git a/src/NL/gl/glView.cpp b/src/NL/gl/glView.cpp
-index 9fdece1..5443293 100644
 --- a/src/NL/gl/glView.cpp
 +++ b/src/NL/gl/glView.cpp
 @@ -10,6 +10,10 @@
  #include "NL/nlMath.h"
  
  #include <math.h>
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +#include <new>
 +#include <stdexcept>
 +#endif
  
  const nlMatrix4 gGLViewIdentityMatrix = {
      { { { 1.0f, 0.0f, 0.0f, 0.0f },
-@@ -59,10 +63,15 @@ class UnidentifiedPacketSorterTree_8052E504
+@@ -59,10 +63,22 @@
            DefaultKeyCompare<long> >
  {
  public:
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    static void* operator new(size_t size) { return ::operator new(size); }
 +    static void operator delete(void* ptr) { ::operator delete(ptr); }
 +#else
++#if defined(MSCHARGED_NATIVE)
++    static void* operator new(size_t size)
++#else
      static void* operator new(unsigned long size)
++#endif
      {
          return nlMalloc(size, 8, false);
      }
++#if defined(MSCHARGED_NATIVE)
++    static void operator delete(void* ptr) { nlFree(ptr); }
++#endif
 +#endif
  
-     UnidentifiedPacketSorterTree_8052E504(int initial, int delta)
-         : nlAVLTreeSlotPool<long, UnidentifiedPacketSorter*,
-@@ -158,13 +167,21 @@ void gl_ViewReset()
+     GLPacketSorterTree(int initial, int delta)
+         : nlAVLTreeSlotPool<long, GLPacketSorter*,
+@@ -158,13 +174,21 @@
      while (!iterator.IsDone())
      {
          GLView* view = iterator.Current();
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        view->ResetPackets();
 +#else
          view->m_Sorters->Clear();
@@ -249,37 +251,37 @@ index 9fdece1..5443293 100644
  
  void gl_ViewStartup()
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!glGetCurrentResourcePool()) throw std::logic_error("GL views require game graphics memory");
 +    gRootView.SetViewport(0, 0, glGetScreenWidth(), glGetScreenHeight());
 +#endif
  }
  
- class UnidentifiedPacketSorterIterator
-@@ -257,6 +274,10 @@ GLView::GLView(GLViewInterface* interface, const GLRenderPair& renderPair,
+ class GLPacketSorterIterator
+@@ -257,6 +281,10 @@
      m_Name = s_UninitializedViewName;
      m_Unknown48 = 0;
      m_TriangleCount = 0;
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!interface || sortMode < GLViewSort_Texture || sortMode >= GLViewSort_Count)
 +        throw std::invalid_argument("Invalid GL view interface or sort mode");
 +#endif
      m_Interface = interface;
      m_Parent = 0;
  
-@@ -282,7 +303,11 @@ GLView::GLView(GLViewInterface* interface, const GLRenderPair& renderPair,
+@@ -282,7 +310,11 @@
      }
  
      m_CreateSorter = createSorter;
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    m_Sorters = 0; // Root construction precedes game allocator initialization.
 +#else
-     m_Sorters = new UnidentifiedPacketSorterTree_8052E504(16, 16);
+     m_Sorters = new GLPacketSorterTree(16, 16);
 +#endif
      m_Viewport.x = 0;
      m_Viewport.y = 0;
      m_Viewport.width = glGetScreenWidth();
-@@ -295,7 +320,10 @@ GLView::GLView(GLViewInterface* interface, const GLRenderPair& renderPair,
+@@ -295,7 +327,10 @@
      m_Visible = true;
  }
  
@@ -291,77 +293,77 @@ index 9fdece1..5443293 100644
      : m_RenderPair(0, 0)
  {
      m_Unknown38 = 0;
-@@ -306,7 +334,11 @@ inline GLView::GLView()
+@@ -306,7 +341,11 @@
      m_Interface = &gDefaultViewInterface;
      m_Parent = 0;
-     m_CreateSorter = fn_802CEF1C;
-+#if defined(MSCHARGED_NATIVE)
+     m_CreateSorter = CreateTexturePacketSorter;
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    m_Sorters = 0; // Root construction precedes game allocator initialization.
 +#else
-     m_Sorters = new UnidentifiedPacketSorterTree_8052E504(16, 16);
+     m_Sorters = new GLPacketSorterTree(16, 16);
 +#endif
      m_Viewport.x = 0;
      m_Viewport.y = 0;
      m_Viewport.width = glGetScreenWidth();
-@@ -321,6 +353,12 @@ inline GLView::GLView()
+@@ -321,6 +360,12 @@
  
- inline UnidentifiedPacketSorter* GLView::GetSorter(long sortKey)
+ inline GLPacketSorter* GLView::GetSorter(long layer)
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!glGetCurrentResourcePool()) throw std::logic_error("GL packet attachment requires graphics memory");
 +    if (m_NativeIterating || glNativeViewDispatchActive()) throw std::logic_error("Cannot attach packets during GL view dispatch");
 +    if (m_NativeFrame != glNativeFrameGeneration()) ResetPackets();
-+    if (!m_Sorters) m_Sorters = new UnidentifiedPacketSorterTree_8052E504(16, 16);
++    if (!m_Sorters) m_Sorters = new GLPacketSorterTree(16, 16);
 +#endif
-     UnidentifiedPacketSorter* sorter;
-     UnidentifiedPacketSorter** foundSorter;
+     GLPacketSorter* sorter;
+     GLPacketSorter** foundSorter;
      AVLTreeNode* existingNode;
-@@ -338,10 +376,16 @@ inline UnidentifiedPacketSorter* GLView::GetSorter(long sortKey)
+@@ -338,10 +383,16 @@
  
  GLView::~GLView()
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (m_Parent) m_Parent->RemoveChild(this);
 +#endif
      while (m_Children.m_Head != 0)
      {
          GLView* child;
          m_Children.RemoveStart(&child);
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        child->m_Parent = 0;
 +#endif
          delete child;
      }
      delete m_Sorters;
-@@ -349,11 +393,23 @@ GLView::~GLView()
+@@ -349,11 +400,23 @@
  
- void GLView::AttachPacket(const glModelPacket* packet, unsigned long sortKey)
+ void GLView::AttachPacket(const glModelPacket* packet, unsigned long layer)
  {
-+#if defined(MSCHARGED_NATIVE)
-+    if (!packet || !packet->materialProgram || sortKey > UINT32_MAX)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
++    if (!packet || !packet->materialProgram || layer > UINT32_MAX)
 +        throw std::invalid_argument("Invalid GL packet or sort layer");
-+    sortKey = static_cast<s32>(static_cast<u32>(sortKey));
++    layer = static_cast<s32>(static_cast<u32>(layer));
 +#endif
-     GetSorter(sortKey)->fn_10(this, packet);
+     GetSorter(layer)->AttachPacket(this, packet);
  }
  
- void GLView::AttachModel(const glModel* model, unsigned long sortKey)
+ void GLView::AttachModel(const glModel* model, unsigned long layer)
  {
-+#if defined(MSCHARGED_NATIVE)
-+    if (!model || model->numPackets > 65535 || (model->numPackets && !model->packets) || sortKey > UINT32_MAX)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
++    if (!model || model->numPackets > 65535 || (model->numPackets && !model->packets) || layer > UINT32_MAX)
 +        throw std::invalid_argument("Invalid GL model or sort layer");
 +    for (unsigned i = 0; i < model->numPackets; ++i)
 +        if (!model->packets[i].materialProgram) throw std::invalid_argument("GL model packet has no material");
-+    sortKey = static_cast<s32>(static_cast<u32>(sortKey));
++    layer = static_cast<s32>(static_cast<u32>(layer));
 +#endif
-     UnidentifiedPacketSorter& sorter = *GetSorter(sortKey);
+     GLPacketSorter& sorter = *GetSorter(layer);
      unsigned long packetOffset;
      unsigned long index;
-@@ -367,6 +423,13 @@ void GLView::AttachModel(const glModel* model, unsigned long sortKey)
+@@ -367,6 +430,13 @@
  
  void GLView::Iterate(GLViewPacketCallback callback)
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!callback || m_NativeIterating) throw std::logic_error("Invalid or recursive GL view iteration");
 +    if (m_Sorters && m_Sorters->m_Root && m_NativeFrame != glNativeFrameGeneration())
 +        throw std::logic_error("GL view packets outlived their graphics frame");
@@ -371,11 +373,11 @@ index 9fdece1..5443293 100644
      m_TriangleCount = 0;
      if (!m_Visible)
          return;
-@@ -375,7 +438,11 @@ void GLView::Iterate(GLViewPacketCallback callback)
+@@ -375,7 +445,11 @@
  
      PacketCallbackManager callbackManager(this, callback);
-     UnidentifiedPacketSorterIterator iterator;
-+#if defined(MSCHARGED_NATIVE)
+     GLPacketSorterIterator iterator;
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    iterator.Initialize(m_Sorters ? m_Sorters->m_Root : 0);
 +#else
      iterator.Initialize(m_Sorters->m_Root);
@@ -383,41 +385,41 @@ index 9fdece1..5443293 100644
  
      if (iterator.IsValid())
          callback(this, 1, 0);
-@@ -401,7 +468,14 @@ void GLView::Iterate(GLViewPacketCallback callback)
+@@ -401,7 +475,14 @@
  
  void GLView::RemoveChild(GLView* child)
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!child || child->m_Parent != this || m_NativeIterating || glNativeViewDispatchActive())
 +        throw std::invalid_argument("GL view is not an attached child or is being rendered");
 +#endif
      m_Children.RemoveEntry(child);
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    child->m_Parent = 0;
 +#endif
  }
  
  GLRenderPair GLView::GetRenderPair() const
-@@ -421,6 +495,9 @@ GLViewIterator::GLViewIterator(GLView* root)
+@@ -421,6 +502,9 @@
  
  void GLViewIterator::Push(GLViewIteratorEntry entry)
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!entry.entry || m_Depth >= 7) throw std::length_error("GL view graph exceeds eight levels");
 +#endif
      GLViewIteratorEntry* stackEntry = &m_Stack[++m_Depth];
      *stackEntry = entry;
  
-@@ -470,10 +547,57 @@ void glViewCompact()
+@@ -470,10 +554,57 @@
      while (!iterator.IsDone())
      {
          GLView* view = iterator.Current();
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        view->ResetPackets();
 +#else
          view->m_Sorters->Clear();
 +#endif
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        if (view->m_Sorters) view->m_Sorters->m_Allocator.FreeBlocks();
 +#else
          view->m_Sorters->m_Allocator.FreeBlocks();
@@ -428,7 +430,7 @@ index 9fdece1..5443293 100644
  
  GLView gRootView;
 +
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +void GLView::ResetPackets()
 +{
 +    if (m_NativeIterating) throw std::logic_error("Cannot reset a GL view during iteration");
@@ -461,14 +463,13 @@ index 9fdece1..5443293 100644
 +}
 +#endif
 +
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +static bool nativeViewDispatch = false;
 +bool glNativeViewDispatchActive() { return nativeViewDispatch; }
 +void glNativeSetViewDispatch(bool active) { nativeViewDispatch = active; }
 +#endif
 diff --git a/src/NL/gl/glViewMath.cpp b/src/NL/gl/glViewMath.cpp
 new file mode 100644
-index 0000000..3a0fcd8
 --- /dev/null
 +++ b/src/NL/gl/glViewMath.cpp
 @@ -0,0 +1,45 @@
@@ -518,10 +519,9 @@ index 0000000..3a0fcd8
 +    v3NDC.z *= wc;
 +}
 diff --git a/src/NL/glx/glxMemory.cpp b/src/NL/glx/glxMemory.cpp
-index c8e805d..caaff44 100644
 --- a/src/NL/glx/glxMemory.cpp
 +++ b/src/NL/glx/glxMemory.cpp
-@@ -74,6 +74,10 @@ static unsigned char glx_MemoryDump;
+@@ -65,6 +65,10 @@
  static unsigned long FrameMemSizes[2];
  static int i_frame;
  static bool sFrameMemoryInitialized;
@@ -532,7 +532,7 @@ index c8e805d..caaff44 100644
  static GLInventory::ModelReleaseCallback sModelReleaseCallback;
  
  static GLResourceMark p_frame[2][2];
-@@ -122,6 +126,7 @@ static unsigned long FrameStride(unsigned long size)
+@@ -113,6 +117,7 @@
  
  void glxShutdownMemory()
  {
@@ -540,7 +540,7 @@ index c8e805d..caaff44 100644
      nlFree(reinterpret_cast<void*>(p_frame[0][0]));
      nlFree(reinterpret_cast<void*>(p_frame[0][1]));
      memset(p_frame, 0, sizeof(p_frame));
-@@ -196,6 +201,7 @@ void glplatFrameAllocNextFrame()
+@@ -187,6 +192,7 @@
  #if defined(MSCHARGED_NATIVE)
      if (!sFrameMemoryInitialized) throw std::logic_error("GL frame memory is not initialized");
      mscharged::InvalidateGraphicsCaches();
@@ -549,7 +549,6 @@ index c8e805d..caaff44 100644
      n_frame[i_frame][0] = n_frame[i_frame][1] = 0;
  #else
 diff --git a/src/NL/nlSlotPool.cpp b/src/NL/nlSlotPool.cpp
-index 16474fb..4fc62fa 100644
 --- a/src/NL/nlSlotPool.cpp
 +++ b/src/NL/nlSlotPool.cpp
 @@ -4,11 +4,20 @@
@@ -573,7 +572,7 @@ index 16474fb..4fc62fa 100644
      CurrentAllocator = &VirtualAllocator;
      AllocatorStack[AllocatorStackDepth++] = &VirtualAllocator;
  
-@@ -18,10 +27,14 @@ static void* DefaultSlotPoolAllocator(unsigned long size)
+@@ -18,10 +27,14 @@
      AllocatorStack[AllocatorStackDepth] = 0;
      CurrentAllocator = AllocatorStack[AllocatorStackDepth - 1];
      return result;
@@ -588,7 +587,7 @@ index 16474fb..4fc62fa 100644
      CurrentAllocator = &VirtualAllocator;
      AllocatorStack[AllocatorStackDepth++] = &VirtualAllocator;
  
-@@ -30,6 +43,7 @@ static void DefaultSlotPoolFree(void* data)
+@@ -30,6 +43,7 @@
      --AllocatorStackDepth;
      AllocatorStack[AllocatorStackDepth] = 0;
      CurrentAllocator = AllocatorStack[AllocatorStackDepth - 1];
@@ -596,7 +595,7 @@ index 16474fb..4fc62fa 100644
  }
  
  SlotPoolBase::SlotPoolBase()
-@@ -54,16 +68,16 @@ void SlotPoolBase::BaseFreeBlocks(SlotPoolBase* slotPool, unsigned int slotSize)
+@@ -54,16 +68,16 @@
  {
      SlotPoolBlock* nextBlock;
      SlotPoolBlock* currentBlock;
@@ -616,7 +615,7 @@ index 16474fb..4fc62fa 100644
          }
          slotPool->m_FreeFn((unsigned char*)currentBlock - blockOffset);
          currentBlock = nextBlock;
-@@ -89,11 +103,20 @@ void SlotPoolBase::BaseAddNewBlock(SlotPoolBase* slotPool, unsigned int slotSize
+@@ -89,11 +103,20 @@
              numSlots = slotPool->m_Initial;
          }
  

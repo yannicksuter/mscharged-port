@@ -1,16 +1,15 @@
-Subject: Select native model duplication and stadium shadow submission
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Subject: Select diagnostic model duplication and stadium shadow submission
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
-Select original no-stream model duplication with typed material sizes and input
-bounds. Preserve independent packets/parameters and shared geometry. Extract the
-original empty clone hook and StadiumShadowVolumeDrawable's model initialization
-and draw body with explicit model/pool inputs; full world loading stays unlinked.
+Leave the original production duplication bodies in glModel.cpp. Retain the
+transitional ScenePreview-only copy with the actual GLMaterialProgram type and
+its original parameterDataSize read; bounds and pool checks are diagnostic only.
+The original empty clone hook and isolated stadium shadow helpers remain unchanged.
 
 diff --git a/src/Game/Render/ShadowLayersNative.cpp b/src/Game/Render/ShadowLayersNative.cpp
-index 3ec105a..7bfed12 100644
 --- a/src/Game/Render/ShadowLayersNative.cpp
 +++ b/src/Game/Render/ShadowLayersNative.cpp
-@@ -274,3 +274,12 @@ void SetupNativeShadowLayers(GLViewInterface* sceneCamera)
+@@ -274,3 +274,12 @@
      }
      catch (...) { ShutdownNativeShadowLayers(); throw; }
  }
@@ -25,7 +24,6 @@ index 3ec105a..7bfed12 100644
 +}
 diff --git a/src/Game/Render/StadiumShadowNative.cpp b/src/Game/Render/StadiumShadowNative.cpp
 new file mode 100644
-index 0000000..9efa833
 --- /dev/null
 +++ b/src/Game/Render/StadiumShadowNative.cpp
 @@ -0,0 +1,23 @@
@@ -52,137 +50,22 @@ index 0000000..9efa833
 +    ShowLayerView(eCLV_ShadowVolume);
 +    ShowLayerView(eCLV_ShadowVolumeBlend);
 +}
-diff --git a/src/NL/gl/glModel.cpp b/src/NL/gl/glModel.cpp
-index b0b2b10..cdbedb2 100644
---- a/src/NL/gl/glModel.cpp
-+++ b/src/NL/gl/glModel.cpp
-@@ -6,108 +6,6 @@
- 
- #include <string.h>
- 
--struct glModelPacketDataInfo
--{
--    /* 0x00 */ u8 unknown00[8];
--    /* 0x08 */ u32 size;
--}; // size: 0xC
--
- #include "glModelMatrix.cpp"
- 
--glModel* glModelDupArrayNoStreams(
--    const glModel* pModelArray, unsigned long nModels, bool bPermanent,
--    void* pAllocator)
--{
--    glModel* result;
--    glModelPacket* new_packets;
--    void* data;
--    void* source;
--    unsigned long dataSize;
--    glModelPacket* sourcePackets;
--    glModel* dst_model;
--    unsigned long packetOffset;
--    unsigned long size;
--    unsigned long packetSize;
--    unsigned long j;
--    glModelPacket* packet;
--    glModelPacketDataInfo* info;
--    unsigned long numPackets;
--    int i;
--
--    glBeginResource(pModelArray->id);
--
--    if (bPermanent)
--    {
--        size = nModels * sizeof(glModel);
--        result = (glModel*)glResourceAlloc(size, GLM_Header, pAllocator);
--    }
--    else
--    {
--        size = nModels * sizeof(glModel);
--        result = (glModel*)glFrameAlloc(size, GLM_Header);
--    }
--
--    memcpy(result, pModelArray, size);
--
--    dst_model = result;
--    i = 0;
--    while (i < (int)nModels)
--    {
--        numPackets = dst_model->numPackets;
--        sourcePackets = dst_model->packets;
--        if (bPermanent)
--        {
--            packetSize = numPackets * sizeof(glModelPacket);
--            new_packets = (glModelPacket*)glResourceAlloc(
--                packetSize, GLM_Header, pAllocator);
--        }
--        else
--        {
--            packetSize = numPackets * sizeof(glModelPacket);
--            new_packets = (glModelPacket*)glFrameAlloc(
--                packetSize, GLM_Header);
--        }
--
--        memcpy(new_packets, sourcePackets, packetSize);
--        dst_model->packets = new_packets;
--
--        j = 0;
--        packetOffset = 0;
--        while (j < dst_model->numPackets)
--        {
--            packet = (glModelPacket*)((u8*)dst_model->packets + packetOffset);
--            info = (glModelPacketDataInfo*)packet->materialProgram;
--            source = packet->materialParameters;
--            dataSize = info->size;
--            if (bPermanent)
--            {
--                data = glResourceAlloc(dataSize, GLM_Header, pAllocator);
--            }
--            else
--            {
--                data = glFrameAlloc(dataSize, GLM_Header);
--            }
--
--            memcpy(data, source, dataSize);
--            packet->materialParameters = data;
--            glplatOnPacketCloned(
--                (glModelPacket*)((u8*)dst_model->packets + packetOffset),
--                pAllocator);
--
--            packetOffset += sizeof(glModelPacket);
--            ++j;
--        }
--
--        ++dst_model;
--        ++i;
--    }
--
--    glEndResource();
--    return result;
--}
--
--glModel* glModelDupNoStreams(
--    const glModel* pModel, bool bPermanent, void* pAllocator)
--{
--    return glModelDupArrayNoStreams(pModel, 1, bPermanent, pAllocator);
--}
-+#include "glModelCopies.cpp"
 diff --git a/src/NL/gl/glModelCopies.cpp b/src/NL/gl/glModelCopies.cpp
 new file mode 100644
-index 0000000..7a1cc71
 --- /dev/null
 +++ b/src/NL/gl/glModelCopies.cpp
-@@ -0,0 +1,148 @@
-+// Original glModel duplication, selected separately from its matrix operations.
+@@ -0,0 +1,142 @@
++// Transitional ScenePreview-only copy of the original glModel duplication bodies.
++// Production builds select whole glModel.cpp, which retains these bodies directly.
 +#include "NL/gl/glModel.h"
 +#include "NL/gl/gl.h"
++#include "NL/gl/glMaterialProgram.h"
 +#include "NL/gl/glMemory.h"
 +#include <string.h>
-+#if defined(MSCHARGED_NATIVE)
-+#include "NL/gl/glMaterialProgram.h"
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_MODELS)
 +#include <stdexcept>
-+#else
-+struct glModelPacketDataInfo { u8 unknown00[8]; u32 size; };
 +#endif
++
 +glModel* glModelDupArrayNoStreams(
 +    const glModel* pModelArray, unsigned long nModels, bool bPermanent,
 +    void* pAllocator)
@@ -199,13 +82,11 @@ index 0000000..7a1cc71
 +    unsigned long packetSize;
 +    unsigned long j;
 +    glModelPacket* packet;
-+#if !defined(MSCHARGED_NATIVE)
-+    glModelPacketDataInfo* info;
-+#endif
++    GLMaterialProgram* materialProgram;
 +    unsigned long numPackets;
 +    int i;
 +
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_MODELS)
 +    // Validate before allocating. The caller owns the destination pool/marker;
 +    // streams and indices remain borrowed from the source resource.
 +    if (!pModelArray || !nModels || nModels > 4096 || (!bPermanent && pAllocator))
@@ -235,8 +116,8 @@ index 0000000..7a1cc71
 +        }
 +    }
 +#endif
-+#if !defined(MSCHARGED_NATIVE)
-+    glBeginResource(pModelArray->id); // Empty original resource-label hook.
++#if !defined(MSCHARGED_NATIVE) || defined(MSCHARGED_GAME_MODULE)
++    glBeginResource(pModelArray->id);
 +#endif
 +
 +    if (bPermanent)
@@ -279,13 +160,9 @@ index 0000000..7a1cc71
 +        while (j < dst_model->numPackets)
 +        {
 +            packet = (glModelPacket*)((u8*)dst_model->packets + packetOffset);
++            materialProgram = static_cast<GLMaterialProgram*>(packet->materialProgram);
 +            source = packet->materialParameters;
-+#if defined(MSCHARGED_NATIVE)
-+            dataSize = static_cast<const GLMaterialProgram*>(packet->materialProgram)->parameterDataSize;
-+#else
-+            info = (glModelPacketDataInfo*)packet->materialProgram;
-+            dataSize = info->size;
-+#endif
++            dataSize = materialProgram->parameterDataSize;
 +            if (bPermanent)
 +            {
 +                data = glResourceAlloc(dataSize, GLM_Header, pAllocator);
@@ -309,7 +186,7 @@ index 0000000..7a1cc71
 +        ++i;
 +    }
 +
-+#if !defined(MSCHARGED_NATIVE)
++#if !defined(MSCHARGED_NATIVE) || defined(MSCHARGED_GAME_MODULE)
 +    glEndResource();
 +#endif
 +    return result;
@@ -321,10 +198,9 @@ index 0000000..7a1cc71
 +    return glModelDupArrayNoStreams(pModel, 1, bPermanent, pAllocator);
 +}
 diff --git a/src/NL/glx/glxModel.cpp b/src/NL/glx/glxModel.cpp
-index b3afe63..3cd54c0 100644
 --- a/src/NL/glx/glxModel.cpp
 +++ b/src/NL/glx/glxModel.cpp
-@@ -20,6 +20,4 @@ void glplatFinalizePacket(
+@@ -22,6 +22,4 @@
      packet->skinnedVertices = 0;
  }
  
@@ -334,7 +210,6 @@ index b3afe63..3cd54c0 100644
 +#include "glxModelClone.cpp"
 diff --git a/src/NL/glx/glxModelClone.cpp b/src/NL/glx/glxModelClone.cpp
 new file mode 100644
-index 0000000..0010a8e
 --- /dev/null
 +++ b/src/NL/glx/glxModelClone.cpp
 @@ -0,0 +1,5 @@

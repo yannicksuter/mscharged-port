@@ -1,0 +1,26 @@
+From: mscharged native port
+Subject: [PATCH] Named diagnostic admission of the original Title factory case
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Temporarily admit only the genuine Title case within the existing selected
+frontend sequence. The original Intro abort chooses it; no scene queue,
+transition, handler, readiness, asset or camera behavior is substituted.
+Normal/native default and console retain the original whole factory.
+
+diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneManager.cpp
+--- a/src/Game/FE/BaseGameSceneManager.cpp
++++ b/src/Game/FE/BaseGameSceneManager.cpp
+@@ -304,10 +304,12 @@
+ 
+     switch (newscene)
+     {
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_TITLE)
+     case SCENE_TITLE:
+         newHandler = new (nlMalloc(sizeof(TitleScene), 8, false)) TitleScene(movement);
+         break;
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     case SCENE_MAIN_MENU:
+         newHandler = new (nlMalloc(sizeof(SHMainMenu), 8, false)) SHMainMenu();
+         break;

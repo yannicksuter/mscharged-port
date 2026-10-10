@@ -1,0 +1,83 @@
+From: mscharged native port
+Subject: [PATCH] Preserve native retrace callback and screenshot scalar widths
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Use four-byte native retrace callback arguments and GXPeekARGB output cells.
+Use the native SDK GXBool output type for hardware status cells.
+Upstream now uses shared SDK declarations and clock macros, retiring the old
+local colour/compare guards and hardware-clock hunk. Native clock transport
+remains in0244. Preserve source callbacks, screenshot and swap decisions.
+
+diff --git a/src/NL/glx/glxSwap.cpp b/src/NL/glx/glxSwap.cpp
+--- a/src/NL/glx/glxSwap.cpp
++++ b/src/NL/glx/glxSwap.cpp
+@@ -42,8 +42,16 @@
+ static void glx_ScreenCapture(bool isMovie);
+ static void PutPixel(u8* dst, u32 argbColor);
+ static void loading_indicator();
++#if defined(MSCHARGED_NATIVE)
++static void vi_pre_cb(u32);
++#else
+ static void vi_pre_cb(unsigned long);
++#endif
++#if defined(MSCHARGED_NATIVE)
++static void vi_post_cb(u32);
++#else
+ static void vi_post_cb(unsigned long);
++#endif
+ static void draw_done_cb();
+ static void AdvanceFrame();
+ static void ReportGPStatus();
+@@ -116,7 +124,11 @@
+     char filename[0x40];
+     FILE* file;
+     TargaHeader header;
++#if defined(MSCHARGED_NATIVE)
++    u32 argbColor;
++#else
+     unsigned long argbColor;
++#endif
+     s32 pixelOffset;
+     s32 y, x;
+     u8* imageData;
+@@ -220,12 +232,20 @@
+     }
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++static void vi_pre_cb(u32)
++#else
+ static void vi_pre_cb(unsigned long)
++#endif
+ {
+     bInRetrace = 1;
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++static void vi_post_cb(u32)
++#else
+ static void vi_post_cb(unsigned long)
++#endif
+ {
+     HandleSoftReset();
+     if (glx_bLoadingIndicator != 0)
+@@ -310,11 +330,19 @@
+ 
+ static void ReportGPStatus()
+ {
++#if defined(MSCHARGED_NATIVE)
++    GXBool overhi;
++    GXBool underlow;
++    GXBool readIdle;
++    GXBool cmdIdle;
++    GXBool brkpt;
++#else
+     u8 overhi;
+     u8 underlow;
+     u8 readIdle;
+     u8 cmdIdle;
+     u8 brkpt;
++#endif
+ 
+     GXGetGPStatus(&overhi, &underlow, &readIdle, &cmdIdle, &brkpt);
+     OSReport("overhi = %s\n", overhi ? "true" : "false");

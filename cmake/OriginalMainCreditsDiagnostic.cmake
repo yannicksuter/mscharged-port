@@ -1,0 +1,450 @@
+include_guard(GLOBAL)
+
+# Owner-authorized original-main/selected-Credits diagnostic. Normal game
+# inventories do not enable these temporary flow gates. One source module owns
+# original main, FE/font/resources, handlers and rendering; the host supplies one
+# actual SDK and window/device services before original construction.
+if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin|Windows)$" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8
+        OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" OR MSVC
+        OR (WIN32 AND NOT (MINGW AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")))
+    message(FATAL_ERROR "The original-main source diagnostic requires 64-bit Linux, macOS or Windows (LLVM-MinGW) with GCC or Clang")
+endif()
+include(cmake/OriginalModuleLinkage.cmake)
+include(cmake/OriginalRetailReturnCompatibility.cmake)
+mscharged_preserve_original_return_semantics()
+include(cmake/NativeModuleLoader.cmake)
+include(cmake/OriginalFrontendResetDiagnostic.cmake)
+include(cmake/OriginalFunctionPools.cmake)
+include(cmake/WiiStringFormat.cmake)
+include(cmake/OriginalHBMWii16.cmake)
+include(cmake/NativeHBMDebug.cmake)
+include(cmake/NativeSystemSettings.cmake)
+include(cmake/NativeSTM.cmake)
+include(cmake/NativeVideo.cmake)
+include(cmake/OriginalCreditsMovieHardware.cmake)
+include(cmake/NativeHardwareOwner.cmake)
+include(cmake/NativeVideoOutput.cmake)
+include(cmake/NativeFilesystemBoot.cmake)
+include(cmake/NativeOSShutdownRequests.cmake)
+include(cmake/OriginalOSShutdown.cmake)
+find_package(Threads REQUIRED)
+if(BUILD_TESTING)
+    include(cmake/OriginalHBMTaskLifecycle.cmake)
+    mscharged_add_original_hbm_task_lifecycle_tests()
+    include(cmake/OriginalHBMTaskCapacity.cmake)
+    mscharged_add_original_hbm_task_capacity_tests()
+    include(cmake/NativeHBMArithmetic.cmake)
+    include(cmake/NativeHBMStorage.cmake)
+    mscharged_add_native_hbm_storage_tests()
+    include(cmake/NativeHBMText.cmake)
+    include(cmake/OriginalHBMSoundArchive.cmake)
+endif()
+
+add_library(mscharged_original_main_credits_module MODULE
+    "${MSCHARGED_PREPARED}/src/NL/nlMemory.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/nlMemory.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/MemAlloc.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlSlotPool.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlFunctionMemory.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlString.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlStringSupport.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlPrint.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlDebug.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlFileGC.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlFile.cpp"
+    src/platform/game_module_allocations.cpp
+    src/platform/file_handle_abi.cpp
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLTextureAnim.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glTextureManager.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glTexture.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLInventory.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMemory.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glResourcePool.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/gl.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gc/gcSwizzler.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLVertexAnim.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlAVLTree.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Debug/FrameCounter.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlRandom.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxMemory.cpp"
+    src/platform/game_allocation_ownership.cpp
+    src/platform/original_entry.cpp
+    "${MSCHARGED_PREPARED}/src/NL/nlInit.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlTicker.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlTime.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Core/mtRandom.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMemoryInit.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SAnimDecode.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/main.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxTexture.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakRegistry.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakValueBase.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakNode.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakEntry.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakNameRecycler.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakValue.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakCallback.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GameTweaks.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/AIPad.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Game.cpp"
+    src/platform/tweak_storage.cpp
+    "${MSCHARGED_PREPARED}/src/Game/Ball.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glPlat.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glStat.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glDrawSyncLog.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glState.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMatrix.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glTarget.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glView.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxGX.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxSwap.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxTarget.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXMaterialProgramRegistry.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXUnlitTextureMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXVertexColourTextureMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXFloatTexturedColourMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXScissoredVertexColourTextureMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glStruct.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXUnlitTextureMaterialProgramRender.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXVertexColourTextureMaterialProgramRender.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXFloatTexturedColourMaterialProgramRender.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXScissoredVertexColourTextureMaterialProgramRender.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glMaterialParameters.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glFont.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxFont.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glRenderList.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/platvmath.cpp"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/mtx/mtx44.c"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxModel.cpp"
+    src/platform/game_resource_records.cpp
+    "${MSCHARGED_PREPARED}/src/Game/FE/feSceneManager.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feRender.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/fePackage.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/fePresentation.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feLibObject.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feText.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feImage.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feAnimation.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feFinder.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feGroup.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feLayer.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/utility.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlSlide.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlComponent.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlComponentInstance.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlTextInstance.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlTextInstance_runtime.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlInstance.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/tlDefault.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/BaseGameSceneManager.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHOptions.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Sys/simpleparser.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlEvent.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlBind.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHCredits.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/SH/SHMoviePlayer.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Sys/movie.cpp"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/thp/THPSimple.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Task/GameRenderTask.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLMovieMeshWriter.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgram.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/GXMovieMaterialProgramRender.cpp"
+    src/platform/frontend_package.cpp
+    "${MSCHARGED_PREPARED}/src/Game/Render/Frustum.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Render/RLViewLayers.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxFog.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Render/RLView.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glLoadModel.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxDisplayList.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxSkinMatrix.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/glModelBuilder.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLTexturedColourMeshWriter.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GL/GLFloatTexturedColourMeshWriter.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glModel.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxSend.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlMath.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/math.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plane.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/platqmath.cpp"
+    src/platform/rlg_record_abi.cpp
+    src/platform/rlg_vertex_animation_abi.cpp
+    src/platform/rlg_geometry_bytes.cpp
+    src/platform/rlg_material_parameters.cpp
+    src/platform/world_record_wire.cpp
+    "${MSCHARGED_PREPARED}/src/Game/Font/fontmanager.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlFont.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlTextEscape.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlBundleFile.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feResourceManager.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feFontResource.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feScene.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/BaseSceneHandler.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Task/FrontEndTask.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Team.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/AI/StatsGatherer.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feSceneResource.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feTextureResource.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlTask.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlLocalization.cpp"
+    src/platform/localization_data.cpp
+    "${MSCHARGED_PREPARED}/src/NL/gl/glDraw2.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/gl/glDraw3.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/glx/glxMatrix.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlTextBox.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/Font/FontLoading.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/GameInfo.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/nlConfig.cpp"
+ )
+set_source_files_properties("${MSCHARGED_PREPARED}/src/RVL_SDK/mtx/mtx44.c" PROPERTIES LANGUAGE CXX)
+add_dependencies(mscharged_original_main_credits_module verify_prepared)
+include(cmake/OriginalCompressedFiles.cmake)
+include(cmake/OriginalARC.cmake)
+include(cmake/OriginalRFLShape.cmake)
+include(cmake/OriginalRFLResource.cmake)
+include(cmake/OriginalRFLCharacterSources.cmake)
+include(cmake/OriginalCharacterLoading.cmake)
+include(cmake/OriginalAnimationControllers.cmake)
+mscharged_add_original_inflater(mscharged_original_main_credits_module)
+set_target_properties(mscharged_original_main_credits_module PROPERTIES
+    PREFIX "" POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON)
+target_compile_features(mscharged_original_main_credits_module PRIVATE cxx_std_20)
+target_link_libraries(mscharged_original_main_credits_module PRIVATE charged_original_function_pool_abi)
+target_include_directories(mscharged_original_main_credits_module BEFORE PRIVATE
+    "${MSCHARGED_AURORA_PREPARED}/include")
+target_include_directories(mscharged_original_main_credits_module PRIVATE
+    "${MSCHARGED_PREPARED}/src" "${MSCHARGED_PREPARED}/src/NL/gl"
+    "${MSCHARGED_PREPARED}/src/NL/glx")
+target_compile_definitions(mscharged_original_main_credits_module PRIVATE
+    MSCHARGED_GAME_MODULE=1 AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca
+    MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP=1 MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND=1
+    MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND_SCENE=1 MSCHARGED_DIAGNOSTIC_CREDITS_SCENE=1
+    MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE=1 MSCHARGED_DIAGNOSTIC_CREDITS_COPYRIGHTS=1
+    MSCHARGED_DIAGNOSTIC_MAIN_INPUT=1
+    C_MTXFrustum=Charged_C_MTXFrustum C_MTXOrtho=Charged_C_MTXOrtho)
+target_compile_options(mscharged_original_main_credits_module PRIVATE
+    -O1 -ffunction-sections -fdata-sections -fno-strict-aliasing
+    -ffp-contract=off -fsigned-char -Wno-unknown-pragmas
+    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof;-fcheck-new>")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(mscharged_original_main_credits_module PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique;-fno-assume-sane-operators-new-delete;-fno-devirtualize-speculatively>")
+    # Retail loops that write past an array (PauseMenuScene's hover counts)
+    # keep their full iteration count: GCC must not derive a shorter one from
+    # the out-of-bounds store. Console idioms GCC reports by default: `register`,
+    # char* string tables, C++20-deprecated volatile increments and small values
+    # stored in pointer-typed contexts. Pointer truncation (-Wpointer-to-int-cast)
+    # stays diagnosed; the online-only 32-bit connection handles in NetworkLobby
+    # and ReliableSocket remain a known native online gap.
+    target_compile_options(mscharged_original_main_credits_module PRIVATE
+        -fno-aggressive-loop-optimizations
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-register;-Wno-write-strings;-Wno-volatile;-Wno-int-to-pointer-cast>")
+else()
+    target_compile_options(mscharged_original_main_credits_module PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-assume-sane-operator-new;-Wno-register>")
+endif()
+if(APPLE)
+    # Original source remains incomplete: defer only unexecuted function imports.
+    # Explicit exports keep game operators and the original codec module-local.
+    target_link_options(mscharged_original_main_credits_module PRIVATE
+        LINKER:-undefined,dynamic_lookup LINKER:-dead_strip LINKER:-no_fixup_chains)
+elseif(WIN32)
+    # The DLL imports host services from mscharged.exe (see
+    # mscharged_import_original_windows_host); unfinished functions stay
+    # unresolved until called, like the ELF/Mach-O modules.
+    target_link_options(mscharged_original_main_credits_module PRIVATE -Wl,--gc-sections)
+else()
+    target_link_options(mscharged_original_main_credits_module PRIVATE
+        -Wl,-Bsymbolic-functions -Wl,--gc-sections)
+endif()
+mscharged_select_original_hbm_debug(mscharged_original_main_credits_module)
+mscharged_set_original_module_exports(mscharged_original_main_credits_module
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/original_main_credits_exports.map")
+
+# Actual source InitPads/FEInput at their original Initialize positions. Keep
+# source branches and whole TUs; ordinary O2 inlining matches the earlier bounded
+# source qualification and does not retain an unused unfinished base-vptr store.
+add_library(mscharged_original_main_credits_focus OBJECT
+    "${MSCHARGED_PREPARED}/src/Game/PadActions.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/globalpad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/cGlobalPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/PadBackend.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feInput.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/GameCubePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiRemotePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiFreestylePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/cPlatPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/PlatPadManager.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiClassicPad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/SwappablePad.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/DPDData.cpp"
+    "${MSCHARGED_PREPARED}/src/RVL_SDK/kpad/KPAD.c"
+    "${MSCHARGED_PREPARED}/src/Game/PadMonkey.cpp"
+    "${MSCHARGED_PREPARED}/src/NL/plat/WiiPadMonkey.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/TweakConfig.cpp"
+    "${MSCHARGED_PREPARED}/src/Game/FE/feHelpFuncs.cpp"
+ )
+add_dependencies(mscharged_original_main_credits_focus verify_prepared)
+set_target_properties(mscharged_original_main_credits_focus PROPERTIES
+    POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+target_compile_features(mscharged_original_main_credits_focus PRIVATE cxx_std_20)
+target_link_libraries(mscharged_original_main_credits_focus PRIVATE charged_original_function_pool_abi)
+target_include_directories(mscharged_original_main_credits_focus BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
+target_compile_definitions(mscharged_original_main_credits_focus PRIVATE
+    MSCHARGED_GAME_MODULE=1 AURORA_WII_CLOCK=1 dSINGLE=1 __alloca=__builtin_alloca)
+target_compile_options(mscharged_original_main_credits_focus PRIVATE
+    -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off
+    -fsigned-char -Wno-unknown-pragmas
+    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof;-fcheck-new>")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(mscharged_original_main_credits_focus PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique;-fno-assume-sane-operators-new-delete;-fno-devirtualize-speculatively>")
+else()
+    target_compile_options(mscharged_original_main_credits_focus PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-assume-sane-operator-new;-Wno-register>")
+endif()
+target_link_libraries(mscharged_original_main_credits_module PRIVATE mscharged_original_main_credits_focus)
+
+# Target-local whole SDK VI owns the true native clock/IRQ implementation. The
+# default aurora_vi archive stays ordinary (never whole-linked here), so its
+# alternate VI object is not pulled after this complete provider resolves VI.
+# Preserve the normal/standalone diagnostic build's existing feature selection.
+add_library(mscharged_original_main_credits_vi OBJECT
+    "${MSCHARGED_AURORA_PREPARED}/lib/dolphin/vi/vi.cpp")
+add_dependencies(mscharged_original_main_credits_vi verify_prepared)
+target_compile_features(mscharged_original_main_credits_vi PRIVATE cxx_std_20)
+target_compile_definitions(mscharged_original_main_credits_vi PRIVATE
+    AURORA_NATIVE_VIDEO=1 AURORA_WII_CLOCK=1 TARGET_PC=1)
+target_compile_options(mscharged_original_main_credits_vi PRIVATE -ffunction-sections -fdata-sections)
+target_link_libraries(mscharged_original_main_credits_vi PRIVATE aurora::vi)
+
+add_library(charged_original_main_credits_host OBJECT
+    src/runtime/original_main_credits.cpp src/runtime/frame_timing_log.cpp src/platform/console.cpp
+    src/platform/os.cpp src/platform/host_metadata.cpp src/platform/string_format.cpp
+    src/platform/report.cpp src/platform/thread.cpp src/platform/os_version.cpp)
+if(NOT WIN32)
+    # On Windows the module instead builds after the host it imports from.
+    add_dependencies(charged_original_main_credits_host mscharged_original_main_credits_module)
+endif()
+target_compile_features(charged_original_main_credits_host PRIVATE cxx_std_20)
+target_include_directories(charged_original_main_credits_host BEFORE PRIVATE "${MSCHARGED_AURORA_PREPARED}/include")
+target_include_directories(charged_original_main_credits_host PUBLIC src)
+target_include_directories(charged_original_main_credits_host PRIVATE
+    "${MSCHARGED_AURORA_PREPARED}/lib"
+    "${MSCHARGED_PREPARED}/include" "${MSCHARGED_PREPARED}/libs/RVL_SDK/include")
+target_compile_definitions(charged_original_main_credits_host PRIVATE
+    MSCHARGED_NATIVE=1 TARGET_PC=1 AURORA_WII_CLOCK=1
+    MSCHARGED_ORIGINAL_MAIN_CREDITS_MODULE_FILENAME="$<TARGET_FILE_NAME:mscharged_original_main_credits_module>")
+target_compile_options(charged_original_main_credits_host PRIVATE
+    -O2 -ffunction-sections -fdata-sections -fno-strict-aliasing -ffp-contract=off)
+target_link_libraries(charged_original_main_credits_host PRIVATE
+    charged_app_icon
+    charged_native_module_loader
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,aurora::gx,aurora::mtx,aurora::os>"
+    aurora::core aurora::dvd charged_host charged_wii_string_format charged_native_stm
+    charged_native_system_settings charged_native_video_device charged_credits_movie_hardware
+    charged_native_hardware_owner
+    charged_native_video_output_device charged_native_filesystem_boot
+    charged_native_ipc_boot_buffer charged_original_rtc Threads::Threads ${CMAKE_DL_LIBS})
+
+function(mscharged_link_original_main_credits target)
+    mscharged_link_original_hbm_debug_host("${target}")
+    if(NOT WIN32)
+        add_dependencies(${target} mscharged_original_main_credits_module)
+    endif()
+    target_link_libraries(${target} PRIVATE charged_original_main_credits_host
+        mscharged_original_main_credits_vi aurora::core)
+    if(APPLE)
+        target_link_options(${target} PRIVATE LINKER:-dead_strip LINKER:-export_dynamic
+            LINKER:-unexported_symbol,___OSSetVIForceDimming)
+        if(NOT MSCHARGED_DIAGNOSTIC_FRONTEND_RESET)
+            target_link_options(${target} PRIVATE
+                LINKER:-unexported_symbol,___OSHotReset
+                LINKER:-unexported_symbol,___OSShutdownToSBY)
+        endif()
+    elseif(WIN32)
+        # Host services for the game DLLs: mscharged.exe exports its symbols and
+        # its import library is what the modules link against.
+        # The game keeps addresses in 32-bit unsigned long carriers on LLP64
+        # (64-bit on Linux and macOS). Game memory stays below 2 GB: the Wii
+        # arenas are placed low (Aurora 0079), the game DLLs use low image bases
+        # and allocations go bottom-up without high-entropy ASLR. The process
+        # stays large-address-aware for drivers and Vulkan layers.
+        # No --gc-sections: host services that only the game DLLs call would be
+        # discarded before --export-all-symbols could offer them.
+        target_link_options(${target} PRIVATE -Wl,--export-all-symbols
+            -Wl,-Xlink=-highentropyva:no
+            -Wl,--image-base,0x400000
+            # The modules carry the original zlib; the host's zlib-ng internals
+            # must not be offered to them.
+            -Xlinker --exclude-symbols=zcalloc,zcfree,inflate_table)
+    else()
+        if(MSCHARGED_DIAGNOSTIC_FRONTEND_RESET)
+            set(_host_exports original_main_reset_host_exports.map)
+        else()
+            set(_host_exports original_main_credits_host_exports.map)
+        endif()
+        target_link_options(${target} PRIVATE
+            -Wl,--gc-sections -Wl,--export-dynamic
+            "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/${_host_exports}")
+        set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics/${_host_exports}")
+    endif()
+    mscharged_require_original_host_symbol(${target} PRIVATE SCGetSimpleAddressID)
+    mscharged_require_original_host_symbol(${target} PRIVATE __OSGetIOSRev)
+    foreach(symbol __OSInitSram __OSSyncSram __OSGetRTCFlags __OSClearRTCFlags)
+        mscharged_require_original_host_symbol(${target} PRIVATE "${symbol}")
+    endforeach()
+    # Original nlPrint in the module formats Wii16 strings through the host.
+    mscharged_require_original_host_symbol(${target} PRIVATE mscharged_format_wii16)
+    set_property(TARGET ${target} PROPERTY LINK_LIBRARY_OVERRIDE
+        "WHOLE_ARCHIVE,aurora_gx,aurora_mtx,aurora_os")
+endfunction()
+
+add_executable(mscharged-original-main-credits-check
+    tests/diagnostics/original_main_credits_window.cpp)
+mscharged_link_original_main_credits(mscharged-original-main-credits-check)
+
+# The user opts into this combined executable by enabling both existing options.
+# The graphics preset's ordinary launcher-OFF preference is never changed here.
+if(TARGET mscharged)
+    target_compile_definitions(mscharged PRIVATE MSCHARGED_HAS_ORIGINAL_CREDITS=1)
+    mscharged_link_original_main_credits(mscharged)
+endif()
+
+# Windows: a game DLL resolves host services through mscharged.exe's import
+# library, so it links after the executable (the reverse of the ELF order).
+function(mscharged_import_original_windows_host module)
+    if(NOT WIN32 OR NOT TARGET mscharged)
+        return()
+    endif()
+    add_dependencies(${module} mscharged)
+    # CMake writes the executable's import library (libmscharged.dll.a); a
+    # linker option rather than a file input, as that link produces it.
+    # Below 2 GB like the executable (see mscharged_link_original_main_credits).
+    if(module STREQUAL "mscharged_original_frontend_module")
+        set(_base 0x20000000)
+    else()
+        set(_base 0x30000000)
+    endif()
+    target_link_options(${module} PRIVATE "-L${CMAKE_BINARY_DIR}" -lmscharged
+        -Wl,-Xlink=-force:unresolved -Wl,--image-base,${_base} -Wl,-Xlink=-highentropyva:no)
+endfunction()
+mscharged_import_original_windows_host(mscharged_original_main_credits_module)
+
+if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN AND MSCHARGED_CREDITS_TEST_DISC)
+    add_test(NAME original_main_credits_vulkan COMMAND mscharged-original-main-credits-check
+        --disc "${MSCHARGED_CREDITS_TEST_DISC}")
+    set_tests_properties(original_main_credits_vulkan PROPERTIES TIMEOUT 70
+        LABELS "gpu;vulkan;owned-data" RESOURCE_LOCK gx_check
+        ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+        FAIL_REGULAR_EXPRESSION "VUID-|Validation Error|Actual source diagnostic stopped:")
+endif()
+
+include(cmake/OriginalLoadingDiagnostic.cmake)
+
+if(MSCHARGED_BUILD_ORIGINAL_FRONTEND_DIAGNOSTIC)
+    include(cmake/OriginalFrontendDiagnostic.cmake)
+endif()

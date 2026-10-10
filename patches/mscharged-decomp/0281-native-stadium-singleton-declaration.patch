@@ -1,0 +1,19 @@
+Subject: Match original stadium singleton linkage on native compilers
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+Classification: native compiler declaration compatibility only; Wii declaration unchanged.
+
+diff --git a/include/Game/Render/StadiumLoading.h b/include/Game/Render/StadiumLoading.h
+--- a/include/Game/Render/StadiumLoading.h
++++ b/include/Game/Render/StadiumLoading.h
+@@ -61,7 +61,11 @@
+ void OnStadiumModelResourceLoaded(void* data, unsigned long size, void* userData);
+ void OnStadiumEffectsLoaded(void* data, unsigned long size, void* userData);
+ 
++#if defined(MSCHARGED_NATIVE)
++extern "C" BasicStadium* pBasicStadiumInstance;
++#else
+ extern BasicStadium* pBasicStadiumInstance;
++#endif
+ extern StadiumModelEntry gStadiumModelEntries[22];
+ extern char gStadiumName[32];
+ extern char gStadiumResourcePath[256];

@@ -1,0 +1,32 @@
+From: mscharged-port original-source integration
+Subject: Restore original save-owner construction in the frontend diagnostic
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Retire the named bootstrap omission for the literal CupManager, StatsTracker
+and StrikerChallenge construction blocks, retaining their original order and
+allocation requests. Whole Simmer supplies the original statistics dependency.
+No owner pointers, settings, load flags, callbacks or menu readiness are seeded.
+Default native and console projections are unchanged with this option absent.
+
+diff --git a/src/Game/main.cpp b/src/Game/main.cpp
+--- a/src/Game/main.cpp
++++ b/src/Game/main.cpp
+@@ -1,6 +1,9 @@
+ #include "Game/Task/GameTaskState.h"
+ #include "NL/nlDLListContainer.inl"
+ #include "Game/main.h"
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SAVE_OWNERS) && (!defined(MSCHARGED_NATIVE) || !defined(MSCHARGED_GAME_MODULE) || !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE))
++#error Original save-owner admission requires the native original frontend diagnostic
++#endif
+ #if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_FLASH) && (!defined(MSCHARGED_NATIVE) || !defined(MSCHARGED_GAME_MODULE) || !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE))
+ #error Original flash admission requires the native original frontend diagnostic
+ #endif
+@@ -674,7 +677,7 @@
+         GameInfoManager::s_pInstance = new (8, false) GameInfoManager;
+     }
+ #endif
+-#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP)
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SAVE_OWNERS)
+     if (CupManager::s_pInstance == 0)
+     {
+         CupManager::s_pInstance = new (8, false) CupManager;

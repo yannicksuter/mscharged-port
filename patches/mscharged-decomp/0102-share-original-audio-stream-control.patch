@@ -1,0 +1,77 @@
+Subject: Retain legacy diagnostic audio helpers without rewriting original source
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+The existing diagnostic helper snapshots remain for explicitly selected preview
+consumers. Complete original game/SDK methods, headers, enum definitions and
+retail state transitions are no longer delegated to these copies. No AX/DSP
+readiness, native game audio manager or new source behavior is provided.
+
+diff --git a/include/Game/Audio/AudioStreamControlSteps.h b/include/Game/Audio/AudioStreamControlSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Audio/AudioStreamControlSteps.h
+@@ -0,0 +1,63 @@
++#ifndef GAME_AUDIO_STREAM_CONTROL_STEPS_H
++#define GAME_AUDIO_STREAM_CONTROL_STEPS_H
++// Original present AudioReadState state branches; platform work stays typed.
++template<class Source,class Prepare,class Start>
++bool AudioStreamPlaySteps(Source& source,unsigned int value,Prepare prepare,Start start)
++{
++    source.m_PlayCount = value;
++    switch (source.m_Unknown10)
++    {
++    case 1:
++        prepare();
++    case 2:
++        source.m_Unknown28 = 5;
++        break;
++    case 3:
++        start();
++        source.m_Unknown10 = 4;
++        break;
++    default:
++        return false;
++    }
++    return true;
++}
++template<class Source,class Stop,class Pending,class Cancel>
++void AudioStreamStopSteps(Source& source,Stop stop,Pending pending,Cancel cancel)
++{
++    switch (source.m_Unknown10)
++    {
++    case 4:
++        stop();
++    case 2:
++        source.m_Unknown28 = 6;
++        if (pending())
++            cancel();
++        source.m_Unknown10 = 6;
++        break;
++    case 3:
++    case 7:
++        source.m_Unknown10 = 6;
++        break;
++    case 5:
++        break;
++    }
++}
++template<class Source,class Pause>
++bool AudioStreamPauseSteps(Source& source,Pause pause)
++{
++    if (source.m_Unknown10 != 4)
++        return false;
++    pause();
++    source.m_Unknown10 = 7;
++    return true;
++}
++template<class Source,class Resume>
++bool AudioStreamResumeSteps(Source& source,Resume resume)
++{
++    if (source.m_Unknown10 != 7)
++        return false;
++    resume();
++    source.m_Unknown10 = 4;
++    return true;
++}
++#endif

@@ -1,6 +1,7 @@
 #pragma once
 #include "runtime/lighting.h"
 #include "NL/gl/glView.h"
+#include <optional>
 
 namespace mscharged
 {
@@ -21,6 +22,8 @@ class ViewMatrices : public GLViewInterface
 {
 public:
     nlMatrix4 view, projection;
+    // Secondary views need their own camera for camera-relative materials.
+    std::optional<nlVector3> material_camera;
     ViewMatrices() { view.SetIdentity(); projection.SetIdentity(); }
     void GetViewMatrix(nlMatrix4& out) const override { out = view; }
     void GetProjectionMatrix(nlMatrix4& out) const override { out = projection; }
@@ -31,7 +34,13 @@ public:
 };
 
 // Child views render before their parents, using the original packet callbacks.
-void RenderOriginalViews(float time, const GameLighting& lighting);
+// Supply the active game camera in authored world units for camera overlays;
+// it is independent of each child view's rendering camera.
+void RenderOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position = nullptr);
+// Lifecycle-owned submission leaves packet reset to original glSendFrame.
+void DispatchOriginalViews(float time, const GameLighting& lighting, const nlVector3* camera_position = nullptr);
+bool OriginalViewsReady();
+void SetViewFrameShutdown(void (*shutdown)());
 void InitializeNativeTargets(unsigned width, unsigned height, void (*drain)());
 void ShutdownNativeTargets();
 // Selected game layer owners release their views before the containing graph.

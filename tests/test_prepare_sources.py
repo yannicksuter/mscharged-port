@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise source preparation against disposable local Git repositories."""
 import difflib
+import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,10 +10,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tracemalloc
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from prepare_sources import PreparationError, prepare
+from format_prepared import find_clang_format
+from prepare_sources import PreparationError, content_inventory, prepare
 
 
 class SourcePreparationTests(unittest.TestCase):
@@ -59,6 +64,90 @@ class SourcePreparationTests(unittest.TestCase):
 
     def run_prepare(self, **kwargs):
         return prepare(self.root, self.build, "example", **kwargs)
+
+    def test_inventory_bounds_memory_and_preserves_bytes_modes(self):
+        tree = self.workspace / "inventory"
+        tree.mkdir()
+        payload = tree / "payload.bin"
+        block = bytes(range(256)) * 16
+        expected = hashlib.sha256()
+        with payload.open("wb") as stream:
+            for _ in range(1024):
+                stream.write(block)
+                expected.update(block)
+            stream.write(b"unaligned tail\0\xff")
+            expected.update(b"unaligned tail\0\xff")
+        payload.chmod(0o755)
+        executable = bool(payload.stat().st_mode & 0o111)
+        (tree / "empty").write_bytes(b"")
+        tracemalloc.start()
+        try:
+            inventory = content_inventory(tree)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertLess(peak, 1024 * 1024, "Inventory retained a file-sized Python allocation")
+        self.assertEqual(inventory, {
+            "empty": {"sha256": hashlib.sha256(b"").hexdigest(), "executable": False},
+            "payload.bin": {"sha256": expected.hexdigest(), "executable": executable},
+        })
+
+    def test_inventory_preserves_symlinks_without_following_them(self):
+        tree = self.workspace / "inventory"
+        tree.mkdir()
+        try:
+            (tree / "outside").symlink_to(self.upstream, target_is_directory=True)
+            (tree / "broken").symlink_to("missing")
+        except OSError as error:
+            if os.name == "nt":
+                self.skipTest(f"Symlink fixture unavailable: {error}")
+            raise
+        self.assertEqual(content_inventory(tree), {
+            "outside": {"symlink": str(self.upstream)}, "broken": {"symlink": "missing"},
+        })
+
+    def test_inventory_propagates_open_read_and_final_stat_failures(self):
+        tree = self.workspace / "inventory"
+        tree.mkdir()
+        path = tree / "value.bin"
+        path.write_bytes(b"source bytes")
+        failed = OSError(errno.EIO, "injected file failure")
+        with mock.patch.object(Path, "open", side_effect=failed):
+            with self.assertRaises(OSError) as caught:
+                content_inventory(tree)
+            self.assertIs(caught.exception, failed)
+
+        class FailedReader:
+            calls = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, size=-1):
+                self.calls += 1
+                if self.calls == 1:
+                    return b"partial read"
+                raise failed
+
+        with mock.patch.object(Path, "open", return_value=FailedReader()):
+            with self.assertRaises(OSError) as caught:
+                content_inventory(tree)
+            self.assertIs(caught.exception, failed)
+
+        original_stat = Path.stat
+        def fail_final_stat(queried, *args, **kwargs):
+            if queried == path and kwargs.get("follow_symlinks", True):
+                raise failed  # The unchanged executable-mode check after hashing.
+            return original_stat(queried, *args, **kwargs)
+
+        with mock.patch.object(Path, "is_file", return_value=True), \
+                mock.patch.object(Path, "stat", fail_final_stat):
+            with self.assertRaises(OSError) as caught:
+                content_inventory(tree)
+            self.assertIs(caught.exception, failed)
 
     def test_ordered_patches_and_cache(self):
         self.patch("one.patch", "original\n", "first\n")
@@ -202,6 +291,119 @@ class SourcePreparationTests(unittest.TestCase):
         (patch_dir / "base").write_text(pin + "\n", newline="\n")
         (patch_dir / "series").write_text("", newline="\n")
         return patch_dir
+
+    def clang_format(self):
+        path = os.environ.get("MSCHARGED_TEST_CLANG_FORMAT") or find_clang_format()
+        if not path:
+            self.skipTest("clang-format 16 or newer is not available")
+        return path
+
+    def format_fixture(self):
+        files = {
+            "include/types.h": "typedef int s32;\n",
+            "src/game.cpp": "int add( int a,int b ){return a+b;}\n",
+            "src/panic.cpp": "void report(int line);\n#define PANIC() report(__LINE__)\nvoid f( ) { PANIC(); }\n",
+        }
+        for name, text in files.items():
+            path = self.upstream / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, newline="\n")
+        self.git(self.upstream, "add", ".")
+        self.git(self.upstream, "commit", "-qm", "Formatting fixture")
+        self.git(self.root, "-c", "protocol.file.allow=always", "submodule", "add",
+                 "-q", str(self.upstream), "extern/mscharged-decomp")
+        patch_dir = self.root / "patches/mscharged-decomp"
+        patch_dir.mkdir(parents=True)
+        (patch_dir / "base").write_text(self.git(self.upstream, "rev-parse", "HEAD").strip() + "\n", newline="\n")
+        (patch_dir / "series").write_text("", newline="\n")
+        return patch_dir
+
+    def prepare_decomp(self, **kwargs):
+        return prepare(self.root, self.build, "mscharged-decomp", **kwargs)
+
+    def test_formatted_compile_tree_keeps_exact_patched_tree(self):
+        clang_format = self.clang_format()
+        self.format_fixture()
+        source = self.prepare_decomp(clang_format=clang_format)
+        patched = source.parent / "patched"
+        self.assertEqual((patched / "src/game.cpp").read_text(), "int add( int a,int b ){return a+b;}\n")
+        self.assertEqual((source / "src/game.cpp").read_text(), "int add(int a, int b)\n{\n    return a + b;\n}\n")
+        # Formatting would move a __LINE__ expansion, so the file stays exactly as patched.
+        self.assertEqual((source / "src/panic.cpp").read_bytes(), (patched / "src/panic.cpp").read_bytes())
+        state = json.loads((source.parent / "manifest.json").read_text())
+        self.assertEqual(state["kept_unformatted"], {"src/panic.cpp": "PANIC line moved"})
+        self.assertIn("clang-format version", state["inputs"]["formatting"]["tool"])
+        self.prepare_decomp(clang_format=clang_format, check=True)
+        with self.assertRaisesRegex(PreparationError, "stale or modified"):
+            self.prepare_decomp(check=True)  # An unformatted build expects other sources.
+
+    def test_unformatted_game_sources_keep_both_trees(self):
+        patch_dir = self.format_fixture()
+        source = self.prepare_decomp()  # No clang-format: source/ is an unchanged copy.
+        patched = source.parent / "patched"
+        self.assertEqual((source / "src/game.cpp").read_bytes(), (patched / "src/game.cpp").read_bytes())
+        self.assertNotIn("kept_unformatted", json.loads((source.parent / "manifest.json").read_text()))
+        (patched / "src/game.cpp").write_text("int add( int a,int b ){return a*b;}\n", newline="\n")
+        exported = self.prepare_decomp(export_patch=self.build / "edit.patch")
+        shutil.copyfile(exported, patch_dir / "0001-edit.patch")
+        (patch_dir / "series").write_text("0001-edit.patch\n", newline="\n")
+        source = self.prepare_decomp(discard_generated=True)
+        self.assertEqual((source / "src/game.cpp").read_text(), "int add( int a,int b ){return a*b;}\n")
+        self.prepare_decomp(check=True)
+
+    def test_patch_development_uses_exact_tree(self):
+        clang_format = self.clang_format()
+        patch_dir = self.format_fixture()
+        source = self.prepare_decomp(clang_format=clang_format)
+        patched = source.parent / "patched"
+        (source / "src/game.cpp").write_text("int add(int a, int b) { return 0; }\n", newline="\n")
+        with self.assertRaisesRegex(PreparationError, "stale or modified"):
+            self.prepare_decomp(clang_format=clang_format, check=True)
+        with self.assertRaisesRegex(PreparationError, "Make patch edits in"):
+            self.prepare_decomp(export_patch=self.build / "rejected.patch")
+        source = self.prepare_decomp(clang_format=clang_format, discard_generated=True)
+        (patched / "src/game.cpp").write_text("int add( int a,int b ){return a-b;}\n", newline="\n")
+        exported = self.prepare_decomp(export_patch=self.build / "edit.patch")  # Any formatter, or none.
+        self.assertIn("-int add( int a,int b ){return a+b;}", exported.read_text())
+        shutil.copyfile(exported, patch_dir / "0001-edit.patch")
+        (patch_dir / "series").write_text("0001-edit.patch\n", newline="\n")
+        source = self.prepare_decomp(clang_format=clang_format, discard_generated=True)
+        self.assertEqual((patched / "src/game.cpp").read_text(), "int add( int a,int b ){return a-b;}\n")
+        self.assertEqual((source / "src/game.cpp").read_text(), "int add(int a, int b)\n{\n    return a - b;\n}\n")
+        self.prepare_decomp(clang_format=clang_format, check=True)
+
+    def test_formatting_reuses_unchanged_results(self):
+        clang_format = self.clang_format()
+        patch_dir = self.format_fixture()
+        source = self.prepare_decomp(clang_format=clang_format)
+        stamp = 1_500_000_000_000_000_000
+        for name in ("include/types.h", "src/game.cpp"):
+            os.utime(source / name, ns=(stamp, stamp))
+        text = "int add( int a,int b ){return a+b;}\n"
+        changed = text.replace("a+b", "b+a")
+        patch = "".join(difflib.unified_diff(text.splitlines(keepends=True), changed.splitlines(keepends=True),
+                                             fromfile="a/src/game.cpp", tofile="b/src/game.cpp"))
+        (patch_dir / "0001-swap.patch").write_text(patch, newline="\n")
+        (patch_dir / "series").write_text("0001-swap.patch\n", newline="\n")
+        self.prepare_decomp(clang_format=clang_format)
+        self.assertEqual((source / "include/types.h").stat().st_mtime_ns, stamp)
+        self.assertNotEqual((source / "src/game.cpp").stat().st_mtime_ns, stamp)
+        self.assertIn("return b + a;", (source / "src/game.cpp").read_text())
+        cache = self.build / "prepared/.mscharged-decomp.format-cache"
+        entries = sorted(path.suffix for path in cache.rglob("*") if path.is_file())
+        self.assertEqual(entries, ["", "", ".kept"])  # Only the current tree's results remain.
+
+    def test_formatting_definition_is_an_input(self):
+        clang_format = self.clang_format()
+        self.format_fixture()
+        self.prepare_decomp(clang_format=clang_format)
+        definition = self.build / "two-spaces.clang-format"
+        definition.write_text("BasedOnStyle: WebKit\nIndentWidth: 2\nBreakBeforeBraces: Allman\n"
+                              "AllowShortFunctionsOnASingleLine: None\n", newline="\n")
+        source = self.prepare_decomp(clang_format=clang_format, format_config=definition)
+        self.assertEqual((source / "src/game.cpp").read_text(), "int add(int a, int b)\n{\n  return a + b;\n}\n")
+        with self.assertRaisesRegex(PreparationError, "stale or modified"):
+            self.prepare_decomp(clang_format=clang_format, check=True)
 
     def nested_fixture(self):
         nested = self.workspace / "nested"

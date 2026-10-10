@@ -1,21 +1,20 @@
 Subject: Keep RVL scalar and clock fields at console widths
 
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
 RVL long typedefs widen on LP64. Use fixed-width 32-bit fields and the
 standard pointer-width type. Avoid native POSIX and C++ character-type name
 collisions. This does not adapt pointer-bearing SDK structures or Wii services.
 
 diff --git a/libs/RVL_SDK/include/revolution/os/OSTime_fwd.h b/libs/RVL_SDK/include/revolution/os/OSTime_fwd.h
-index 515f14a..b404cbd 100644
 --- a/libs/RVL_SDK/include/revolution/os/OSTime_fwd.h
 +++ b/libs/RVL_SDK/include/revolution/os/OSTime_fwd.h
-@@ -1,24 +1,26 @@
- #ifndef REVOLUTION_OS_TIME_FWD_H
+@@ -2,25 +2,26 @@
  #define REVOLUTION_OS_TIME_FWD_H
  
+ #include <revolution/os/OSHardware_fwd.h>
 +#include <stdint.h>
-+
+ 
  #ifdef __cplusplus
  extern "C" {
  #endif
@@ -49,7 +48,6 @@ index 515f14a..b404cbd 100644
  
  OSTime OSGetTime(void);
 diff --git a/libs/RVL_SDK/include/revolution/types.h b/libs/RVL_SDK/include/revolution/types.h
-index aa7de73..794b1d9 100644
 --- a/libs/RVL_SDK/include/revolution/types.h
 +++ b/libs/RVL_SDK/include/revolution/types.h
 @@ -2,14 +2,15 @@
@@ -70,7 +68,7 @@ index aa7de73..794b1d9 100644
  typedef unsigned long long u64;
  
  typedef volatile u8 vu8;
-@@ -54,16 +55,21 @@ typedef unsigned short wchar_t;
+@@ -54,16 +55,21 @@
  #define NULL 0
  #endif
  
@@ -94,3 +92,21 @@ index aa7de73..794b1d9 100644
  
  #define ALIGN(x) __attribute__((aligned(x)))
  #define ATTRIBUTE_ALIGN(x) ALIGN(x)
+diff --git a/libs/RVL_SDK/include/revolution/os/OS_fwd.h b/libs/RVL_SDK/include/revolution/os/OS_fwd.h
+--- a/libs/RVL_SDK/include/revolution/os/OS_fwd.h
++++ b/libs/RVL_SDK/include/revolution/os/OS_fwd.h
+@@ -1,11 +1,13 @@
+ #ifndef REVOLUTION_OS_BASE_FWD_H
+ #define REVOLUTION_OS_BASE_FWD_H
++
++#include <stdint.h>
+ 
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+ 
+-unsigned long OSGetConsoleType(void);
++uint32_t OSGetConsoleType(void);
+ 
+ #ifdef __cplusplus
+ }

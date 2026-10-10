@@ -51,7 +51,8 @@ function(mscharged_add_aurora_host)
     set(AURORA_ENABLE_GX ${MSCHARGED_BUILD_GX_CHECK})
     set(AURORA_DAWN_PROVIDER vendor)
     set(AURORA_DAWN_LINKAGE static)
-    if(MSCHARGED_BUILD_GAME_STARTUP OR MSCHARGED_BUILD_SCENE_PREVIEW)
+    if(MSCHARGED_BUILD_GAME_STARTUP OR MSCHARGED_BUILD_SCENE_PREVIEW
+            OR MSCHARGED_BUILD_ORIGINAL_CREDITS_DIAGNOSTIC)
         set(AURORA_ENABLE_DVD ON)
     else()
         set(AURORA_ENABLE_DVD OFF)
@@ -60,16 +61,40 @@ function(mscharged_add_aurora_host)
     set(AURORA_NOD_LINKAGE static)
     set(AURORA_ENABLE_CARD OFF)
     set(AURORA_ENABLE_THP OFF)
+    # Original Wii source and SDK time conversions use the same hardware units.
+    set(AURORA_WII_CLOCK ON)
+    # Match the original Wii GX specular-light position constant.
+    set(AURORA_WII_LIGHTING ON)
+    set(AURORA_ENABLE_NATIVE_VIDEO ${MSCHARGED_NATIVE_VIDEO})
     set(AURORA_ENABLE_RMLUI OFF)
     set(AURORA_ENABLE_TESTS OFF)
     set(AURORA_ENABLE_EXAMPLES OFF)
     add_subdirectory("${MSCHARGED_AURORA_PREPARED}" "${CMAKE_CURRENT_BINARY_DIR}/extern/aurora" EXCLUDE_FROM_ALL)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        # The Apple SDK deprecates sprintf even for Tracy's bounded case: a
+        # uint32_t thread ID (at most 10 digits) in a 256-byte buffer. Keep this
+        # exception in the amalgamated client's own source directory.
+        set_property(SOURCE "${MSCHARGED_TRACY_PREPARED}/public/TracyClient.cpp"
+            TARGET_DIRECTORY TracyClient APPEND PROPERTY COMPILE_OPTIONS -Wno-deprecated-declarations)
+        if(TARGET aurora_gx)
+            # These GX switches select subsets of the indirect stages; the
+            # GX_MAX_INDTEXSTAGE sentinel is not an additional hardware stage.
+            set_property(SOURCE "${MSCHARGED_AURORA_PREPARED}/lib/dolphin/gx/GXBump.cpp"
+                TARGET_DIRECTORY aurora_gx APPEND PROPERTY COMPILE_OPTIONS -Wno-switch)
+        endif()
+    endif()
 endfunction()
 mscharged_add_aurora_host()
 if(TARGET aurora_gx)
+    include(cmake/NativeInterrupts.cmake)
+    target_link_libraries(aurora_gx PRIVATE charged_native_interrupts)
     # GX and core reference one another. Declare the reverse static dependency
     # so even consumers of core alone get the required archive rescans.
     target_link_libraries(aurora_core PUBLIC aurora_gx)
+    include(cmake/NativeWiiLighting.cmake)
+endif()
+if(TARGET aurora_dvd)
+    include(cmake/NativeDVDReset.cmake)
 endif()
 foreach(directory IN ITEMS "${MSCHARGED_FMT_PREPARED}"
         "${MSCHARGED_XXHASH_PREPARED}/cmake_unofficial" "${MSCHARGED_TRACY_PREPARED}" "${MSCHARGED_AURORA_PREPARED}")
@@ -97,6 +122,12 @@ if(NOT MSCHARGED_BUILD_GX_CHECK)
     if(BUILD_TESTING)
         add_test(NAME aurora_host COMMAND mscharged-aurora-check)
         set_tests_properties(aurora_host PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy" TIMEOUT 30)
+        add_executable(aurora_configuration_tests tests/aurora_configuration.cpp)
+        target_compile_features(aurora_configuration_tests PRIVATE cxx_std_20)
+        target_link_libraries(aurora_configuration_tests PRIVATE aurora::core)
+        add_test(NAME aurora_configuration COMMAND aurora_configuration_tests)
+        set_tests_properties(aurora_configuration PROPERTIES
             ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_AUDIODRIVER=dummy" TIMEOUT 30)
     endif()
 endif()

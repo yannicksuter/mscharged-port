@@ -1,0 +1,56 @@
+From: mscharged-port
+Subject: [PATCH] Preserve native original audio source providers
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Upstream now owns the typed AudioResourceLoadOwner/AudioBankLoader selection
+boundary. Retain the remaining original source-provider compiler adaptations.
+Emit the original spatial destructor and sample pool delete provider for modern
+cross-TU linkage without changing either body. Console projection is unchanged.
+No effect factory, Backend/AX readiness, source state or voice is supplied.
+
+diff --git a/include/Game/Audio/Plat3dSoundSrc.h b/include/Game/Audio/Plat3dSoundSrc.h
+--- a/include/Game/Audio/Plat3dSoundSrc.h
++++ b/include/Game/Audio/Plat3dSoundSrc.h
+@@ -11,7 +11,11 @@
+ class Plat3dSoundSrc : public XSoundOwner
+ {
+ public:
++#if defined(MSCHARGED_NATIVE)
++    virtual ~Plat3dSoundSrc();
++#else
+     virtual inline ~Plat3dSoundSrc();
++#endif
+     virtual void Update(PlatAudioListener* listener, float deltaTime);
+ 
+     /* 0x20 */ float m_Pan;
+diff --git a/src/Game/Audio/AudioSource.cpp b/src/Game/Audio/AudioSource.cpp
+--- a/src/Game/Audio/AudioSource.cpp
++++ b/src/Game/Audio/AudioSource.cpp
+@@ -177,7 +177,11 @@
+     m_State = AUDIO_SOURCE_IDLE;
+ }
+ 
++#if defined(MSCHARGED_NATIVE)
++void AudioSampleSource::operator delete(void* pointer)
++#else
+ inline void AudioSampleSource::operator delete(void* pointer)
++#endif
+ {
+     gAudioSampleSourcePool.Free((AudioSampleSource*)pointer);
+ }
+diff --git a/src/Game/Audio/AudioSystem.cpp b/src/Game/Audio/AudioSystem.cpp
+--- a/src/Game/Audio/AudioSystem.cpp
++++ b/src/Game/Audio/AudioSystem.cpp
+@@ -252,6 +252,10 @@
+ 
+ int XSoundHandle::IsCallbackEnabled() { return m_CallbackEnabled; }
+ 
++#if defined(MSCHARGED_NATIVE)
++Plat3dSoundSrc::~Plat3dSoundSrc()
++#else
+ inline Plat3dSoundSrc::~Plat3dSoundSrc()
+-{
+-}
++#endif
++{
++}

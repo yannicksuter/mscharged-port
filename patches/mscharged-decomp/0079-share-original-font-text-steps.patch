@@ -1,0 +1,428 @@
+From: mscharged-port contributors
+Subject: [PATCH] Share original bounded native font measurement and quad steps
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Add separately selected font measurement/quad diagnostic helpers for retained
+native preview fixtures. Leave the complete original nlFont.cpp methods intact;
+production uses its original glyph traversal, metrics, kerning and colour flow.
+Diagnostic wrapping/page guards apply only to the copied helpers. Their
+selection does not establish original FontManager, texture or game readiness.
+
+diff --git a/include/NL/FontTextSteps.h b/include/NL/FontTextSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/NL/FontTextSteps.h
+@@ -0,0 +1,413 @@
++#ifndef NL_FONT_TEXT_STEPS_H
++#define NL_FONT_TEXT_STEPS_H
++#include "NL/nlTextEscape.h"
++#include "NL/nlMath.h"
++#if defined(MSCHARGED_NATIVE)
++#include <stdexcept>
++#endif
++
++// Source-shared font measurement and page traversal. Native callers supply
++// bounded, validated font-character strings and retained glyph/page storage.
++// Lookup provides the original glyph, character-width and kerning contracts.
++struct FontTextQuad
++{
++    nlVector2 m_pos[4];
++    nlVector2 m_uv[4];
++    nlColour colour;
++};
++struct FontTextColourResult
++{
++    bool pushed;
++    nlColour last;
++    void Apply(nlColour* output) const
++    {
++        if (output != 0)
++        {
++            if (pushed && last.c[3] != 0) { *output = last; output->c[3] = 0xFF; }
++            else output->c[3] = 0;
++        }
++    }
++};
++
++inline unsigned long FontCharacterAdvance(unsigned char advance, signed char offset, int kerning, float spacing)
++{
++    unsigned long result = advance + offset;
++    result += kerning;
++    return (unsigned long)(result * spacing);
++}
++
++template <typename Lookup>
++unsigned long FontCharacterWidth(const Lookup& lookup, float spacing,
++    unsigned short current, unsigned short previous)
++{
++    const typename Lookup::GlyphInfo& glyph = lookup.GetGlyphInfo(current);
++    int kerning = 0;
++    if (previous != 0 && lookup.GetGlyphInfo(previous).HasKernPairs)
++        kerning = lookup.Kerning(previous, current);
++    return FontCharacterAdvance(glyph.Advance, glyph.Offset, kerning, spacing);
++}
++
++template <typename Lookup, typename Escape>
++unsigned long FontGetStringWidth(const unsigned short* string, const Lookup& glyphLookup, bool SingleLine, unsigned long Width, bool WordWrap)
++{
++    if (SingleLine)
++    {
++        unsigned short PrevChar = 0;
++        unsigned long StringWidth = 0;
++        const unsigned short* pCurrentChar = string;
++
++        while (*pCurrentChar != 0)
++        {
++            if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++            {
++                Escape esc(pCurrentChar);
++                pCurrentChar = esc.m_pEnd - 1;
++            }
++            else
++            {
++                StringWidth += glyphLookup.GetCharWidth(*pCurrentChar, PrevChar);
++                PrevChar = *pCurrentChar;
++            }
++            pCurrentChar++;
++        }
++        return StringWidth;
++    }
++
++#if defined(MSCHARGED_NATIVE)
++    unsigned nativeSteps = 0;
++#endif
++    unsigned long CurrentRowWidth = 0;
++    unsigned long MaxWidth = 0;
++    const unsigned short* pLastSpace = 0;
++    const unsigned short* pLastNonEsc = 0;
++    unsigned long WidthAtLastSpace = 0;
++    unsigned char FirstChar = 1;
++    unsigned char IsNewParagraph = 0;
++    const unsigned short* pCurrentChar = string;
++    unsigned long CharWidth;
++
++
++    while (*pCurrentChar != 0)
++    {
++#if defined(MSCHARGED_NATIVE)
++        if (++nativeSteps > 65536) throw std::length_error("Font wrapping made no bounded progress");
++#endif
++        if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++        {
++            Escape esc(pCurrentChar);
++            if (esc.GetType() == ESC_NON_BREAKING_SPACE)
++            {
++                unsigned short prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? *pLastNonEsc : 0);
++                CharWidth = glyphLookup.GetCharWidth(' ', prevChar);
++            }
++            else if (esc.GetType() == ESC_PARAGRAPH)
++            {
++                CharWidth = Width + 1;
++                WidthAtLastSpace = CurrentRowWidth;
++                IsNewParagraph = 1;
++                pLastSpace = esc.m_pEnd - 1;
++            }
++            else
++            {
++                CharWidth = 0;
++            }
++            pCurrentChar = esc.m_pEnd - 1;
++        }
++        else
++        {
++            unsigned short prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? *pLastNonEsc : 0);
++            CharWidth = glyphLookup.GetCharWidth(*pCurrentChar, prevChar);
++            pLastNonEsc = pCurrentChar;
++            if (*pCurrentChar == ' ')
++            {
++                pLastSpace = pCurrentChar;
++                WidthAtLastSpace = CurrentRowWidth;
++            }
++        }
++        FirstChar = 0;
++        if (CurrentRowWidth + CharWidth > Width)
++        {
++            if (WordWrap && pLastSpace != 0)
++            {
++                CurrentRowWidth = WidthAtLastSpace;
++                pCurrentChar = pLastSpace + 1;
++                pLastSpace = 0;
++                WidthAtLastSpace = 0;
++            }
++            if (*pCurrentChar != ' ')
++            {
++#if defined(MSCHARGED_NATIVE)
++                if (pCurrentChar == string) throw std::length_error("Font width cannot fit its first glyph");
++#endif
++                pCurrentChar--;
++            }
++            bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++            if (useWidth)
++            {
++                MaxWidth = CurrentRowWidth;
++            }
++            CurrentRowWidth = 0;
++        }
++        CurrentRowWidth += CharWidth;
++        if (IsNewParagraph)
++        {
++            bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++            if (useWidth)
++            {
++                MaxWidth = CurrentRowWidth;
++            }
++            CurrentRowWidth = 0;
++            IsNewParagraph = 0;
++        }
++        pCurrentChar++;
++    }
++    bool useWidth = CurrentRowWidth < Width && CurrentRowWidth > MaxWidth;
++    if (useWidth)
++    {
++        MaxWidth = CurrentRowWidth;
++    }
++    return MaxWidth;
++}
++
++template <typename Lookup, typename Escape>
++unsigned long FontGetStringLineCount(const unsigned short* string, const Lookup& glyphLookup, unsigned long Width, bool WordWrap)
++{
++    unsigned long RowCount = 0;
++#if defined(MSCHARGED_NATIVE)
++    unsigned nativeSteps = 0;
++#endif
++    unsigned long CurrentRowWidth = 0;
++    const unsigned short* pLastSpace = 0;
++    const unsigned short* pLastNonEsc = 0;
++    unsigned char FirstChar = 1;
++    unsigned char IsNewParagraph = 0;
++    const unsigned short* pCurrentChar = string;
++    unsigned long CharWidth;
++
++
++    while (*pCurrentChar != 0)
++    {
++#if defined(MSCHARGED_NATIVE)
++        if (++nativeSteps > 65536) throw std::length_error("Font wrapping made no bounded progress");
++#endif
++        if (*pCurrentChar == glyphLookup.GetEscapeBegin())
++        {
++            Escape esc(pCurrentChar);
++            if (esc.GetType() == ESC_NON_BREAKING_SPACE)
++            {
++                unsigned long prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? (unsigned long)*pLastNonEsc : 0);
++                CharWidth = glyphLookup.GetCharWidth(' ', (unsigned short)prevChar);
++            }
++            else if (esc.GetType() == ESC_PARAGRAPH)
++            {
++                CharWidth = Width + 1;
++                IsNewParagraph = 1;
++                pLastSpace = esc.m_pEnd - 1;
++            }
++            else
++            {
++                CharWidth = 0;
++            }
++            pCurrentChar = esc.m_pEnd - 1;
++        }
++        else
++        {
++            unsigned long prevChar = FirstChar ? 0 : (pLastNonEsc != 0 ? (unsigned long)*pLastNonEsc : 0);
++            CharWidth = glyphLookup.GetCharWidth(*pCurrentChar, (unsigned short)prevChar);
++            pLastNonEsc = pCurrentChar;
++            if (*pCurrentChar == ' ')
++            {
++                pLastSpace = pCurrentChar;
++            }
++        }
++        FirstChar = 0;
++        if (CurrentRowWidth + CharWidth > Width)
++        {
++            if (WordWrap && pLastSpace != 0)
++            {
++                pCurrentChar = pLastSpace + 1;
++                pLastSpace = 0;
++            }
++            RowCount++;
++            if (*pCurrentChar != ' ')
++            {
++#if defined(MSCHARGED_NATIVE)
++                if (pCurrentChar == string) throw std::length_error("Font width cannot fit its first glyph");
++#endif
++                pCurrentChar--;
++            }
++            CurrentRowWidth = 0;
++        }
++        CurrentRowWidth += CharWidth;
++        if (IsNewParagraph)
++        {
++            CurrentRowWidth = 0;
++            IsNewParagraph = 0;
++        }
++        pCurrentChar++;
++    }
++    return RowCount + 1;
++}
++
++inline unsigned long FontStringHeight(unsigned short height, unsigned long lines, float spacing)
++{
++    return (unsigned long)(spacing * (height * lines));
++}
++
++template <typename Lookup, typename Escape, typename Sink>
++FontTextColourResult FontDrawStringSteps(const unsigned short* string, const Lookup& glyphLookup,
++    float spacing, float StartingX, float StartingY, const nlColour& Colour,
++    int StringLength, bool FlipY, nlColour* pOverrideColour, Sink& sink)
++{
++    nlVector2 CurrentPosition;
++    const typename Lookup::GlyphInfo* pGlyph;
++    FontTextQuad quad;
++    unsigned long HandledChars = 0;
++    unsigned long CurrentPage = 0;
++    const unsigned short* pCurrentChar;
++    nlColour OverrideColour = Colour;
++    if (pOverrideColour != 0 && pOverrideColour->c[3] != 0)
++    {
++        OverrideColour = *pOverrideColour;
++    }
++
++    const unsigned short* PushColourIndex = 0;
++    nlColour LastPushedColour = OverrideColour;
++    nlVec2Set(CurrentPosition, StartingX, StartingY);
++
++    while (HandledChars < (unsigned long)StringLength)
++    {
++#if defined(MSCHARGED_NATIVE)
++        if (CurrentPage >= 16) throw std::length_error("Font page traversal exceeded its bound");
++#endif
++        sink.BeginPage(CurrentPage);
++
++        CurrentPosition.x = StartingX;
++        int i = 0;
++        pCurrentChar = string;
++
++        while (*pCurrentChar != 0 && HandledChars < (unsigned long)StringLength && i < (unsigned long)StringLength)
++        {
++            unsigned long Char = *pCurrentChar;
++            if (Char == glyphLookup.GetEscapeBegin())
++            {
++                Escape escape(pCurrentChar);
++                switch (escape.m_Type)
++                {
++                case ESC_COLOUR:
++                    OverrideColour = escape.GetExtendedColour();
++
++                    if (PushColourIndex < pCurrentChar)
++                    {
++                        if (OverrideColour.c[3] == 0)
++                        {
++                            LastPushedColour = Colour;
++                            LastPushedColour.c[3] = 0;
++                        }
++                        else
++                        {
++                            LastPushedColour = OverrideColour;
++                            LastPushedColour.c[3] = 0xFF;
++                        }
++                        PushColourIndex = pCurrentChar;
++                    }
++
++                    if (OverrideColour.c[3] == 0)
++                    {
++                        OverrideColour = Colour;
++                    }
++                    break;
++
++                case ESC_NON_BREAKING_SPACE:
++                {
++                    const typename Lookup::GlyphInfo* pSpaceGlyph = &glyphLookup.GetGlyphInfo(' ');
++                    CurrentPosition.x += (float)((int)pSpaceGlyph->Offset + (int)pSpaceGlyph->Advance);
++                }
++                    break;
++                default:
++                    break;
++                }
++
++                i += (escape.m_pEnd - pCurrentChar) - 1;
++                if (CurrentPage == 0)
++                {
++                    HandledChars += escape.m_pEnd - pCurrentChar;
++                }
++                pCurrentChar = escape.m_pEnd - 1;
++            }
++            else
++            {
++                pGlyph = &glyphLookup.GetGlyphInfo(Char);
++                unsigned long Page = pGlyph->Page;
++                CurrentPosition.x += (float)pGlyph->Offset;
++                if (Page == CurrentPage)
++                {
++                    int renderAscent = FlipY ? -pGlyph->RenderAscent : pGlyph->RenderAscent;
++                    CurrentPosition.y = StartingY - (float)renderAscent;
++                    quad.m_pos[1].x = CurrentPosition.x;
++                    quad.m_pos[0].x = CurrentPosition.x;
++
++                    quad.m_pos[2].x = quad.m_pos[3].x = CurrentPosition.x + (float)pGlyph->RenderWidth - 1.0f;
++
++                    quad.m_pos[3].y = CurrentPosition.y;
++                    quad.m_pos[0].y = CurrentPosition.y;
++
++                    int renderHeight;
++                    if (FlipY)
++                    {
++                        renderHeight = -(pGlyph->RenderHeight - 1);
++                    }
++                    else
++                    {
++                        renderHeight = pGlyph->RenderHeight - 1;
++                    }
++
++                    quad.m_pos[1].y = quad.m_pos[2].y = CurrentPosition.y + (float)renderHeight;
++
++
++                    quad.m_uv[0].x = quad.m_uv[1].x = pGlyph->uv.x;
++
++                    quad.m_uv[2].x = quad.m_uv[3].x = pGlyph->uvEnd.x;
++
++                    quad.m_uv[0].y = quad.m_uv[3].y = pGlyph->uv.y;
++
++                    quad.m_uv[1].y = quad.m_uv[2].y = pGlyph->uvEnd.y;
++
++                    nlColour QuadColour = OverrideColour;
++                    QuadColour.c[3] = Colour.c[3];
++                    quad.colour = QuadColour;
++                    sink.Quad(quad);
++                    HandledChars++;
++                }
++
++                int FinalAdvance = (int)pGlyph->Advance;
++                if (pGlyph->HasKernPairs && pCurrentChar[1] != 0)
++                {
++                    FinalAdvance += glyphLookup.Kerning(pCurrentChar[0], pCurrentChar[1]);
++                }
++
++                CurrentPosition.x += (float)FinalAdvance * spacing;
++            }
++
++            pCurrentChar++;
++            i++;
++        }
++
++        if (pOverrideColour != 0 && pOverrideColour->c[3] != 0)
++        {
++            OverrideColour = *pOverrideColour;
++        }
++        else
++        {
++            OverrideColour = Colour;
++        }
++
++        sink.EndPage();
++        CurrentPage++;
++    }
++    FontTextColourResult result;
++    result.pushed = PushColourIndex != 0;
++    result.last = LastPushedColour;
++    return result;
++}
++#endif

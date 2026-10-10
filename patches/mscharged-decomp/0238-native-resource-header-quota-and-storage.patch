@@ -1,0 +1,95 @@
+From: mscharged-port native source preparation
+Subject: [PATCH] Preserve Wii resource header quotas with pool-owned native storage
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+Classification: permanent native record ABI/storage adaptation; original quota/control flow retained.
+
+diff --git a/src/NL/gl/glMemory.cpp b/src/NL/gl/glMemory.cpp
+--- a/src/NL/gl/glMemory.cpp
++++ b/src/NL/gl/glMemory.cpp
+@@ -1,3 +1,6 @@
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++#include "platform/game_resource_records.h"
++#endif
+ #include "NL/gl/glMemory.h"
+ 
+ #include "Game/GL/GLInventory.h"
+@@ -63,6 +66,9 @@
+     {
+         sCurrentResourcePool = 0;
+     }
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++    mscharged::platform::ReleaseGameResourceRecords(this);
++#endif
+ }
+ 
+ GLResourcePool* glCreateResourcePool(
+diff --git a/src/NL/glx/glxMemory.cpp b/src/NL/glx/glxMemory.cpp
+--- a/src/NL/glx/glxMemory.cpp
++++ b/src/NL/glx/glxMemory.cpp
+@@ -1,3 +1,6 @@
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++#include "platform/game_resource_records.h"
++#endif
+ #if defined(MSCHARGED_NATIVE)
+ #include "runtime/graphics_memory.h"
+ #include <dolphin/gx.h>
+@@ -345,9 +348,14 @@
+ #else
+     unsigned long value0 = mUsedMemory[0];
+     unsigned long value1 = mUsedMemory[1];
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE)
++    GLResourceMarker* marker = static_cast<GLResourceMarker*>(
++        mscharged::platform::AllocateGameResourceRecord(this, 0x10, sizeof(GLResourceMarker)));
++#else
+     GLResourceMarker* marker
+         = (GLResourceMarker*)glResourceAlloc(
+             sizeof(GLResourceMarker), GLM_Header, this);
++#endif
+     marker->mUsedMemory[0] = value0;
+     marker->mUsedMemory[1] = value1;
+     marker->mLevel = m_level;
+@@ -385,6 +393,8 @@
+     mUsedMemory[1] = marker->mUsedMemory[1];
+     m_level = level;
+ #if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE)
++    mscharged::platform::RetireGameResourceRecords(this,
++        (void*)(mPoolMemory[0] + mUsedMemory[0]), mPoolSizes[0] - mUsedMemory[0]);
+     for (int pool = 0; pool < 2; ++pool)
+         nativeRetirement[pool].Commit((void*)(mPoolMemory[pool] + mUsedMemory[pool]),
+             mPoolSizes[pool] - mUsedMemory[pool]);
+diff --git a/src/NL/glx/glxTexture.cpp b/src/NL/glx/glxTexture.cpp
+--- a/src/NL/glx/glxTexture.cpp
++++ b/src/NL/glx/glxTexture.cpp
+@@ -1,3 +1,6 @@
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++#include "platform/game_resource_records.h"
++#endif
+ #include "NL/glx/glxTexture.h"
+ #include "Game/Sys/debug.h"
+ #include "Game/TweakValue.h"
+@@ -187,7 +190,12 @@
+ 
+     textureSize = GCTextureSize(
+         header->format, width, height, numLevels, texhandle);
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++    pTex = new (mscharged::platform::AllocateGameResourceRecord(
++        static_cast<GLResourcePool*>(allocator), 0x50, sizeof(PlatTexture))) PlatTexture();
++#else
+     pTex = new (glResourceAlloc(sizeof(PlatTexture), GLM_Header, allocator)) PlatTexture();
++#endif
+ 
+     format = header->format;
+     pTex->Create(width, height, format, allocator, numLevels, false, false);
+@@ -314,7 +322,12 @@
+ 
+ PlatTexture* glx_CreatePlatTexture(void* allocator)
+ {
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE) && !defined(MSCHARGED_DIAGNOSTIC_RESOURCE_POOLS)
++    return new (mscharged::platform::AllocateGameResourceRecord(
++        static_cast<GLResourcePool*>(allocator), 0x50, sizeof(PlatTexture))) PlatTexture();
++#else
+     return new (glResourceAlloc(sizeof(PlatTexture), GLM_Header, allocator)) PlatTexture();
++#endif
+ }
+ 
+ void PlatTexture::ClearData()

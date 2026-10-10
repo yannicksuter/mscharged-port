@@ -1,5 +1,5 @@
 add_executable(mscharged-gx-check src/runtime/gx_check.cpp)
-target_include_directories(mscharged-gx-check PRIVATE src)
+target_include_directories(mscharged-gx-check PRIVATE src "${MSCHARGED_AURORA_PREPARED}/lib")
 target_compile_features(mscharged-gx-check PRIVATE cxx_std_20)
 target_link_libraries(mscharged-gx-check PRIVATE aurora::gx aurora::mtx aurora::os
     aurora::vi aurora::core mscharged_build_info)
@@ -11,12 +11,32 @@ if(BUILD_TESTING)
     add_test(NAME sqlite_preparation
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_prepare_sqlite.py")
 endif()
+if(MSCHARGED_TEST_VULKAN AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "MSCHARGED_TEST_VULKAN requires Linux/Vulkan; run mscharged-gx-check directly for Metal qualification")
+endif()
 if(BUILD_TESTING AND MSCHARGED_TEST_VULKAN)
+    add_executable(gx_completion_tests tests/gx_completion.cpp)
+    target_include_directories(gx_completion_tests PRIVATE src "${MSCHARGED_AURORA_PREPARED}")
+    target_compile_features(gx_completion_tests PRIVATE cxx_std_20)
+    target_link_libraries(gx_completion_tests PRIVATE aurora::gx aurora::mtx
+        aurora::os aurora::vi aurora::core charged_native_interrupts absl::flat_hash_map)
+    add_test(NAME gx_completion COMMAND gx_completion_tests)
+    add_test(NAME gx_coplanar COMMAND gx_completion_tests --coplanar)
+    add_test(NAME gx_coplanar_perspective COMMAND gx_completion_tests --coplanar-perspective)
+    add_test(NAME gx_coplanar_offscreen COMMAND gx_completion_tests --coplanar-offscreen)
+    add_test(NAME gx_position_invariance COMMAND gx_completion_tests --position-invariance)
+    add_test(NAME gx_completion_device_loss COMMAND "${Python3_EXECUTABLE}" -B
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gx_completion_device_loss.py"
+        "$<TARGET_FILE:gx_completion_tests>")
     add_test(NAME gx_vulkan COMMAND mscharged-gx-check --frames 180 --resize-test)
     add_test(NAME gx_vulkan_optimized COMMAND mscharged-gx-check --frames 180 --optimized-device)
     # Require the installed layer even if Dawn would otherwise skip an absent one.
-    set_tests_properties(gx_vulkan gx_vulkan_optimized PROPERTIES TIMEOUT 45 LABELS "gpu;vulkan"
+    set_tests_properties(gx_vulkan gx_vulkan_optimized gx_completion gx_completion_device_loss gx_position_invariance
+        gx_coplanar gx_coplanar_perspective gx_coplanar_offscreen PROPERTIES TIMEOUT 45 LABELS "gpu;vulkan"
         ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
         RESOURCE_LOCK gx_check
         FAIL_REGULAR_EXPRESSION "VUID-|Error:|Validation Error|GX check failed")
 endif()
+
+# Real native VI display-register/output qualification; no game input required.
+include(cmake/NativeVIDisplayGPU.cmake)

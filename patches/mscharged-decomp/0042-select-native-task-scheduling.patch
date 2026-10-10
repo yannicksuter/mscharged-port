@@ -1,0 +1,224 @@
+Subject: Select original task scheduling and explicit movie service boundary
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Restore the complete original task algorithm for production. Borrowed-task
+registration, constructor zeroing, extra scheduler checks and absent-service
+movie boundaries remain explicitly selected diagnostics. The original movie
+implementation compiles under native platform interfaces separately.
+
+diff --git a/include/NL/nlTask.h b/include/NL/nlTask.h
+--- a/include/NL/nlTask.h
++++ b/include/NL/nlTask.h
+@@ -7,10 +7,21 @@
+ {
+ public:
+     nlTask()
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++        : m_next(nullptr), m_prev(nullptr), mPriority(0), mActiveStates(0),
++          mPreviousTicker(0), mExecutionTime(0), mTimeDilated(true)
++#else
+         : mTimeDilated(true)
++#endif
+     {
+     }
+ 
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    ~nlTask(); // Tasks are borrowed by the scheduler; typed destruction detaches them.
++    nlTask(const nlTask&) = delete;
++    nlTask& operator=(const nlTask&) = delete;
++    bool mNativeRegistered = false;
++#endif
+     virtual void Run(float) = 0;
+     virtual const char* GetName() = 0;
+     // Spelled out so the mangled name stays ...FUiUi even in translation
+diff --git a/src/Game/Sys/movie.cpp b/src/Game/Sys/movie.cpp
+--- a/src/Game/Sys/movie.cpp
++++ b/src/Game/Sys/movie.cpp
+@@ -1,4 +1,7 @@
+ #include "Game/Sys/movie.h"
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++#include "runtime/startup.h"
++#else
+ #include "Game/Sys/debug.h"
+ 
+ #include "RVL_SDK/thp/THPSimple.h"
+@@ -24,6 +27,8 @@
+ 
+ static THPVideoInfo videoInfo;
+ static PlatTexture* pTex[4];
++
++#endif
+ 
+ static unsigned int g_uLastDecodeRenderTick = -1;
+ static bool g_bSyncedDecode = true;
+@@ -45,6 +50,10 @@
+ 
+ bool MovieInit()
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++    mscharged::MissingStartupService("MovieInit",
++        "Wii THPSimple decoding, audio and movie texture lifetime are not connected.");
++#else
+     if (g_bTHPInitialized)
+     {
+         return true;
+@@ -53,13 +62,19 @@
+     THPSimpleInit(1);
+     g_bTHPInitialized = true;
+     return true;
++#endif
+ }
+ 
+ bool MovieQuit()
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++    mscharged::MissingStartupService("MovieQuit",
++        "Wii THPSimple decoding, audio and movie texture lifetime are not connected.");
++#else
+     THPSimpleQuit();
+     g_bTHPInitialized = false;
+     return true;
++#endif
+ }
+ 
+ void SetSyncedDecode(bool value)
+@@ -70,6 +85,10 @@
+ bool MovieStart(
+     const char* szFilename, bool bSound, bool bLoopMovie, bool bMono)
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++    mscharged::MissingStartupService("MovieStart",
++        "Wii THPSimple decoding, audio and movie texture lifetime are not connected.");
++#else
+     if (g_bActive)
+     {
+         return false;
+@@ -146,6 +165,7 @@
+     g_bActive = true;
+     g_uCurrentFrame = 0;
+     return true;
++#endif
+ }
+ 
+ bool MovieStop()
+@@ -154,7 +174,10 @@
+     {
+         return false;
+     }
+-
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++    mscharged::MissingStartupService("MovieStop",
++        "Active Wii movie playback requires THPSimple, audio and GX texture services.");
++#else
+     g_bActive = false;
+     lbl_806E2419 = false;
+ 
+@@ -182,6 +205,7 @@
+ 
+     glGetCurrentResourcePool()->ReleaseResource(resourceMarker);
+     return true;
++#endif
+ }
+ 
+ void MovieRenderTick()
+@@ -195,7 +219,10 @@
+     {
+         return false;
+     }
+-
++#ifdef MSCHARGED_DIAGNOSTIC_MOVIES
++    mscharged::MissingStartupService("MoviePlay",
++        "Active Wii movie playback requires THPSimple, audio and GX texture services.");
++#else
+     if (g_bMovieMustStop)
+     {
+         g_bFinished = true;
+@@ -266,6 +293,7 @@
+     }
+ 
+     return true;
++#endif
+ }
+ 
+ bool IsMovieActive()
+diff --git a/src/NL/TaskBase.cpp b/src/NL/TaskBase.cpp
+--- a/src/NL/TaskBase.cpp
++++ b/src/NL/TaskBase.cpp
+@@ -1,2 +1,6 @@
+ // The original default transition hook is inline in NL/nlTask.h.
+ #include "NL/nlTask.h"
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++#include "runtime/tasks.h"
++nlTask::~nlTask() { mscharged::DestroyNativeTask(this); }
++#endif
+diff --git a/src/NL/nlTask.cpp b/src/NL/nlTask.cpp
+--- a/src/NL/nlTask.cpp
++++ b/src/NL/nlTask.cpp
+@@ -1,4 +1,7 @@
+ #include "NL/nlTask.h"
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++#include "runtime/tasks.h"
++#endif
+ 
+ #include "NL/nlDLRing.h"
+ #include "NL/nlMemory.h"
+@@ -13,7 +16,14 @@
+ 
+ void nlTaskManager::Startup(u32 initialState)
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    mscharged::PrepareNativeTaskStartup();
++    m_pInstance = new (8, false) nlTaskManager;
++    m_pInstance->mCurrentTimeDelta = m_pInstance->mRealTimeDelta = 0.0f;
++    mscharged::FinishNativeTaskStartup();
++#else
+     m_pInstance = new (nlMalloc(sizeof(nlTaskManager), 8, false)) nlTaskManager;
++#endif
+     m_pInstance->mPreviousState = initialState;
+     m_pInstance->mCurrentState = initialState;
+     m_pInstance->mPendingState = initialState;
+@@ -24,9 +34,16 @@
+ 
+ void nlTaskManager::AddTask(nlTask* task, u32 priority, u32 activeStates)
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    mscharged::CheckNativeTaskInsertion(task);
++#endif
+     task->mPriority = priority;
+     task->mActiveStates = activeStates;
+     task->mPreviousTicker = nlGetTicker();
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    task->mExecutionTime = 0.0f;
++    task->mNativeRegistered = true;
++#endif
+ 
+     if (m_pInstance->mTaskList == 0)
+     {
+@@ -57,6 +74,9 @@
+ 
+ void nlTaskManager::RunAllTasks()
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    mscharged::NativeTaskFrame nativeFrame;
++#endif
+     nlTask* currentTask = nlDLRingGetStart<nlTask>(m_pInstance->mTaskList);
+     if (currentTask != 0)
+     {
+@@ -110,10 +130,16 @@
+ 
+ void nlTaskManager::SetNextState(unsigned int nextState)
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    mscharged::CheckNativeTaskThread();
++#endif
+     m_pInstance->mPendingState = nextState;
+ }
+ 
+ void nlTaskManager::SetTimeDilation(float timeDilation)
+ {
++#ifdef MSCHARGED_DIAGNOSTIC_TASKS
++    mscharged::CheckNativeTaskDilation(timeDilation);
++#endif
+     m_pInstance->mTimeDilation = timeDilation;
+ }

@@ -1,0 +1,39 @@
+Subject: Transport original camera serialized words
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Keep the original camera loading, owning/borrowed records, copying, list and
+callback algorithms. Before the original direct word reads, ask the native
+platform to convert completed Wii chunk headers and the consumed camera word
+channels in place, retaining the original allocation and surrounding bytes.
+NIS's original borrowed LoadAnimCameraData call uses the same representation.
+
+Upstream now owns the three debug-camera sizeof placement requests.
+
+No original initialization, catalog, camera selection or playback is changed.
+Platform byte domains require the reviewed allocation/completion metadata.
+This does not establish original file request, camera runtime or scene startup.
+
+diff --git a/src/Game/Camera/animcam.cpp b/src/Game/Camera/animcam.cpp
+--- a/src/Game/Camera/animcam.cpp
++++ b/src/Game/Camera/animcam.cpp
+@@ -14,6 +14,9 @@
+ #include "NL/platqmath.h"
+ #include "NL/platvmath.h"
+ #include "NL/nlstring_tmpl.h"
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE)
++#include "platform/camera_data_transport.h"
++#endif
+ 
+ static float dofBehindTarget = 2.0f;
+ static float dofReferenceFOV = 45.0f;
+@@ -89,6 +92,9 @@
+ 
+ bool LoadAnimCameraData(nlChunk* outerChunk, nlChunk* outerEnd, cCameraData* pAnimCameraData, bool ownsKeyData)
+ {
++#if defined(MSCHARGED_NATIVE) && defined(MSCHARGED_GAME_MODULE)
++    mscharged::platform::PrepareCameraChunkRange(outerChunk, outerEnd);
++#endif
+     pAnimCameraData->ownsKeyData = ownsKeyData;
+     while (outerChunk < outerEnd)
+     {

@@ -1,65 +1,157 @@
 # Mario Strikers Charged — Native Port
 
-A native source port of **Mario Strikers Charged** for Nintendo Wii, built from
-[mscharged-decomp](https://github.com/yannicksuter/mscharged-decomp) with
-[Aurora](https://github.com/encounter/aurora) as its compatibility and rendering
-foundation.
+[![Build stable](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml/badge.svg?branch=stable)](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable)
+[![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue)](CMakeLists.txt)
 
-**This is not a binary recompilation project.** The goal is a full native port
-built by adapting the reconstructed C/C++ game and engine source to modern
-systems.
+Play **Mario Strikers Charged** natively on your PC. The port compiles the
+fully reconstructed game source of
+[mscharged-decomp](https://github.com/yannicksuter/mscharged-decomp) into native
+code, with [Aurora](https://github.com/encounter/aurora) in place of the Wii
+hardware. It is not an emulator and not a recompilation of the PowerPC binary:
+the original game runs unchanged, modern systems provide the rest.
+
+> [!IMPORTANT]
+> Only the **USA version** of the game (**R4QE01**, revision 1) is supported.
+> European and Japanese discs need their own complete decompilation before they
+> can run glitch free.
+
+## Download and play
+
+You don't need to build anything: ready-made builds for **Windows, Linux and
+macOS** are available.
+
+1. Open the latest successful
+   [**Build binaries** run of `stable`](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
+   and download the package for your system under **Artifacts** (GitHub
+   requires you to be signed in to download artifacts):
+
+   | System | Artifact |
+   | --- | --- |
+   | Windows 10/11, 64-bit | `mscharged-windows-x86_64-…` |
+   | Linux, x86_64 | `mscharged-linux-x86_64-…` |
+   | macOS, Apple Silicon (M1 or newer) | `mscharged-macos-arm64-…` |
+
+2. Unpack it. The download is a `.zip` holding the package (`.zip` on Windows,
+   `.tar.gz` on Linux and macOS); unpack that too, into a folder of your choice.
+   Keep all its files together.
+3. Start **`mscharged.exe`** (Windows) or **`mscharged`** (Linux, macOS).
+4. In the launcher, choose your own **USA disc image** (ISO or RVZ, see
+   [game data](#game-data)) and press **Play**.
+
+The builds are not signed, so the system asks once on the first start:
+
+- **Windows:** if SmartScreen warns, choose *More info → Run anyway*.
+- **macOS:** allow the app under *System Settings → Privacy & Security*, or run
+  `xattr -dr com.apple.quarantine <unpacked folder>`. Controllers also need
+  the **Input Monitoring** permission
+  ([details](docs/BUILDING_MACOS.md#controllers)).
+- **Linux:** a current distribution (the package is built on Ubuntu 26.04)
+  and a Vulkan driver (Mesa or your GPU vendor's driver) are needed.
+
+Settings and saves are kept beside the program, so the folder can live anywhere
+you like. See [GitHub builds](docs/BUILDING_GITHUB.md) for details.
 
 ## Status
 
-**Work in progress.** The port grows alongside the ongoing decompilation,
-cleanup, and validation of the original game. Development builds are currently
-verified on Linux; Windows and macOS are intended targets.
-**The game is not playable yet.**
+**Every offline feature of the original game works**: all modes, up to four
+players, saves, movies, music and sound. What remains is polishing and testing.
+Online play is not available, since Nintendo Wi-Fi Connection has shut down.
 
-## Why a native source port?
+Highlights:
 
-Compared with translating console machine instructions, working directly with
-reconstructed source makes it easier to:
+- Keyboard & mouse with freely assignable keys
+- Xbox, PlayStation and other gamepads
+- Real Wii Remotes with Nunchuk through a Mayflash DolphinBar, with pointer
+  calibration
+- Sharp picture, 4:3 or 16:9, optional antialiasing, any window size or
+  fullscreen
+- A launcher for disc, players, controls, display and audio
 
-- **Debug and maintain the game:** follow readable gameplay and engine code,
-  types, and data structures when diagnosing problems.
-- **Integrate modern platforms:** adapt engine services and memory layouts for
-  native graphics, audio, and input APIs.
-- **Improve and extend the game:** refactor and optimize code or add features
-  through explicit, reviewable source changes while preserving original behavior.
+See the full **[feature list](docs/FEATURES.md)**.
 
-## Build
+### Builds
 
-From the repository root:
+All three platforms are built and packaged by the
+[**Build binaries**](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml)
+workflow (badge above: latest `stable` build).
 
-```sh
-git submodule update --init --checkout extern/mscharged-decomp extern/nod extern/corrosion extern/sdl extern/imgui
-cmake --workflow --preset release
-./build/release/mscharged
-```
-
-This builds and opens the development launcher. See
-[build instructions](docs/BUILDING.md) for prerequisites, Debug builds, and
-experimental runtime checks.
+| Platform | Build | Package | State |
+| --- | --- | --- | --- |
+| Linux x86_64 | Ubuntu 26.04, GCC 15, Vulkan | `.tar.gz` | Tested, playable |
+| Windows x86_64 | Cross-compiled with LLVM-MinGW, Vulkan | `.zip` | Playable; tested on Windows |
+| macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; tested on Apple Silicon |
 
 ## Game data
 
-Use an **ISO or RVZ** from your own copy of Mario Strikers Charged and select it
-in the launcher. Game data is not included with this project.
-See [disc setup](docs/BUILDING.md#configure-your-disc) for configuration details.
+Supply an **ISO or RVZ from your own copy** of the USA disc. Game data is not
+included. Choose the file in the launcher or see
+[disc setup](docs/BUILDING.md#configure-your-disc).
 
-## Source and development
+## Controls
 
-The decompilation, Aurora, and other source dependencies are Git submodules
-pinned to specific commits. Before building, the port applies its patches to
-generated source copies, keeping upstream checkouts clean. Dependency updates
-are reviewed explicitly, so new upstream commits do not change an existing
-port checkout.
+Keyboard & mouse act as a Wii Remote with a Nunchuk; gamepads and real Wii
+Remotes can be assigned to players 1–4 in the launcher. Default keys:
 
-- [Dependencies and attribution](extern/README.md)
-- [Patch workflow](patches/README.md)
-- [Current runtime implementation](docs/RUNTIME.md)
-- [Contributing](CONTRIBUTING.md)
+| Wii input | Keyboard / mouse |
+| --- | --- |
+| Pointer | Mouse |
+| A / B | Enter or left click / Esc or right click |
+| D-pad | Arrow keys |
+| Nunchuk stick | W A S D |
+| Nunchuk C / Z | C / V |
+| 1 / 2 | Z / X |
+| + / − / HOME | Tab / - / Home |
+| Shake Remote / Nunchuk | E / Q |
+
+Press **P** for a screenshot. See [Wii Remote setup](docs/RUNTIME.md#wii-remote)
+for the DolphinBar.
+
+## Build from source
+
+Install the [build prerequisites](docs/BUILDING.md#requirements) first; Mac users
+can follow [macOS tool setup](docs/BUILDING_MACOS.md#install-tools). Then:
+
+```sh
+git clone --branch main --no-recurse-submodules https://github.com/yannicksuter/mscharged-port.git && cd mscharged-port
+python3 tools/setup_dependencies.py && CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --workflow --preset release --fresh
+./build/release/mscharged
+```
+
+`main` is the development branch; `stable` holds reviewed snapshots. See the
+[build guide](docs/BUILDING.md) for updates and options.
+
+## Porting approach
+
+Original source plus reviewed patches becomes the compiled game:
+
+1. **Pin.** The decomp and every dependency stay clean submodules at reviewed
+   commits; upstream changes enter only through explicit updates.
+2. **Patch.** The build exports the decomp's complete `include/`, `libs/`, and
+   `src/` trees and applies the ordered [patch series](patches/README.md):
+   compiler compatibility, native replacements for Wii hardware and platform
+   services, and data/ABI adaptation.
+3. **Format.** clang-format 16+ gives the patched tree one readable layout
+   ([definition](tools/formatting/prepared-sources.clang-format)). It changes
+   whitespace only and is verified token by token; files whose program depends
+   on their layout (`__LINE__`, stringified macro arguments) stay as patched.
+4. **Compile.** Original game code controls the game flow from `main(...)`;
+   native adapters replace Wii hardware services while preserving retail behavior.
+
+Steps 1–3 run during CMake configuration. To produce the source without
+configuring or building:
+
+```sh
+git submodule update --init extern/mscharged-decomp
+python3 tools/prepare_sources.py --build-dir build/release
+```
+
+This writes `build/release/prepared/mscharged-decomp/patched/` (pinned decomp
+plus patches, byte-exact; patches are developed here) and `source/` (the
+formatted tree that is compiled). A later `cmake --preset release` reuses it.
+Without clang-format, `source/` is an unformatted copy.
+
+See the short [port strategy](docs/PORTING.md), [patch workflow](patches/README.md),
+and [contributing guide](CONTRIBUTING.md).
 
 ## License
 

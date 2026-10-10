@@ -1,5 +1,5 @@
 Subject: Preserve original target registry with native lifetime and failure checks
-Upstream-base: 4a9ab8151d9a74e321e52b36c95d1e157d41af60
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
 
 Keep original target naming, lookup and registration. Native platform targets
 own independent resource pools and Aurora copy-texture lifetimes. Use fixed-width
@@ -7,25 +7,7 @@ Wii descriptions, reject invalid/aliased handles after reuse and roll back faile
 texture registration. Add ordered shutdown and matching frees for game-allocated
 registry nodes. The desktop adapter supplies GX calls and native texture records.
 
-diff --git a/include/NL/gl/glPlat.h b/include/NL/gl/glPlat.h
-index 0b53ce9..bbaf767 100644
---- a/include/NL/gl/glPlat.h
-+++ b/include/NL/gl/glPlat.h
-@@ -3,7 +3,11 @@
- 
- #include "NL/gl/glStruct.h"
- 
--#ifndef RVL_SDK_GX_FRAMEBUF_H
-+#if defined(MSCHARGED_NATIVE) && defined(AURORA)
-+#include <dolphin/gx/GXStruct.h>
-+#endif
-+
-+#if !defined(DOLPHIN_GXSTRUCT_H) && !defined(RVL_SDK_GX_FRAMEBUF_H)
- struct GXRenderModeObj
- {
-     u32 tvInfo;
 diff --git a/include/NL/gl/glTarget.h b/include/NL/gl/glTarget.h
-index 657728b..d5f4715 100644
 --- a/include/NL/gl/glTarget.h
 +++ b/include/NL/gl/glTarget.h
 @@ -4,6 +4,10 @@
@@ -39,7 +21,7 @@ index 657728b..d5f4715 100644
  
  enum GLTargetFormat
  {
-@@ -26,34 +30,46 @@ struct GLTargetInfo
+@@ -26,34 +30,46 @@
          : unknown08(0)
          , unknown0C(0)
      {
@@ -95,7 +77,7 @@ index 657728b..d5f4715 100644
      {
      }
  
-@@ -64,6 +80,10 @@ struct GLRenderPair
+@@ -64,6 +80,10 @@
  };
  
  void gl_TargetStartup();
@@ -107,10 +89,9 @@ index 657728b..d5f4715 100644
  GLRenderPair glGetBackBufferTarget();
  GLRenderPair glCreateTarget(const char* name, const GLTargetInfo* targetInfo);
 diff --git a/include/NL/glx/glxTarget.h b/include/NL/glx/glxTarget.h
-index 9bc9377..61f9319 100644
 --- a/include/NL/glx/glxTarget.h
 +++ b/include/NL/glx/glxTarget.h
-@@ -13,6 +13,7 @@ public:
+@@ -13,6 +13,7 @@
          : mCopyFormat(-1)
          , mLastCopyFrame(0)
      {
@@ -119,7 +100,6 @@ index 9bc9377..61f9319 100644
          mHeight = targetInfo->height;
          mFormat = targetInfo->format;
 diff --git a/src/NL/gl/glTarget.cpp b/src/NL/gl/glTarget.cpp
-index a91495e..5e7fa35 100644
 --- a/src/NL/gl/glTarget.cpp
 +++ b/src/NL/gl/glTarget.cpp
 @@ -1,9 +1,16 @@
@@ -139,7 +119,7 @@ index a91495e..5e7fa35 100644
  
  typedef nlAVLTree<unsigned long, GLXTarget*, DefaultKeyCompare<unsigned long> > TargetTree;
  
-@@ -11,7 +18,11 @@ static TargetTree targets;
+@@ -11,7 +18,11 @@
  
  static inline GLRenderPair GetBackBufferTarget()
  {
@@ -151,7 +131,7 @@ index a91495e..5e7fa35 100644
      return GLRenderPair(hash, glplatGetBackBufferTarget());
  }
  
-@@ -27,13 +38,28 @@ static inline GLRenderPair FindOrCreateTarget(unsigned long& hash, const GLTarge
+@@ -27,13 +38,28 @@
  {
      GLRenderPair result = FindTarget(hash);
      if (result)
@@ -180,7 +160,7 @@ index a91495e..5e7fa35 100644
      }
      else
      {
-@@ -44,12 +70,19 @@ static inline GLRenderPair FindOrCreateTarget(unsigned long& hash, const GLTarge
+@@ -44,12 +70,19 @@
  
  void gl_TargetStartup()
  {
@@ -200,7 +180,7 @@ index a91495e..5e7fa35 100644
  }
  
  GLRenderPair glGetBackBufferTarget()
-@@ -59,7 +92,12 @@ GLRenderPair glGetBackBufferTarget()
+@@ -59,7 +92,12 @@
  
  GLRenderPair glCreateTarget(const char* name, const GLTargetInfo* targetInfo)
  {
@@ -213,7 +193,7 @@ index a91495e..5e7fa35 100644
  
      char targetName[128];
      nlStrNCat(targetName, "target/", name, sizeof(targetName));
-@@ -67,25 +105,66 @@ GLRenderPair glCreateTarget(const char* name, const GLTargetInfo* targetInfo)
+@@ -67,25 +105,66 @@
  
      GLRenderPair result = FindOrCreateTarget(hash, targetInfo);
  
@@ -282,22 +262,42 @@ index a91495e..5e7fa35 100644
 +}
 +#endif
 diff --git a/src/NL/gl/glView.cpp b/src/NL/gl/glView.cpp
-index 5443293..fd48083 100644
 --- a/src/NL/gl/glView.cpp
 +++ b/src/NL/gl/glView.cpp
-@@ -480,8 +480,15 @@ void GLView::RemoveChild(GLView* child)
+@@ -487,8 +487,15 @@
  
  GLRenderPair GLView::GetRenderPair() const
  {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +    if (!m_RenderPair && (m_RenderPair.hash || m_RenderPair.target || m_RenderPair.nativeGeneration))
 +        throw std::invalid_argument("Incomplete GL view target handle");
 +#endif
      if (m_RenderPair)
      {
-+#if defined(MSCHARGED_NATIVE)
++#if defined(MSCHARGED_DIAGNOSTIC_VIEWS)
 +        glValidateTarget(m_RenderPair);
 +#endif
          return m_RenderPair;
      }
      return glGetBackBufferTarget();
+diff --git a/libs/RVL_SDK/include/revolution/gx/GXRenderModeObj.h b/libs/RVL_SDK/include/revolution/gx/GXRenderModeObj.h
+--- a/libs/RVL_SDK/include/revolution/gx/GXRenderModeObj.h
++++ b/libs/RVL_SDK/include/revolution/gx/GXRenderModeObj.h
+@@ -2,6 +2,10 @@
+ #define RVL_SDK_GX_RENDER_MODE_OBJ_H
+ 
+ #define GX_VFILTER_SZ 7
++
++#if defined(MSCHARGED_NATIVE)
++#include <dolphin/gx/GXStruct.h>
++#else
+ 
+ typedef struct _GXRenderModeObj {
+     union {
+@@ -25,4 +29,6 @@
+     unsigned char vfilter[GX_VFILTER_SZ]; // at 0x32
+ } GXRenderModeObj;
+ 
++#endif // MSCHARGED_NATIVE
++
+ #endif

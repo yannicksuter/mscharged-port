@@ -1,0 +1,806 @@
+Subject: Select temporary original Boot/Nav/Intro diagnostic endpoints
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Named diagnostic-only omissions retain default native and console game flow.
+Full Async/camera/world/AX services remain unqualified.
+
+diff --git a/src/Game/AsyncLoading.cpp b/src/Game/AsyncLoading.cpp
+--- a/src/Game/AsyncLoading.cpp
++++ b/src/Game/AsyncLoading.cpp
+@@ -1,4 +1,7 @@
+ #include "revolution/types.h"
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#include <stdexcept>
++#endif
+ #include "NL/nlDLListContainer.inl"
+ #include "Game/Font/FontLoading.h"
+ #include "Game/MiiManager.h"
+@@ -275,6 +278,10 @@
+ 
+ void AsyncLoadingManager::DoFunctionCall(unsigned int functionIndex)
+ {
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    (void)functionIndex;
++    throw std::logic_error("Frontend endpoint diagnostic does not execute the unqualified full Async dispatcher");
++#else
+     switch (functionIndex)
+     {
+     case 0:
+@@ -1124,6 +1131,7 @@
+         nlBreak();
+         break;
+     }
++#endif
+ }
+ 
+ AsyncLoadingManager::AsyncLoadingManager()
+@@ -1433,6 +1441,7 @@
+ 
+ extern "C" void fn_80119528(AsyncLoadingManager* manager)
+ {
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     static GLMemoryRequirement requirements[] = {
+         { GLM_Header, 0x400 },
+         { GLM_VertexData, 0x800 },
+@@ -1440,22 +1449,32 @@
+     GLView* view = GetLayerView(eCLV_ImpostorTexture);
+     ImpostorManager::GetInstance()->Initialize(view, 30, requirements, 2, true);
+     ImpostorManager::GetInstance()->SetEnabled(true);
++#endif // unqualified stadium/impostor initialization is omitted in this diagnostic
+     manager->SetLoadingComment("InitializeFEState2");
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     ParticleUpdateTask* particleTask = ParticleUpdateTask::sInstance;
+-    particleTask->Initialize(GetLayerView(eCLV_Particles), 0x5F6, 0x2FB);
++    particleTask->Initialize(GetLayerView((eCLV)0x19), 0x5F6, 0x2FB);
++#endif // unqualified effects initialization is omitted in this diagnostic
+     GameInfoManager::Instance()->ResetUnknown0xA0();
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     FEMusic::StopStream();
+-    BaseSceneHandler* scene = GameSceneManager::Instance()->Push(SCENE_NAVIGATION, SCREEN_NOTHING, false);
++#endif // normal AX frontend music is omitted in this diagnostic
++    BaseSceneHandler* scene = GameSceneManager::Instance()->Push((SceneList)0x1D, SCREEN_NOTHING, false);
+     FESceneManager::Instance()->SetTopMostScene(scene);
+     SetPointerEnabled(false);
+     if (!lbl_806E1044)
+     {
+         lbl_806E1044 = true;
+-        GameSceneManager::Instance()->Push(SCENE_INTRO_MOVIE, SCREEN_NOTHING, false);
++        GameSceneManager::Instance()->Push((SceneList)0x16, SCREEN_NOTHING, false);
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+         FrontEndPresentation::GetInstance()->Call("StartTitleScreenSequence");
++#endif // unqualified3D title-camera initialization omitted; actual Intro/Title camera waits stay held
+     }
+     else
+     {
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++        throw std::logic_error("Frontend sequence diagnostic does not qualify later world/network frontend initialization");
++#else
+         SetPointerEnabled(true);
+         if (g_e3_Build)
+         {
+@@ -1541,7 +1560,10 @@
+                 FrontEndPresentation::GetInstance()->Call("StartMainMenuSequence");
+             }
+         }
+-    }
++
++#endif
++}
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     StopSound(0x7FC13AA3, manager);
+     g_pAudioSystem->GetBundleManager()->GetSoundMap()->UnloadBank(0x12);
+     {
+@@ -1585,6 +1607,7 @@
+         StartAudioEffect(&binding, &definition, parameter, false, 0.0f);
+     }
+ 
++#endif // normal AX controller-speaker effects omitted in this diagnostic
+     GameInfoManager::Instance()->unknown_0x71C8 = 0;
+     manager->mLoadingState = ASYNC_RESOURCES_LOADED;
+     lbl_806E1040->SetVisible(false);
+@@ -2271,3 +2294,22 @@
+ PersistentResourceRequirements gPersistentResourceRequirements = {
+     { { GLM_Header, 0x3C00 }, { GLM_TextureData, 0x390800 } },
+ };
++
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++// Temporary source endpoint selection. These are the genuine original Boot
++// flags/predicate; no callback, phase, interpreter state or camera is completed
++// by this integration boundary. The original bytecode dispatcher replaces this
++// selection once all normal loading providers are qualified.
++extern "C" void ChargedDiagnosticAdvanceFrontendOwner()
++{
++    if (lbl_806E1044)
++        return;
++    BootLoadingScene* scene = static_cast<BootLoadingScene*>(
++        GameSceneManager::Instance()->GetScene(
++            g_pLocalization->m_CurrentLanguage == nlLocalization::LangJapanese
++                ? SCENE_BOOT_LOADING_JPN : SCENE_BOOT_LOADING));
++    if (lbl_806E1068 && lbl_806E1069 && scene != 0
++        && scene->mPhase == 4 && !scene->IsBootScreenPending())
++        fn_80119528(AsyncLoadingManager::Instance());
++}
++#endif
+diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneManager.cpp
+--- a/src/Game/FE/BaseGameSceneManager.cpp
++++ b/src/Game/FE/BaseGameSceneManager.cpp
+@@ -1,5 +1,8 @@
+ #include "Game/SH/SHHallOfFame.h"
+ #include "revolution/types.h"
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#include <stdexcept>
++#endif
+ #include "NL/nlDLListContainer.inl"
+ #include "Game/SH/SHOnlineMiiSelectOverlay.h"
+ #include "Game/BaseGameSceneManager.h"
+@@ -302,6 +305,7 @@
+ 
+     switch (newscene)
+     {
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     case SCENE_TITLE:
+         newHandler = new (nlMalloc(sizeof(TitleScene), 8, false)) TitleScene(movement);
+         break;
+@@ -350,21 +354,25 @@
+     case SCENE_SUPER_LOADING:
+         newHandler = new (nlMalloc(sizeof(SuperLoadingScene), 8, false)) SuperLoadingScene();
+         break;
++#endif
+     case SCENE_BOOT_LOADING:
+         newHandler = new (nlMalloc(sizeof(BootLoadingScene), 8, false)) BootLoadingScene();
+         break;
+     case SCENE_BOOT_LOADING_JPN:
+         newHandler = new (nlMalloc(sizeof(BootLoadingScene), 8, false)) BootLoadingScene();
+         break;
+-    case SCENE_MOVIE_PLAYER:
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    case (SceneList)20:
+         newHandler = new (nlMalloc(sizeof(MoviePlayerScene), 8, false)) MoviePlayerScene();
+         break;
+     case SCENE_NLG_LOGO:
+         newHandler = new (nlMalloc(sizeof(NLGLogoMovieScene), 8, false)) NLGLogoMovieScene();
+         break;
++#endif
+     case SCENE_INTRO_MOVIE:
+         newHandler = new (nlMalloc(sizeof(IntroMovieScene), 8, false)) IntroMovieScene();
+         break;
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     case SCENE_CREDITS:
+         newHandler = new (nlMalloc(sizeof(CreditScene), 8, false)) CreditScene();
+         break;
+@@ -383,10 +391,12 @@
+     case SCENE_OPTIONS_CHEATS_LIST:
+         newHandler = new (nlMalloc(sizeof(SHOptionsCheatsList), 8, false)) SHOptionsCheatsList();
+         break;
+-    case SCENE_NAVIGATION:
++#endif
++    case (SceneList)29:
+         newHandler = new (nlMalloc(sizeof(SHNavigation), 8, false)) SHNavigation();
+         break;
+-    case SCENE_WII_CURSOR:
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    case (SceneList)30:
+         newHandler = new (nlMalloc(sizeof(SHNavigation), 8, false)) SHNavigation();
+         break;
+     case SCENE_ROAD_TO_STRIKERS_CUP:
+@@ -599,6 +609,11 @@
+     case OVERLAY_DEFENSIVE_PLAY:
+         newHandler = new (nlMalloc(sizeof(DefensivePlayOverlay), 8, false)) DefensivePlayOverlay();
+         break;
++#endif
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    default:
++        throw std::logic_error("Frontend sequence diagnostic reached an unqualified original scene factory case");
++#endif
+     }
+ 
+     FESceneManager::Instance()->QueueScenePush(newHandler, filename, &VirtualAllocator);
+diff --git a/src/Game/GameInfo.cpp b/src/Game/GameInfo.cpp
+--- a/src/Game/GameInfo.cpp
++++ b/src/Game/GameInfo.cpp
+@@ -429,7 +429,9 @@
+ void GameInfoManager::ResetUnknown0xA0()
+ {
+     mUseCurGameSettings = 0;
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     mUserInfo.mAudioOptions.ApplySettings();
++#endif // unqualified original AudioSystem/factory settings endpoint omitted in this diagnostic
+ }
+ 
+ void GameInfoManager::ApplyDifficultySettings()
+diff --git a/src/Game/Render/FrontEndPresentation.cpp b/src/Game/Render/FrontEndPresentation.cpp
+--- a/src/Game/Render/FrontEndPresentation.cpp
++++ b/src/Game/Render/FrontEndPresentation.cpp
+@@ -1,4 +1,7 @@
+ #include "NL/nlDLListContainer.inl"
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#include <stdexcept>
++#endif
+ #include "Game/Render/FrontEndPresentation.h"
+ 
+ #include "Game/GameSceneManager.h"
+diff --git a/src/Game/Render/FrontEndPresentation_interp.cpp b/src/Game/Render/FrontEndPresentation_interp.cpp
+--- a/src/Game/Render/FrontEndPresentation_interp.cpp
++++ b/src/Game/Render/FrontEndPresentation_interp.cpp
+@@ -12,9 +12,11 @@
+ {
+     switch (function)
+     {
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     case 0:
+         NetTournManager::Instance()->DetachTournamentTrophy();
+         break;
++
+     case 1:
+     {
+         bool value = m_SP[-1] != 0;
+@@ -36,15 +38,19 @@
+         FEModelManager::Instance()->CreateModel(FE_MODEL_IMPOSTOR, MSCHARGED_FE_VM_STRING(name), side, value, 0, 0, alternate);
+         break;
+     }
++
+     case 2:
+         FEModelManager::Instance()->ReleaseImpostors();
+         break;
++
+     case 3:
+         NetTournManager::Instance()->DestroyTournamentTrophy();
+         break;
++
+     case 4:
+         CupManager::s_pInstance->ShowRoundNews();
+         break;
++
+     case 5:
+     {
+         unsigned int value = m_SP[-1];
+@@ -56,6 +62,7 @@
+         }
+         break;
+     }
++
+     case 6:
+     {
+         unsigned int value = m_SP[-1];
+@@ -66,16 +73,21 @@
+         }
+         break;
+     }
++
+     case 7:
+         SetCupTrophiesVisible(false);
+         break;
++
++#endif
+     case 8:
+         StopWithUndo();
+         break;
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     case 9:
+         ++m_SP;
+         m_SP[-1] = g_e3_Build;
+         break;
++
+     case 10:
+     {
+         const char* animationName;
+@@ -102,10 +114,12 @@
+         }
+         break;
+     }
++
+     case 11:
+         ++m_SP;
+         m_SP[-1] = IsWidescreen();
+         break;
++
+     case 12:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -113,9 +127,11 @@
+         DestroyFrontEndPresentationEmission(name);
+         break;
+     }
++
+     case 13:
+         BeginLoadTournamentTrophy();
+         break;
++
+     case 14:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -123,6 +139,7 @@
+         DisableFrontEndPresentationEmission(name);
+         break;
+     }
++
+     case 15:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -133,6 +150,7 @@
+         camera->m_EndOfAnimationCallback = OnCameraAnimationFinished;
+         break;
+     }
++
+     case 16:
+     {
+         ePlayMode playMode = (ePlayMode)m_SP[-1];
+@@ -142,6 +160,7 @@
+         SetWorldAnimation(objectName, animationName, playMode);
+         break;
+     }
++
+     case 17:
+     {
+         float value = *(float*)&m_SP[-1];
+@@ -156,6 +175,7 @@
+         }
+         break;
+     }
++
+     case 18:
+     {
+         unsigned int argument1 = m_SP[-1];
+@@ -169,9 +189,11 @@
+         }
+         break;
+     }
++
+     case 19:
+         FEAudio::PlayAnimAudioEvent(0xB60A9CC0, 0, 0, true);
+         break;
++
+     case 20:
+     {
+         unsigned int event = m_SP[-1];
+@@ -179,6 +201,7 @@
+         FEAudio::PlayAnimAudioEvent(event, 0, 0, true);
+         break;
+     }
++
+     case 21:
+     {
+         float duration = *(float*)&m_SP[-1];
+@@ -187,6 +210,7 @@
+         mCameraTransitionFinished = false;
+         break;
+     }
++
+     case 22:
+     {
+         unsigned int childName = m_SP[-1];
+@@ -203,6 +227,7 @@
+         }
+         break;
+     }
++
+     case 23:
+     {
+         bool value = m_SP[-1] != 0;
+@@ -217,6 +242,7 @@
+         mCameraTransitionFinished = false;
+         break;
+     }
++
+     case 24:
+     {
+         bool value = m_SP[-1] != 0;
+@@ -239,6 +265,7 @@
+         mCameraTransitionFinished = false;
+         break;
+     }
++
+     case 25:
+     {
+         int value1 = (int)m_SP[-1];
+@@ -247,9 +274,11 @@
+         GameSceneManager::Instance()->Push((SceneList)value0, (ScreenMovement)value1, false);
+         break;
+     }
++
+     case 26:
+         GameSceneManager::Instance()->Push(SCENE_CHOOSE_SIDES_STRIKER_CUP, SCREEN_FORWARD, false);
+         break;
++
+     case 27:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -261,6 +290,7 @@
+         }
+         break;
+     }
++
+     case 28:
+     {
+         float time = *(float*)&m_SP[-1];
+@@ -268,6 +298,7 @@
+         GetCurrentAnimatedCamera()->SetAnimationTime(time, true);
+         break;
+     }
++
+     case 29:
+     {
+         cAnimCamera* camera = GetCurrentAnimatedCamera();
+@@ -275,6 +306,7 @@
+         camera->SetAnimationTime(time, true);
+         break;
+     }
++
+     case 30:
+     {
+         unsigned int value = m_SP[-1];
+@@ -287,6 +319,7 @@
+         }
+         break;
+     }
++
+     case 31:
+     {
+         unsigned int childName = m_SP[-1];
+@@ -303,6 +336,7 @@
+         }
+         break;
+     }
++
+     case 32:
+     {
+         float time = *(float*)&m_SP[-1];
+@@ -310,6 +344,7 @@
+         mWaitTime = time;
+         break;
+     }
++
+     case 33:
+     {
+         bool value = m_SP[-1] != 0;
+@@ -322,6 +357,7 @@
+         }
+         break;
+     }
++
+     case 34:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -333,6 +369,7 @@
+         }
+         break;
+     }
++
+     case 35:
+     {
+         bool cyclic = m_SP[-1] != 0;
+@@ -344,30 +381,38 @@
+         }
+         break;
+     }
++
+     case 36:
+         SetCupTrophiesVisible(true);
+         break;
++
+     case 37:
+         ShowCupAwardRewardsPopup();
+         break;
++
+     case 38:
+         ShowCupBrickWallNews();
+         break;
++
+     case 39:
+         ShowCupRulesPopup();
+         break;
++
+     case 40:
+         ShowCupGoldenBootNews();
+         break;
++
+     case 41:
+         if (SHNavigation* scene = GetNavigationScene())
+         {
+             scene->StartTransition();
+         }
+         break;
++
+     case 42:
+         StartFrontEndPresentationMusic();
+         break;
++
+     case 43:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -375,12 +420,14 @@
+         EnableFrontEndPresentationEmission(name);
+         break;
+     }
++
+     case 44:
+         if (!mCameraFinished)
+             StopWithUndo();
+         else
+             mCameraFinished = false;
+         break;
++
+     case 45:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -392,18 +439,21 @@
+         }
+         break;
+     }
++
+     case 46:
+         if (!mCameraTransitionFinished)
+             StopWithUndo();
+         else
+             mCameraTransitionFinished = false;
+         break;
++
+     case 47:
+         if (SaveEnabled && InOperation)
+         {
+             StopWithUndo();
+         }
+         break;
++
+     case 48:
+         mWaitTime -= mDeltaTime;
+         if (mWaitTime > 0.0f)
+@@ -411,6 +461,7 @@
+         else
+             mWaitTime = 0.0f;
+         break;
++
+     case 49:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -421,6 +472,7 @@
+         }
+         break;
+     }
++
+     case 50:
+     {
+         const char* name = MSCHARGED_FE_VM_STRING(m_SP[-1]);
+@@ -439,6 +491,7 @@
+         }
+         break;
+     }
++
+     case 51:
+         if (IsTournamentTrophyLoaded())
+             FinishLoadTournamentTrophy();
+@@ -448,6 +501,13 @@
+     default:
+         nlBreak();
+         break;
++#endif
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    default:
++        nlPrintf("Frontend sequence unqualified presentation service: %u\n", function);
++        throw std::logic_error("Frontend sequence diagnostic reached unqualified presentation/camera/effects dispatcher");
++#endif
++
+     }
+ }
+ 
+diff --git a/src/Game/SH/SHBootLoading.cpp b/src/Game/SH/SHBootLoading.cpp
+--- a/src/Game/SH/SHBootLoading.cpp
++++ b/src/Game/SH/SHBootLoading.cpp
+@@ -225,7 +225,9 @@
+         {
+             mPhase = PhaseFinished;
+             mElapsedTime = 0.0f;
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+             g_pAudioSystem->GetBundleManager()->GetSoundMap()->UnloadBank(0x17);
++#endif // normal AX NLG sound bank is omitted in this diagnostic
+         }
+     }
+     else if (mPhase == PhaseFinished)
+@@ -269,7 +271,9 @@
+         break;
+     case PhaseDeveloperLogo:
+         mPresentation->SetActiveSlide("NLG", true);
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+         FEAudio::PlaySound(0x17, 0xDE83984E, 0, 0);
++#endif // normal AX NLG sound cue is omitted in this diagnostic
+         break;
+     }
+     if (mHomeButtonWarning != 0)
+diff --git a/src/Game/SH/SHMoviePlayer.cpp b/src/Game/SH/SHMoviePlayer.cpp
+--- a/src/Game/SH/SHMoviePlayer.cpp
++++ b/src/Game/SH/SHMoviePlayer.cpp
+@@ -42,15 +42,17 @@
+     typedef Detail::MemFunImpl<void, void (MoviePlayerScene::*)()> MemFunImpl_MoviePlayerScene_v;
+     typedef BindExp1<void, MemFunImpl_MoviePlayerScene_v, MoviePlayerScene*> BindExp1_MoviePlayerScene_v;
+     mMovieFilename[0] = 0;
++#if !defined(MSCHARGED_DIAGNOSTIC_CREDITS_SCENE) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    if (GameSceneManager::s_pInstance)
++    {
++        mGameSceneManager = GameSceneManager::s_pInstance;
++    }
++    else
++    {
++        mGameSceneManager = g_pOverlayManager;
++    }
++#endif // actual scene-manager selection is retained
+ #if !defined(MSCHARGED_DIAGNOSTIC_CREDITS_SCENE)
+-    if (GameSceneManager::s_pInstance)
+-    {
+-        mGameSceneManager = GameSceneManager::s_pInstance;
+-    }
+-    else
+-    {
+-        mGameSceneManager = g_pOverlayManager;
+-    }
+     FindEvent<NoEventData>("HBMHide", -1)->Add(Function<FnVoidVoid>(BindExp1_MoviePlayerScene_v(MemFun(&MoviePlayerScene::OnHBMHide), this)), (EventOwnerHandle)&mHBMHideConnection, -1);
+ #endif
+ }
+@@ -252,8 +254,10 @@
+         MovieStop();
+         mMovieStarted = false;
+     }
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     BasicStadium* pStadium = BasicStadium::GetCurrentStadium();
+     pStadium->m_bRenderingEnabled = false;
++#endif // the diagnostic has no stadium object to change
+     m_padB4 = 0.0f;
+     mMovieFinished = false;
+     mTransitionPending = false;
+@@ -262,8 +266,10 @@
+ void IntroMovieScene::OnMoviePlaybackEnded()
+ {
+     GameSceneManager::s_pInstance->Push(mNextScene, SCREEN_NOTHING, true);
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     BasicStadium* pStadium = BasicStadium::GetCurrentStadium();
+     pStadium->m_bRenderingEnabled = true;
++#endif // the diagnostic has no stadium object to change
+     SetSyncedDecode(false);
+ }
+ 
+@@ -288,7 +294,9 @@
+                 mMovieFinished = true;
+                 FrontEndPresentation::GetInstance()->Call("TransitionFromMovieToTitleScreen");
+                 mTransitionPending = true;
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+                 BasicStadium::GetCurrentStadium()->m_bRenderingEnabled = true;
++#endif // the diagnostic has no stadium object to change
+                 SetSyncedDecode(false);
+             }
+         }
+diff --git a/src/Game/SH/SHNavigation.cpp b/src/Game/SH/SHNavigation.cpp
+--- a/src/Game/SH/SHNavigation.cpp
++++ b/src/Game/SH/SHNavigation.cpp
+@@ -4,6 +4,10 @@
+ #include "NL/plat/PlatPadStatus.h"
+ #include "Game/SH/SHNavigation.h"
+ #include "Game/BaseGameSceneManager.h"
++#include "Game/BaseSceneHandler.inl"
++#include "Game/GameInfo.inl"
++#include "Game/FE/fePresentation.inl"
++#include "Game/FE/tlInstance.inl"
+ 
+ #include "Game/DB/CharacterInfo.h"
+ #include "Game/FE/feFinder.h"
+diff --git a/src/Game/main.cpp b/src/Game/main.cpp
+--- a/src/Game/main.cpp
++++ b/src/Game/main.cpp
+@@ -8,6 +8,11 @@
+ #endif
+ #if defined(MSCHARGED_DIAGNOSTIC_MAIN_FRONTEND_SCENE)
+ #include "Game/SH/SHCredits.h"
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++#include "Game/AsyncLoading.h"
++#include "Game/FE/FEAudio.h"
++extern "C" void ChargedDiagnosticAdvanceFrontendOwner();
++#endif
+ #if defined(MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE)
+ #include "Game/Sys/movie.h"
+ #endif
+@@ -207,7 +212,11 @@
+ static ResetTask resetTask;
+ static MemCheckTask memCheckTask;
+ static TextWindowTask textWindowTask;
++#endif // unrelated diagnostic task statics remain omitted
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+ static FEDPDTask feDPDTask;
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP)
+ static FlashMemoryTask flashMemoryTask;
+ 
+ 
+@@ -563,7 +572,11 @@
+ 
+     glxSetDrawSyncTimeout(1000.0f);
+     InitializeDispatchEventsTask();
++#endif // unrelated configuration/loading requests remain omitted
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     nlTaskManager::Startup(0x10000);
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP)
+     sLoadingTask.Start();
+     GetEmissionManager();
+     EmissionManager::SetResourceBudget(1, 250);
+@@ -634,10 +647,14 @@
+     }
+     tDebugPrintManager::Print(DC_NETWORK, "CountryCode = %d\n", countryCode);
+ 
++#endif // country-code logging remains omitted in the bootstrap
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     if (GameInfoManager::s_pInstance == 0)
+     {
+         GameInfoManager::s_pInstance = new (8, false) GameInfoManager;
+     }
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP)
+     if (CupManager::s_pInstance == 0)
+     {
+         CupManager::s_pInstance = new (8, false) CupManager;
+@@ -655,7 +672,11 @@
+     nlInitFileCache();
+     ReplayChoreo::Instance();
+     GetPresentation();
++#endif // unrelated replay/presentation tasks remain omitted
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP) || defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
+     FrontEndPresentation::GetInstance();
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_MAIN_BOOTSTRAP)
+     ExcitementSystem::Instance();
+     AddTasks();
+ #endif // unrelated country/game/save/replay/task prerequisites
+@@ -892,6 +913,28 @@
+     // The original loading bytecode and GameSceneManager dispatch are omitted
+     // by this temporary diagnostic. Retain the same source-owned managers,
+     // pools, fonts and graphics established above; never initialize them twice.
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    // Named integration entry into the actual loader-owned boot resources and
++    // handler factory. Normal main/task/VM flow and the Credits mode are intact.
++    // Explicit diagnostic omission: normal frontend SFX still require the
++    // genuine GameAudio/effect-factory/AX predecessor. Use its real control
++    // method; THP mode0 movie PCM is independent and remains enabled.
++    FEAudio::EnableSounds(false);
++    fn_8011B178(AsyncLoadingManager::Instance());
++    FESceneManager::Instance()->ForceImmediateStackProcessing();
++    while (!FESceneManager::Instance()->AreAllScenesValid())
++    {
++        nlServiceFileSystem();
++        FEResourceManager::Instance()->Run(0.0f);
++        OSYieldThread();
++    }
++    nlMatrix4 identity;
++    identity.SetIdentity();
++    fn_80273144(identity, identity, 4.0f / 3.0f, 0.4712389f,
++        4.0f / 3.0f, 0.4712389f);
++    nlPrintf("Original frontend endpoint diagnostic: boot handler ready; Intro waits on original Boot predicates\n");
++    return 85;
++#else
+     FEResourceManager* resources = FEResourceManager::Instance();
+     resources->LoadPermanentResourceBundle("art/fe/MainUI.Dmn", DiagnosticPermanentComplete);
+ #if defined(MSCHARGED_DIAGNOSTIC_MAIN_INPUT)
+@@ -926,6 +969,7 @@
+     // SceneCreated/credits.txt/resource completion owns all scene readiness.
+     nlPrintf("Original main selected Credits ready: state%d, phase%d.\n", credits->mFEScene->mState, credits->mPhase);
+     return 85;
++#endif
+ #else
+     return 83;
+ #endif
+@@ -972,6 +1016,9 @@
+     g_pFEInput->Update(delta);
+ #endif
+     FEResourceManager::Instance()->Run(delta);
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    ChargedDiagnosticAdvanceFrontendOwner();
++#endif
+     FESceneManager::Instance()->Update(delta);
+     FESceneManager::Instance()->RenderActiveScenes();
+ #if defined(MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE)
+@@ -1001,6 +1048,9 @@
+     g_pFEInput->Update(delta);
+ #endif
+     FEResourceManager::Instance()->Run(delta);
++#if defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE)
++    ChargedDiagnosticAdvanceFrontendOwner();
++#endif
+     FESceneManager::Instance()->Update(delta);
+     FESceneManager::Instance()->RenderActiveScenes();
+ #if defined(MSCHARGED_DIAGNOSTIC_CREDITS_MOVIE)

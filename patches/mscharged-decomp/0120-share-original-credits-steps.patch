@@ -1,0 +1,373 @@
+From: mscharged-port
+Subject: Share original Credits phase and scrolling steps
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+diff --git a/include/Game/FE/FrontendCreditsSteps.h b/include/Game/FE/FrontendCreditsSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/FE/FrontendCreditsSteps.h
+@@ -0,0 +1,364 @@
++#ifndef GAME_FE_FRONTEND_CREDITS_STEPS_H
++#define GAME_FE_FRONTEND_CREDITS_STEPS_H
++
++// Original CreditScene phase/copy/scroll equations. Host boundaries are typed
++// callable parameters; console methods below delegate to the same bodies.
++
++template<class S,class Wide,class Video,class Play,class Stadium,class Push,class Music>
++void FrontendCreditsSetupPhase(S& s,Wide wide,Video video,Play play,Stadium stadium,Push push,Music music)
++{
++    auto& mFadeStarted = s.mFadeStarted;
++    auto& mTimeElapsed = s.mTimeElapsed;
++    auto& mPhase = s.mPhase;
++    auto& mPresentation = s.mPresentation;
++    auto& mNextScene = s.mNextScene;
++    mFadeStarted = false;
++    mTimeElapsed = 0.0f;
++
++    switch (mPhase)
++    {
++    case 1:
++        if (wide())
++        {
++            mPresentation->SetActiveSlide("NLG", true);
++        }
++        else
++        {
++            mPresentation->SetActiveSlide("NLG 4:3", true);
++        }
++        if (video() == 1)
++        {
++            s.SetMovieDetails("art/movies/nlgintro_pal.thp", true, false);
++        }
++        else
++        {
++            s.SetMovieDetails("art/movies/nlgintrowide.thp", true, false);
++        }
++        {
++            stadium(false);
++        }
++        break;
++    case 0:
++        mPresentation->SetActiveSlide("NINTENDO", true);
++        mPresentation->m_currentSlide->Update(0.0f);
++        play(0xF394C076, 0, 0, 1);
++        stadium(false);
++        break;
++    case 2:
++        s.SetupForCredits();
++        stadium(false);
++        break;
++    case 3:
++        mPresentation->SetActiveSlide("COPYRIGHTS", true);
++        mPresentation->m_currentSlide->Update(0.0f);
++        stadium(false);
++        break;
++    case 4:
++        play(0xBB142B94, 0, 0, 1);
++        push(mNextScene, 0, true);
++        if (mNextScene == (decltype(s.mNextScene))13)
++        {
++            music(1);
++        }
++        else
++        {
++            music(0);
++        }
++        mNextScene = (decltype(s.mNextScene))13;
++        {
++            stadium(true);
++        }
++        break;
++    default:
++        {
++            stadium(true);
++        }
++        break;
++    }
++}
++
++template<class S>
++void FrontendCreditsUpdateNintendoLogo(S& s,float fDeltaT)
++{
++    auto& mTimeElapsed = s.mTimeElapsed;
++    auto& mFadeStarted = s.mFadeStarted;
++    auto& mPhase = s.mPhase;
++    auto* pWhiteFade = s.GetWhiteFadeComponent();
++    mTimeElapsed += fDeltaT;
++    if (mTimeElapsed < 3.0f)
++    {
++        return;
++    }
++    if (!mFadeStarted)
++    {
++        pWhiteFade->SetActiveSlide("FADEIN", true, false);
++        mFadeStarted = true;
++    }
++    else
++    {
++        ++mPhase;
++        s.SetupForPhase();
++    }
++}
++
++template<class S>
++void FrontendCreditsUpdateCopyrightMessage(S& s,float fDeltaT)
++{
++    auto& mTimeElapsed = s.mTimeElapsed;
++    auto& mFadeStarted = s.mFadeStarted;
++    auto& mPhase = s.mPhase;
++    auto* pWhiteFade = s.GetWhiteFadeComponent();
++    mTimeElapsed += fDeltaT;
++    if (mTimeElapsed < 3.0f)
++    {
++        return;
++    }
++    if (!mFadeStarted)
++    {
++        pWhiteFade->SetActiveSlide("FADEIN", true, false);
++        mFadeStarted = true;
++    }
++    else
++    {
++        ++mPhase;
++        s.SetupForPhase();
++    }
++}
++
++template<class S>
++void FrontendCreditsMovieCompleted(S& s)
++{
++    auto& mPhase = s.mPhase;
++    if ((unsigned int)(mPhase - 1) <= 1)
++    {
++        ++mPhase;
++        s.SetupForPhase();
++    }
++}
++
++template<class S>
++void FrontendCreditsCopyLine(S& scene,int i,const char* pToken)
++{
++    if (pToken[0] == '+')
++    {
++        const unsigned char* pSrc;
++        unsigned int count;
++        count = 64;
++        pSrc = (const unsigned char*)" ";
++        int k = 0;
++        while (count-- && (scene.mStrings[i][k] = *pSrc) != 0)
++        {
++            ++pSrc;
++            ++k;
++        }
++        scene.mStrings[i][63] = 0;
++    }
++    else
++    {
++        const unsigned char* pSrc = (const unsigned char*)pToken;
++        int ch;
++        unsigned int count;
++        count = 64;
++        ch = 0;
++        while (count-- && (scene.mStrings[i][ch] = pSrc[ch]) != 0)
++        {
++            ++ch;
++        }
++        scene.mStrings[i][63] = 0;
++    }
++}
++
++template<class Vector2,class S,class Wide,class Video,class Presentation,class Final,class Line,class Format>
++void FrontendCreditsSetupScrolling(S& s,Wide wide,Video video,Presentation getPresentation,Final findFinal,Line findLine,Format formatLine)
++{
++    auto& mPresentation = s.mPresentation;
++    auto& mCreditParser = s.mCreditParser;
++    auto& m_pTextLines = s.m_pTextLines;
++    if (video() == 1)
++    {
++        s.SetMovieDetails("art/movies/credits_pal.thp", true, false);
++    }
++    else
++    {
++        s.SetMovieDetails("art/movies/credits.thp", true, false);
++    }
++    if (wide())
++    {
++        mPresentation->SetActiveSlide("CREDITS", true);
++    }
++    else
++    {
++        mPresentation->SetActiveSlide("Credits 4:3", true);
++    }
++    mPresentation->Update(0.0f);
++
++    auto* presentation = getPresentation();
++    auto* pFinalText = findFinal(presentation);
++    pFinalText->m_bVisible = false;
++
++    mCreditParser.Load();
++
++    Vector2 boxsize = { 1280.0f, 480.0f };
++
++    for (int i = 0; i < 20; ++i)
++    {
++        char lineName[8];
++        formatLine(lineName,sizeof(lineName),i+1);
++        m_pTextLines[i] = findLine(presentation->m_currentSlide, "Layer", lineName);
++
++        m_pTextLines[i]->SetAssetScale(0.75f, 0.75f, 1.0f);
++
++        auto* pText = m_pTextLines[i];
++        pText->m_OverloadFlags |= 0x10;
++        pText->m_DrawOptions |= 0x10;
++        pText->m_DrawOptions &= ~0x1000;
++
++        pText = m_pTextLines[i];
++        pText->m_OverloadedAttributes.BoxSize = boxsize;
++        pText->m_OverloadFlags |= 0x4;
++
++        auto position = m_pTextLines[i]->GetAssetPosition();
++        m_pTextLines[i]->SetAssetPosition(
++            position.f.x, (float)(-250 - i * 25), position.f.z);
++    }
++}
++
++template<class S,class Update,class Pressed,class Free,class Stop>
++void FrontendCreditsUpdateScrolling(S& s,float fDeltaT,Update movieUpdate,Pressed pressed,Free freeBytes,Stop stopMovie)
++{
++    auto& m_pTextLines = s.m_pTextLines;
++    auto& mLineOnScreen = s.mLineOnScreen;
++    auto& mCreditParser = s.mCreditParser;
++    auto& mStrings = s.mStrings;
++    auto& mCenteredLine = s.mCenteredLine;
++    auto& mAreCreditsOver = s.mAreCreditsOver;
++    auto& mTimeElapsed = s.mTimeElapsed;
++    auto& mFinalMessageDisplayed = s.mFinalMessageDisplayed;
++    auto& mFadeStarted = s.mFadeStarted;
++    auto& mPhase = s.mPhase;
++    movieUpdate(fDeltaT);
++
++    float fraction = fDeltaT / 8.5f;
++    float movement = 500.0f * fraction;
++    const float resetY = -250.0f;
++    const float topY = 250.0f;
++    int numonscreen = 0;
++
++    for (int i = 0; i < 20; ++i)
++    {
++        auto position = m_pTextLines[i]->GetAssetPosition();
++        if (position.f.y >= resetY && !mLineOnScreen[i])
++        {
++            bool hasToken;
++            const char* pToken = mCreditParser.mParser.NextToken(false);
++            if (pToken != 0)
++            {
++                FrontendCreditsCopyLine(s, i, pToken);
++                mCreditParser.mParser.AdvanceLine();
++                hasToken = true;
++            }
++            else
++            {
++                hasToken = false;
++            }
++
++            if (hasToken && mStrings[i][0] == L'@')
++            {
++                for (int j = 0; j < 20; ++j)
++                {
++                    mCenteredLine[j] = true;
++                }
++                pToken = mCreditParser.mParser.NextToken(false);
++                if (pToken != 0)
++                {
++                    FrontendCreditsCopyLine(s, i, pToken);
++                    mCreditParser.mParser.AdvanceLine();
++                    hasToken = true;
++                }
++                else
++                {
++                    hasToken = false;
++                }
++            }
++
++            if (hasToken)
++            {
++                m_pTextLines[i]->SetString(mStrings[i]);
++                mLineOnScreen[i] = true;
++                position.f.y += movement;
++                m_pTextLines[i]->SetAssetPosition(
++                    position.f.x, position.f.y, position.f.z);
++                if (mCenteredLine[i])
++                {
++                    m_pTextLines[i]->m_DrawOptions = 0;
++                    mCenteredLine[i] = false;
++                    m_pTextLines[i]->SetAssetPosition(
++                        -position.f.x, position.f.y, position.f.z);
++                }
++            }
++        }
++        else if (position.f.y >= topY && mLineOnScreen[i] == true)
++        {
++            mLineOnScreen[i] = false;
++            position.f.y = resetY;
++            m_pTextLines[i]->SetAssetPosition(
++                position.f.x, position.f.y, position.f.z);
++        }
++        else
++        {
++            position.f.y += movement;
++            m_pTextLines[i]->SetAssetPosition(
++                position.f.x, position.f.y, position.f.z);
++        }
++
++        if (mLineOnScreen[i])
++        {
++            ++numonscreen;
++        }
++    }
++
++    if (numonscreen == 0)
++    {
++        mAreCreditsOver = true;
++    }
++
++    if (!mFadeStarted)
++    {
++        bool quitcredits = false;
++        if (mAreCreditsOver == true)
++        {
++            mTimeElapsed += fDeltaT;
++            if (mTimeElapsed >= (double)1.7f && !mFinalMessageDisplayed)
++            {
++                quitcredits = true;
++            }
++        }
++        else if (pressed(0x20)
++                 || pressed(0x1E))
++        {
++            quitcredits = true;
++        }
++
++        if (quitcredits)
++        {
++            mFadeStarted = true;
++            auto* pWhiteFade = s.GetWhiteFadeComponent();
++            pWhiteFade->SetActiveSlide("FADEIN", true, false);
++            pWhiteFade->Update(0.0f);
++        }
++    }
++    else
++    {
++        auto* pWhiteFade = s.GetWhiteFadeComponent();
++        if (mCreditParser.mFileData != 0)
++        {
++            freeBytes(mCreditParser.mFileData);
++            mCreditParser.mFileData = 0;
++        }
++        ++mPhase;
++        s.SetupForPhase();
++        stopMovie();
++    }
++}
++
++#endif

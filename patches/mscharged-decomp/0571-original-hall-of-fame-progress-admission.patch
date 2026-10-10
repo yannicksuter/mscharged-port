@@ -1,0 +1,34 @@
+Subject: Admit original Hall of Fame progress pages in the existing named diagnostic
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+Classification: temporary explicit original-source diagnostic admission; depends on 0506.
+
+Move the existing original factory cases 59-61 (SHHallOfFameSummary modes
+14/15/16, requested by the Cup Progress page cycle) under the existing Hall of
+Fame guard beside Cup cases 62-64. Placement allocation and constructors stay
+literal; every other factory case keeps its current guard.
+
+diff --git a/src/Game/FE/BaseGameSceneManager.cpp b/src/Game/FE/BaseGameSceneManager.cpp
+--- a/src/Game/FE/BaseGameSceneManager.cpp
++++ b/src/Game/FE/BaseGameSceneManager.cpp
+@@ -495,8 +495,10 @@
+     case SCENE_HOF_PROFILE:
+         newHandler = new (nlMalloc(sizeof(SHHallOfFameProfile), 8, false)) SHHallOfFameProfile();
+         break;
+-    case SCENE_HOF_TROPHY_SUMMARY:
+-        newHandler = new (nlMalloc(sizeof(SHHallOfFameSummary), 8, false)) SHHallOfFameSummary(HOF_TROPHY_SUMMARY);
++#endif
++#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_HALL_OF_FAME))
++    case (SceneList)59:
++        newHandler = new (nlMalloc(sizeof(SHHallOfFameSummary), 8, false)) SHHallOfFameSummary(14);
+         break;
+     case SCENE_HOF_UNLOCK_SUMMARY:
+         newHandler = new (nlMalloc(sizeof(SHHallOfFameSummary), 8, false)) SHHallOfFameSummary(HOF_UNLOCK_SUMMARY);
+@@ -504,8 +506,6 @@
+     case SCENE_HOF_CHALLENGE_SUMMARY:
+         newHandler = new (nlMalloc(sizeof(SHHallOfFameSummary), 8, false)) SHHallOfFameSummary(HOF_CHALLENGE_SUMMARY);
+         break;
+-#endif
+-#if !defined(MSCHARGED_DIAGNOSTIC_FRONTEND_SEQUENCE) || (defined(MSCHARGED_NATIVE) && defined(MSCHARGED_DIAGNOSTIC_FRONTEND_HALL_OF_FAME))
+     case (SceneList)62:
+         newHandler = new (nlMalloc(sizeof(SHHallOfFameCup), 8, false)) SHHallOfFameCup(0);
+         break;

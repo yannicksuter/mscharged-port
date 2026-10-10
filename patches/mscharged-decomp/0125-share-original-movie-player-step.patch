@@ -1,0 +1,76 @@
+Subject: Share original movie-player update with retained native Credits
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+diff --git a/include/Game/FE/FrontendMoviePlayerSteps.h b/include/Game/FE/FrontendMoviePlayerSteps.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/FE/FrontendMoviePlayerSteps.h
+@@ -0,0 +1,68 @@
++#ifndef GAME_FE_FRONTEND_MOVIE_PLAYER_STEPS_H
++#define GAME_FE_FRONTEND_MOVIE_PLAYER_STEPS_H
++
++// Original MoviePlayerScene::Update order, shared by its console delegate and
++// the retained native Credits owner. Presentation/output services remain typed.
++template<class S,class Base,class E3,class Start,class Mono,class Synced,class Contains,
++    class Format,class Config,class Volume,class Tutorial,class Render,class Abort,
++    class Stop,class Swap,class Finished>
++void FrontendMoviePlayerUpdate(S& s,float fDeltaT,Base baseUpdate,E3 e3Build,Start start,
++    Mono mono,Synced synced,Contains containsNlg,Format format,Config config,Volume setVolume,
++    Tutorial strikers101,Render renderWorld,Abort abortMovie,Stop stop,Swap swapTexture,Finished finished)
++{
++    auto& mMovieStarted=s.mMovieStarted;
++    auto& mSwappedTexture=s.mSwappedTexture;
++    auto& mMovieFilename=s.mMovieFilename;
++    auto& mLoopMovie=s.mLoopMovie;
++    baseUpdate(fDeltaT);
++    if (e3Build())
++    {
++        s.MoviePlayerVirtual3C();
++        return;
++    }
++    if (!mMovieStarted)
++    {
++        mMovieStarted = start(mMovieFilename, false, mLoopMovie, mono());
++        synced(true);
++
++        const char* streamName;
++        if (containsNlg(mMovieFilename))
++        {
++            streamName = "FE_Eggman_Movie";
++        }
++        else
++        {
++            streamName = "FE_Intro_Movie";
++        }
++        char var_68[64];
++        format(var_68, 64, "%s/Volume", streamName);
++        float volume = (float)config(var_68, 100) / 100.0f;
++        format(var_68, 64, "%s/FadeIn", streamName);
++        int fadeIn = config(var_68, 500);
++        setVolume(0, 0);
++        setVolume((int)(127.0f * volume), fadeIn);
++        if (strikers101())
++        {
++            renderWorld(false);
++        }
++    }
++    if (!mMovieStarted || abortMovie())
++    {
++        stop();
++        s.MoviePlayerVirtual3C();
++        mMovieStarted = false;
++        return;
++    }
++    if (!mSwappedTexture)
++    {
++        swapTexture();
++        mSwappedTexture = true;
++    }
++    if (finished())
++    {
++        stop();
++        s.MoviePlayerVirtual3C();
++    }
++}
++
++#endif

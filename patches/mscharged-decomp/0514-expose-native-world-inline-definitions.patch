@@ -1,0 +1,14 @@
+# Patch: 0514-expose-native-world-inline-definitions
+# Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+# Scope: Make existing original inline world bodies visible to every native owning-header consumer.
+--- a/include/Game/World/WorldHelperObject.h
++++ b/include/Game/World/WorldHelperObject.h
+@@ -29,4 +29,8 @@
+     /* 0x20 */ nlMatrix4 mWorldMatrix;
+ }; // size: 0x60
+ 
++#if defined(MSCHARGED_NATIVE)
++#include "Game/World/WorldObject.inl"
++#endif
++
+ #endif // GAME_WORLD_WORLD_HELPER_OBJECT_H

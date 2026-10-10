@@ -1,0 +1,80 @@
+Subject: Share original graphics startup stages and task priorities
+
+Upstream-base: f75ccf1ad20e5bd7585962990db08067c0ae498a
+
+Provide selected-source diagnostic copies of the original resource callback,
+state/default/matrix and target/view stages without refactoring glStartup.
+Retain the original startup order and decisions in gl.cpp. Full glStartup and
+its material/platform/font dependencies remain to be linked.
+Spell the original Wii -1 texture sentinel as 0xFFFFFFFFu so LP64 does not
+produce a different unsigned-long value. Console state ordering is unchanged.
+Provide the four original frame priorities and world state mask as constants
+for diagnostics. Leave original main.cpp AddTasks calls and constants unchanged.
+The diagnostic scheduler does not establish execution of full game tasks.
+
+diff --git a/include/NL/gl/glStartupStages.h b/include/NL/gl/glStartupStages.h
+new file mode 100644
+--- /dev/null
++++ b/include/NL/gl/glStartupStages.h
+@@ -0,0 +1,36 @@
++// Shared stages from original glStartup; callers supply missing service boundaries.
++#ifndef NL_GL_STARTUP_STAGES_H
++#define NL_GL_STARTUP_STAGES_H
++#include "NL/gl/glMemory.h"
++#include "NL/gl/glMatrix.h"
++#include "NL/gl/glState.h"
++#include "NL/gl/glStat.h"
++#include "NL/gl/glTarget.h"
++#include "NL/gl/glView.h"
++
++inline void gl_StartupMemory(void (*startupCallback)())
++{
++    glInitResourcePools();
++    startupCallback();
++}
++
++inline void gl_StartupState()
++{
++    gl_StatStartup();
++    gl_StateStartup();
++    for (int i = 0; i < GLTT_Num; ++i)
++        glSetCurrentTexture(0xFFFFFFFFu, (eGLTextureType)i);
++
++    glSetRasterStateDefaults();
++    glSetCurrentRasterState(glHandleizeRasterState());
++    glSetTextureStateDefaults();
++    glSetCurrentTextureState(glHandleizeTextureState());
++    gl_MatrixStartup();
++}
++
++inline void gl_StartupViews()
++{
++    gl_TargetStartup();
++    gl_ViewStartup();
++}
++#endif
+diff --git a/src/NL/gl/gl.cpp b/src/NL/gl/gl.cpp
+--- a/src/NL/gl/gl.cpp
++++ b/src/NL/gl/gl.cpp
+@@ -36,7 +36,7 @@
+     gl_StatStartup();
+     gl_StateStartup();
+     for (int i = 0; i < GLTT_Num; ++i)
+-        glSetCurrentTexture(-1, (eGLTextureType)i);
++        glSetCurrentTexture(0xFFFFFFFFu, (eGLTextureType)i);
+ 
+     glSetRasterStateDefaults();
+     glSetCurrentRasterState(glHandleizeRasterState());
+diff --git a/include/Game/Task/GraphicsTaskPriorities.h b/include/Game/Task/GraphicsTaskPriorities.h
+new file mode 100644
+--- /dev/null
++++ b/include/Game/Task/GraphicsTaskPriorities.h
+@@ -0,0 +1,8 @@
++// Original main.cpp AddTasks priorities and world active-state mask.
++#ifndef GAME_GRAPHICS_TASK_PRIORITIES_H
++#define GAME_GRAPHICS_TASK_PRIORITIES_H
++namespace GraphicsTaskPriorities
++{
++enum { Begin = 4, Update = 9, Render = 11, End = 16, WorldStates = 0x0002001B };
++}
++#endif
