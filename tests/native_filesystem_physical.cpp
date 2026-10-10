@@ -46,7 +46,8 @@ fs::path Backing(const fs::path& root,const std::string& name){auto out=root/"da
 #endif
  if(end==std::string::npos)break;begin=end+1;}
 #ifdef _WIN32
-return fs::path(std::wstring(L"\\\\?\\")+fs::absolute(out).native());
+// \\?\ paths skip slash normalization; CTest passes forward slashes.
+return fs::path(std::wstring(L"\\\\?\\")+fs::absolute(out).make_preferred().native());
 #else
 return out;
 #endif
@@ -103,8 +104,9 @@ void Run(const fs::path& root) {
         if(!spelled) {
             // Name what is actually there, to diagnose a host that differs.
             std::string found;std::error_code error;
-            for(const auto& entry:fs::directory_iterator(backing,error))found+=" "+entry.path().filename().string();
-            message+="; "+backing.string()+" holds:"+found+(error?" (listing error "+error.message()+")":"");
+            auto utf8=[](const fs::path& path){const auto text=path.u8string();return std::string(text.begin(),text.end());};
+            for(const auto& entry:fs::directory_iterator(backing,error))found+=" "+utf8(entry.path().filename());
+            message+="; "+utf8(backing)+" holds:"+found+(error?" (listing error "+error.message()+")":"");
         }
         Check(spelled,message.c_str());
     }
