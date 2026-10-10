@@ -20,20 +20,16 @@ the original game runs unchanged, modern systems provide the rest.
 You don't need to build anything: ready-made builds for **Windows, Linux and
 macOS** are available.
 
-1. Open the latest successful
-   [**Build binaries** run of `stable`](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
-   and download the package for your system under **Artifacts** (GitHub
-   requires you to be signed in to download artifacts):
+1. Open the [**latest release**](https://github.com/yannicksuter/mscharged-port/releases/latest)
+   and download the package for your system:
 
-   | System | Artifact |
+   | System | Package |
    | --- | --- |
-   | Windows 10/11, 64-bit | `mscharged-windows-x86_64-…` |
-   | Linux, x86_64 | `mscharged-linux-x86_64-…` |
-   | macOS, Apple Silicon (M1 or newer) | `mscharged-macos-arm64-…` |
+   | Windows 10/11, 64-bit | `mscharged-<version>-windows-x86_64.zip` |
+   | Linux, x86_64 | `mscharged-<version>-linux-x86_64.tar.gz` |
+   | macOS, Apple Silicon (M1 or newer) | `mscharged-<version>-macos-arm64.tar.gz` |
 
-2. Unpack it. The download is a `.zip` holding the package (`.zip` on Windows,
-   `.tar.gz` on Linux and macOS); unpack that too, into a folder of your choice.
-   Keep all its files together.
+2. Unpack it into a folder of your choice and keep all its files together.
 3. Start **`mscharged.exe`** (Windows) or **`mscharged`** (Linux, macOS).
 4. In the launcher, choose your own **USA disc image** (ISO or RVZ, see
    [game data](#game-data)) and press **Play**.
@@ -49,7 +45,10 @@ The builds are not signed, so the system asks once on the first start:
   and a Vulkan driver (Mesa or your GPU vendor's driver) are needed.
 
 Settings and saves are kept beside the program, so the folder can live anywhere
-you like. See [GitHub builds](docs/BUILDING_GITHUB.md) for details.
+you like. `SHA256SUMS` in the release lists the packages' checksums. Builds of
+changes not yet released are under the
+[**Build binaries** runs of `stable`](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
+(*Artifacts*, signed-in users); see [GitHub builds](docs/BUILDING_GITHUB.md).
 
 ## Status
 

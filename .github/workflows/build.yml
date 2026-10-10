@@ -5,6 +5,8 @@ on:
     branches: [stable]
   push:
     branches: [stable]
+    # A version tag (v1.0.1) on stable builds the packages and drafts a release.
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -283,3 +285,49 @@ jobs:
         run: ctest --test-dir build/host-checks --output-on-failure
       # Native Windows compiler checks of individual host services; the game
       # itself is built by the windows-game job.
+
+  release:
+    # Drafts the GitHub release for a version tag; publish it after a review.
+    name: draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, windows-game]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: Check the tag against the project version
+        id: version
+        run: |
+          version=$(sed -n 's/^project(mscharged_port VERSION \([0-9.]*\) .*/\1/p' CMakeLists.txt)
+          tag="${GITHUB_REF_NAME}"
+          echo "CMakeLists.txt version: $version, tag: $tag"
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::Tag $tag does not match the project version $version (tools/bump_version.py)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mscharged-*-${{ github.sha }}
+          path: release
+          merge-multiple: true
+      - name: Write checksums
+        working-directory: release
+        run: |
+          ls -la
+          test "$(ls *.tar.gz *.zip | wc -l)" -eq 3
+          sha256sum *.tar.gz *.zip > SHA256SUMS
+          cat SHA256SUMS
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "Mario Strikers Charged Native Port $VERSION" --generate-notes \
+            release/*.tar.gz release/*.zip release/SHA256SUMS
