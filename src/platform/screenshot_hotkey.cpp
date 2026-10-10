@@ -17,6 +17,8 @@ namespace
 {
 std::atomic<SDL_WindowID> sWindow{0};
 std::atomic<bool> sWatching{false};
+void (*sToggleLayers)() = nullptr;
+void (*sCycleLayer)() = nullptr;
 
 void RequestScreenshot()
 {
@@ -40,6 +42,12 @@ bool SDLCALL Watch(void*, SDL_Event* event)
     if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat && event->key.scancode == SDL_SCANCODE_P
         && event->key.windowID != 0 && event->key.windowID == sWindow.load())
         RequestScreenshot();
+    if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat && event->key.windowID != 0
+        && event->key.windowID == sWindow.load())
+    {
+        if (event->key.scancode == SDL_SCANCODE_F9 && sToggleLayers) sToggleLayers();
+        if (event->key.scancode == SDL_SCANCODE_F10 && sCycleLayer) sCycleLayer();
+    }
     return true;
 }
 }
@@ -54,8 +62,15 @@ void InitializeScreenshotHotkey(SDL_Window* window)
     }
 }
 
+void SetDebugLayerKeys(void (*toggle)(), void (*cycle)())
+{
+    sToggleLayers = toggle;
+    sCycleLayer = cycle;
+}
+
 void ShutdownScreenshotHotkey()
 {
+    SetDebugLayerKeys(nullptr, nullptr);
     if (sWatching.exchange(false)) SDL_RemoveEventWatch(Watch, nullptr);
     sWindow = 0;
 }

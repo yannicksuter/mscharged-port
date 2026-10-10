@@ -1,5 +1,6 @@
 #include "platform/graphics_stats.h"
 #include "platform/app_icon.h"
+#include "platform/screenshot_hotkey.h"
 #include "runtime/original_main_credits.h"
 #include "platform/graphics_backend.h"
 #include "runtime/original_sh_menu_diagnostic.h"
@@ -497,8 +498,12 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         auto* module=mscharged::platform::LoadNativeModule(modulePath);
         // MSCHARGED_DEBUG_LAYERS_OFF (frontend module only): diagnostic layer switches.
         if(auto* layers=reinterpret_cast<void(*)()>(mscharged::platform::FindNativeModuleSymbol(
-               module,"charged_apply_debug_layer_toggles")))
+               module,"charged_apply_debug_layer_toggles"))) {
             layers();
+            mscharged::platform::SetDebugLayerKeys(
+                reinterpret_cast<void(*)()>(mscharged::platform::FindNativeModuleSymbol(module,"charged_toggle_debug_layers")),
+                reinterpret_cast<void(*)()>(mscharged::platform::FindNativeModuleSymbol(module,"charged_cycle_debug_layer")));
+        }
         if(axModuleMemory)axModuleMemory->ConfirmLoaded(module);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)

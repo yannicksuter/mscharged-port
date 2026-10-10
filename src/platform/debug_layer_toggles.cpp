@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace {
 struct LayerToggle {
@@ -32,6 +33,12 @@ const LayerToggle kLayers[] = {
     LAYER(UnsortedOrtho640), LAYER(UnsortedSquareOrtho),
 };
 #undef LAYER
+
+std::vector<TweakValueBool*> sListed; // from MSCHARGED_DEBUG_LAYERS_OFF
+bool sListedOff = false;
+int sCycle = -1; // F10: index of the one layer switched off, -1 = none
+
+void SetLayer(TweakValueBool* tweak, bool on) { tweak->ParseValue(on ? "true" : "false"); }
 } // namespace
 
 extern "C" __attribute__((visibility("default"))) void charged_apply_debug_layer_toggles() {
@@ -47,10 +54,37 @@ extern "C" __attribute__((visibility("default"))) void charged_apply_debug_layer
         bool found = false;
         for (const auto& layer : kLayers)
             if (name == layer.name) {
-                layer.tweak->ParseValue("false");
+                SetLayer(layer.tweak, false);
+                sListed.push_back(layer.tweak);
                 found = true;
             }
         std::fprintf(stderr, found ? "Debug: rendering layer %s off\n" : "Debug: unknown rendering layer %s\n",
                      name.c_str());
+    }
+    sListedOff = !sListed.empty();
+}
+
+// F9: switch the MSCHARGED_DEBUG_LAYERS_OFF layers back on / off again.
+extern "C" __attribute__((visibility("default"))) void charged_toggle_debug_layers() {
+    if (sListed.empty()) {
+        std::fprintf(stderr, "Debug: F9 needs MSCHARGED_DEBUG_LAYERS_OFF=Layer,...\n");
+        return;
+    }
+    sListedOff = !sListedOff;
+    for (auto* tweak : sListed) SetLayer(tweak, !sListedOff);
+    std::fprintf(stderr, "Debug: listed rendering layers %s\n", sListedOff ? "off" : "on");
+}
+
+// F10: switch the next single layer off (the previous one back on); after the
+// last layer, all are on again.
+extern "C" __attribute__((visibility("default"))) void charged_cycle_debug_layer() {
+    constexpr int count = int(sizeof(kLayers) / sizeof(kLayers[0]));
+    if (sCycle >= 0) SetLayer(kLayers[sCycle].tweak, true);
+    sCycle = sCycle + 1 < count ? sCycle + 1 : -1;
+    if (sCycle >= 0) {
+        SetLayer(kLayers[sCycle].tweak, false);
+        std::fprintf(stderr, "Debug: only rendering layer %s off (%d/%d)\n", kLayers[sCycle].name, sCycle + 1, count);
+    } else {
+        std::fprintf(stderr, "Debug: all rendering layers on\n");
     }
 }
