@@ -1,7 +1,7 @@
 # Mario Strikers Charged — Native Port
 
 [![Build stable](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml/badge.svg?branch=stable)](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable)
-[![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-blue)](CMakeLists.txt)
+[![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-blue)](CMakeLists.txt)
 
 Play **Mario Strikers Charged** natively on your PC. The port compiles the
 fully reconstructed game source of
@@ -45,10 +45,8 @@ workflow (badge above: latest `stable` build).
 | Windows x86_64 | Cross-compiled with LLVM-MinGW, Vulkan | `.zip` | Playable; tested on Windows |
 | macOS Apple Silicon | macOS 15, Apple Clang, Metal | `.tar.gz` | Playable; tested on Apple Silicon |
 
-Known issues:
-
-- macOS needs **Input Monitoring** permission for controllers
-  ([details](docs/BUILDING_MACOS.md#controllers)).
+On macOS, controllers need the **Input Monitoring** permission
+([details](docs/BUILDING_MACOS.md#controllers)).
 
 ## Download
 
