@@ -60,8 +60,9 @@ deadzone = 15
 rumble = true
 # Where the sensor bar or DolphinBar sits: bottom or top of the screen.
 sensor_bar = bottom
-# Button profile of each gamepad: Default (built in) or the name of a
-# [gamepad_profileN] below. A missing profile plays as Default.
+# Button profile of each gamepad: Default (built in; each controller family
+# gets its own layout) or the name of a [gamepad_profileN] below. A missing
+# profile plays as Default.
 gamepad1_profile = Default
 gamepad2_profile = Default
 gamepad3_profile = Default
@@ -95,7 +96,8 @@ shake_nunchuk = Q
 # gamepad inputs per action, separated by |: a, b, x, y (bottom, right, left,
 # top face button), start, back, guide, leftshoulder, rightshoulder,
 # leftstick, rightstick, dpup, dpdown, dpleft, dpright, lefttrigger,
-# righttrigger. Actions left out keep the Default input. swap_sticks = true
+# righttrigger, or none for no button. Actions left out keep the Default
+# (Xbox) input. swap_sticks = true
 # moves the Nunchuk stick to the right stick and the pointer to the left.
 # [gamepad_profile1]
 # name = Southpaw

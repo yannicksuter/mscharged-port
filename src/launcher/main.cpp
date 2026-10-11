@@ -1289,15 +1289,21 @@ private:
     void GamepadLayoutTooltip(std::size_t slot)
     {
         const auto& profile = draft_.PadProfileOf(slot);
-        const auto bindings = platform::ParseGamepadBindings(profile.inputs);
         const auto type = PadType(int(slot));
+        const bool builtin = draft_.PadProfileIndex(slot) < 0;
+        const auto family = platform::GamepadFamilyOf(type);
+        const auto bindings = builtin ? platform::DefaultGamepadBindings(family)
+                                      : platform::ParseGamepadBindings(profile.inputs);
         const bool swap = profile.swap_sticks;
         const auto& fonts = CurrentFonts();
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Dp(16, 14));
         if (ImGui::BeginTooltip())
         {
-            TextColored(fonts.label, color::text, ("Profile: " + profile.name).c_str());
-            TextColored(fonts.caption, color::muted, "Gamepad as Wii Remote + Nunchuk. Click to change the buttons.");
+            TextColored(fonts.label, color::text,
+                        ("Profile: " + profile.name
+                         + (builtin ? std::string(" (") + platform::GamepadFamilyName(family) + ")" : std::string()))
+                            .c_str());
+            TextColored(fonts.caption, color::muted, "Your controller's button for each Wii input. Click to change.");
             const auto row = [&](const std::string& pad, const char* wii) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -1349,12 +1355,14 @@ private:
             || type == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT
             || type == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT
             || type == SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR;
-        const auto pick = [&](const char* xbox, const char* playstation, const char* switch_) {
-            return std::string(ps ? playstation : nintendo ? switch_ : xbox);
+        const bool gamecube = type == SDL_GAMEPAD_TYPE_GAMECUBE;
+        const auto pick = [&](const char* xbox, const char* playstation, const char* switch_,
+                              const char* cube = nullptr) {
+            return std::string(gamecube && cube ? cube : ps ? playstation : nintendo || gamecube ? switch_ : xbox);
         };
-        if (input == platform::kGamepadTriggerBase + SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return pick("LT", "L2", "ZL");
-        if (input == platform::kGamepadTriggerBase + SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) return pick("RT", "R2", "ZR");
-        if (input < 0 || input >= SDL_GAMEPAD_BUTTON_COUNT) return {};
+        if (input == platform::kGamepadTriggerBase + SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return pick("LT", "L2", "ZL", "L");
+        if (input == platform::kGamepadTriggerBase + SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) return pick("RT", "R2", "ZR", "R");
+        if (input < 0 || input >= SDL_GAMEPAD_BUTTON_COUNT) return "Not set";
         const auto button = SDL_GamepadButton(input);
         if (button <= SDL_GAMEPAD_BUTTON_NORTH)
         {
@@ -1377,16 +1385,18 @@ private:
         {
         case SDL_GAMEPAD_BUTTON_BACK: return pick("Back", "Share", "Minus");
         case SDL_GAMEPAD_BUTTON_GUIDE: return pick("Guide", "PS", "Home");
-        case SDL_GAMEPAD_BUTTON_START: return pick("Start", "Options", "Plus");
+        case SDL_GAMEPAD_BUTTON_START: return pick("Start", "Options", "Plus", "Start");
         case SDL_GAMEPAD_BUTTON_LEFT_STICK: return pick("Left stick click", "L3", "Left stick click");
         case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return pick("Right stick click", "R3", "Right stick click");
         case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return pick("LB", "L1", "L");
-        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return pick("RB", "R1", "R");
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return pick("RB", "R1", "R", "Z");
         case SDL_GAMEPAD_BUTTON_DPAD_UP: return "D-pad up";
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return "D-pad down";
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return "D-pad left";
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return "D-pad right";
         case SDL_GAMEPAD_BUTTON_MISC1: return pick("Share", "Mic", "Capture");
+        case SDL_GAMEPAD_BUTTON_MISC3: return gamecube ? "R click" : "Misc 3";
+        case SDL_GAMEPAD_BUTTON_MISC4: return gamecube ? "L click" : "Misc 4";
         case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1: return "Paddle R1";
         case SDL_GAMEPAD_BUTTON_LEFT_PADDLE1: return "Paddle L1";
         case SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2: return "Paddle R2";
@@ -2038,13 +2048,25 @@ private:
     void OpenGamepadView(std::size_t slot)
     {
         gamepad_view_ = true;
+        pad_slot_ = slot;
         edit_profile_ = draft_.PadProfileIndex(slot);
+        view_family_ = int(platform::GamepadFamilyOf(PadType(int(slot))));
         renaming_ = confirm_delete_ = false;
         pad_capture_action_ = pad_capture_slot_ = -1;
     }
 
+    // Going back assigns the profile on screen to the gamepad the page was opened for.
     void CloseGamepadView()
     {
+        if (gamepad_view_ && pad_slot_ < kGamepadSlots)
+        {
+            const auto& name = ProfileAt(edit_profile_).name;
+            if (draft_.pad_profile_names[pad_slot_] != name)
+            {
+                draft_.pad_profile_names[pad_slot_] = name;
+                dirty_ = true;
+            }
+        }
         gamepad_view_ = false;
         renaming_ = confirm_delete_ = false;
         pad_capture_action_ = pad_capture_slot_ = -1;
@@ -2055,6 +2077,18 @@ private:
     const Settings::PadProfile& ProfileAt(int index) const
     {
         return index < 0 ? Settings::DefaultPadProfile() : draft_.pad_profiles[std::size_t(index)];
+    }
+
+    // The controller the page shows: its button names and, for the built-in
+    // Default, its layout.
+    platform::GamepadFamily ViewFamily() const { return platform::GamepadFamily(view_family_); }
+
+    // Profile `index` as shown: the built-in Default in the shown family's layout.
+    Settings::PadProfile ShownProfile(int index) const
+    {
+        auto profile = ProfileAt(index);
+        if (index < 0) profile.inputs = platform::DefaultGamepadInputs(ViewFamily());
+        return profile;
     }
 
     // Controller type for the button names of profile `index`: the first
@@ -2129,7 +2163,7 @@ private:
         pad_capture_action_ = pad_capture_slot_ = -1;
         if (action < 0 || edit_profile_ < 0 || platform::GamepadInputName(input).empty()) return;
         auto& profile = draft_.pad_profiles[std::size_t(edit_profile_)];
-        const std::string name = PadInputLabel(input, ProfileType(edit_profile_));
+        const std::string name = PadInputLabel(input, platform::GamepadFamilyType(ViewFamily()));
         auto bindings = platform::ParseGamepadBindings(profile.inputs);
         auto& mine = bindings[std::size_t(action)];
         if (mine[0] == input || mine[1] == input) return;
@@ -2141,12 +2175,6 @@ private:
             for (int k = 0; k < 2; ++k)
             {
                 if (binding[k] != input) continue;
-                if (binding[1 - k] == platform::kGamepadNone)
-                {
-                    Notice(name + " is the only button of " + kGamepadActions[other].label
-                               + ". Give that action another button first.", NoticeKind::Warning);
-                    return;
-                }
                 binding = {binding[1 - k], platform::kGamepadNone};
                 moved = int(other);
             }
@@ -2156,10 +2184,13 @@ private:
         profile.inputs[std::size_t(action)] = platform::FormatGamepadBinding(mine);
         if (moved >= 0) profile.inputs[std::size_t(moved)] = platform::FormatGamepadBinding(bindings[moved]);
         dirty_ = true;
+        const bool emptied = moved >= 0 && bindings[std::size_t(moved)][0] == platform::kGamepadNone;
         Notice(name + " now presses " + kGamepadActions[action].label
-                   + (moved >= 0 ? std::string(" (moved from ") + kGamepadActions[moved].label + ")" : std::string())
+                   + (moved >= 0 ? std::string(" (moved from ") + kGamepadActions[moved].label
+                                       + (emptied ? ", which now has no button)" : ")")
+                                 : std::string())
                    + ".",
-               NoticeKind::Info);
+               emptied ? NoticeKind::Warning : NoticeKind::Info);
     }
 
     // A combo choosing the profile of gamepad `slot`.
@@ -2180,9 +2211,11 @@ private:
         if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen(id)) ImGui::SetTooltip("Button profile of this gamepad");
     }
 
-    void EditProfile(int index)
+    // Shows profile `index`, by default with the button names of a controller playing with it.
+    void EditProfile(int index, bool keep_family = false)
     {
         edit_profile_ = index;
+        if (!keep_family) view_family_ = int(platform::GamepadFamilyOf(ProfileType(index)));
         renaming_ = confirm_delete_ = false;
         pad_capture_action_ = pad_capture_slot_ = -1;
     }
@@ -2191,8 +2224,9 @@ private:
     {
         auto& profiles = draft_.pad_profiles;
         const bool builtin = edit_profile_ < 0;
-        BeginCard("##profile", "Profile", "A named button layout. Gamepads can share one; keep one per player.",
-                  Icon::Gamepad);
+        const std::string assigns = "Gamepad " + std::to_string(pad_slot_ + 1)
+            + " plays with the profile shown here when you go back. Gamepads can share a profile; keep one per player.";
+        BeginCard("##profile", "Profile", assigns.c_str(), Icon::Gamepad);
         if (BeginRows("##profile_rows"))
         {
             Row("Edit profile", nullptr);
@@ -2230,18 +2264,27 @@ private:
             }
             EndRows();
         }
+        if (BeginRows("##family_rows"))
+        {
+            Row("Controller", builtin ? "The built-in profile gives each controller its own layout. Choose which to see."
+                                      : "Shows the buttons as named on this controller.");
+            if (Segmented("##family", &view_family_, {"Xbox", "PlayStation", "Nintendo", "GameCube"},
+                          ImGui::GetContentRegionAvail().x))
+                pad_capture_action_ = pad_capture_slot_ = -1;
+            EndRows();
+        }
         const auto users = ProfileUsers(edit_profile_);
         TextColored(CurrentFonts().caption, color::muted,
-                    ((builtin ? std::string("Built-in, cannot be changed. ") : std::string())
+                    ((builtin ? std::string("Built-in, cannot be changed; New makes an editable copy. ") : std::string())
                      + (users.empty() ? "No gamepad plays with this profile." : "Used by " + users + "."))
                         .c_str());
         ImGui::Dummy(Dp(0, 4));
         if (SecondaryButton("##new_profile", "New", Dp(110, 36), profiles.size() < kMaxGamepadProfiles, Icon::Copy))
         {
-            auto copy = ProfileAt(edit_profile_);
+            auto copy = ShownProfile(edit_profile_);
             copy.name = NewProfileName();
             profiles.push_back(copy);
-            EditProfile(int(profiles.size()) - 1);
+            EditProfile(int(profiles.size()) - 1, true);
             dirty_ = true;
             Notice(copy.name + " starts as a copy of the profile you were editing.", NoticeKind::Info);
         }
@@ -2279,38 +2322,23 @@ private:
         else if (confirm_delete_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             confirm_delete_ = false;
         EndCard();
-
-        BeginCard("##pad_assign", "Gamepads", "Which profile each gamepad plays with.", Icon::Gamepad);
-        if (BeginRows("##assign_rows"))
-        {
-            for (std::size_t slot = 0; slot < kGamepadSlots; ++slot)
-            {
-                const std::string label = "Gamepad " + std::to_string(slot + 1);
-                const std::string device = slot < gamepad_names_.size() ? gamepad_names_[slot] : "Not connected";
-                Row(label.c_str(), device.c_str());
-                ImGui::PushID(int(slot));
-                ProfileCombo("##assign", slot, ImGui::GetContentRegionAvail().x);
-                ImGui::PopID();
-            }
-            EndRows();
-        }
-        EndCard();
     }
 
     void GamepadView()
     {
         if (SecondaryButton("##back", "Players", Dp(124, 36), true, Icon::Back)) { CloseGamepadView(); return; }
         ImGui::Dummy(Dp(0, 6));
-        PageHeader("Gamepad profiles", "Gamepads play as a Wii Remote with Nunchuk. A profile holds their buttons; "
-                   "pick one per gamepad, here or on the Players list. Click a button below, then press the new one "
-                   "on the gamepad. Changes are saved when you go back.");
+        PageHeader("Gamepad profiles", "Mario Strikers Charged is played with a Wii Remote and Nunchuk. Your "
+                   "controller stands in for them: a profile says which of its buttons presses each Wii button. "
+                   "Pick a profile per gamepad, here or on the Players list. To change a button, click it below "
+                   "and press the new one on the controller. Changes are saved when you go back.");
         if (edit_profile_ >= int(draft_.pad_profiles.size())) edit_profile_ = -1;
         ProfileCard();
         // The built-in Default is shown read-only; New makes an editable copy.
         const bool builtin = edit_profile_ < 0;
-        Settings::PadProfile scratch = ProfileAt(edit_profile_);
+        Settings::PadProfile scratch = ShownProfile(edit_profile_);
         auto& profile = builtin ? scratch : draft_.pad_profiles[std::size_t(edit_profile_)];
-        const auto type = ProfileType(edit_profile_);
+        const auto type = platform::GamepadFamilyType(ViewFamily());
         const auto bindings = platform::ParseGamepadBindings(profile.inputs);
         bool clicked = false;
         const auto rows = [&](std::size_t first, std::size_t last) {
@@ -2334,9 +2362,11 @@ private:
                     for (int slot = 0; slot < 2; ++slot)
                     {
                         const auto input = bindings[n][slot];
+                        if (slot == 1 && (bindings[n][0] == platform::kGamepadNone || builtin)) break;
                         const bool waiting = pad_capture_action_ == int(n) && pad_capture_slot_ == slot;
                         const std::string label = waiting ? "Press a button..."
-                            : input != platform::kGamepadNone ? PadInputLabel(input, type) : "+";
+                            : input != platform::kGamepadNone ? PadInputLabel(input, type)
+                            : slot == 0 ? "Not set" : "+";
                         if (slot) ImGui::SameLine(0, Dp(6));
                         ImGui::PushID(slot);
                         if (KeyCapButton("##input", label.c_str(), waiting))
@@ -2347,19 +2377,24 @@ private:
                         }
                         if (ImGui::IsItemHovered() && !waiting)
                             ImGui::SetTooltip(input != platform::kGamepadNone
-                                                  ? "Click, then press the new button on the gamepad"
-                                                  : "Add a second button");
+                                                  ? "Click, then press the new button on the controller"
+                                                  : slot == 0 ? "No button presses this. Click, then press one."
+                                                              : "Add a second button");
                         ImGui::PopID();
                     }
-                    if (bindings[n][1] != platform::kGamepadNone)
+                    if (bindings[n][0] != platform::kGamepadNone && !builtin)
                     {
+                        // Removes the second button, or the only one (no button then).
+                        const bool two = bindings[n][1] != platform::kGamepadNone;
                         ImGui::SameLine(0, Dp(6));
                         if (SecondaryButton("##remove", "", Dp(30, 30), true, Icon::Error))
                         {
-                            profile.inputs[n] = platform::FormatGamepadBinding({bindings[n][0], platform::kGamepadNone});
+                            profile.inputs[n] = platform::FormatGamepadBinding(
+                                {two ? bindings[n][0] : platform::kGamepadNone, platform::kGamepadNone});
                             dirty_ = true;
                         }
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove the second button");
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(two ? "Remove the second button" : "Remove the button (none presses this)");
                     }
                     ImGui::PopID();
                 }
@@ -2368,11 +2403,14 @@ private:
             ImGui::PopStyleVar();
         };
         ImGui::BeginDisabled(builtin);
-        const std::string remote_title = "Wii Remote: " + profile.name;
-        BeginCard("##pad_remote", remote_title.c_str(), "Buttons of the gamepad's Wii Remote.", Icon::Gamepad);
+        const std::string remote_title = "Wii Remote buttons: " + profile.name;
+        BeginCard("##pad_remote", remote_title.c_str(),
+                  "Each Wii Remote button, and the controller button that presses it.", Icon::Gamepad);
         rows(GamepadActionA, GamepadActionC);
         EndCard();
-        BeginCard("##pad_nunchuk", "Nunchuk & motion", "The sticks, the Nunchuk buttons and the shakes.", Icon::Gamepad);
+        BeginCard("##pad_nunchuk", "Nunchuk & motion",
+                  "The Nunchuk stick and pointer on the controller's sticks, the Nunchuk buttons and the shakes.",
+                  Icon::Gamepad);
         const bool swap = profile.swap_sticks;
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, Dp(0, 6));
         if (ImGui::BeginTable("##pad_sticks", 2))
@@ -2396,10 +2434,13 @@ private:
             EndRows();
         }
         rows(GamepadActionC, GamepadActionCount);
-        const bool changed = profile.inputs != Settings::DefaultPadInputs() || swap;
+        // Defaults of the controller shown above.
+        const auto defaults = platform::DefaultGamepadInputs(ViewFamily());
+        const bool changed = platform::ParseGamepadBindings(profile.inputs) != platform::ParseGamepadBindings(defaults)
+            || swap;
         if (SecondaryButton("##reset_pad", "Reset to defaults", Dp(180, 36), changed, Icon::Refresh))
         {
-            profile.inputs = Settings::DefaultPadInputs();
+            profile.inputs = defaults;
             profile.swap_sticks = false;
             pad_capture_action_ = pad_capture_slot_ = -1;
             dirty_ = true;
@@ -2680,6 +2721,8 @@ private:
     // the input waiting for a gamepad press.
     bool gamepad_view_ = false;
     int edit_profile_ = -1; // -1: the built-in Default
+    int view_family_ = 0;   // platform::GamepadFamily shown
+    std::size_t pad_slot_ = 0; // the gamepad the page was opened for
     bool renaming_ = false, rename_focus_ = false, confirm_delete_ = false;
     std::string rename_buffer_;
     int pad_capture_action_ = -1, pad_capture_slot_ = -1;

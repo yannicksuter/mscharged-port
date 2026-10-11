@@ -527,6 +527,11 @@ void ServiceDesktopWpad() {
             try {
                 *slot = MakeDevice(input);
                 (*slot)->profile = state.settings.gamepad_profiles[index];
+                // The built-in Default takes this controller's own default layout.
+                if ((*slot)->profile.follow_controller)
+                    (*slot)->profile = {mscharged::platform::DefaultGamepadBindings(
+                                            mscharged::platform::GamepadFamilyOf(SDL_GetGamepadType(input))),
+                                        false, true};
                 if (state.settings.gamepad_players) AttachGamepadPlayer(state, **slot, index);
             }
             catch (...) {

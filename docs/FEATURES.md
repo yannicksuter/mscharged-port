@@ -22,11 +22,14 @@ the reconstructed source, unchanged.
 - **Keyboard & mouse** play as a Wii Remote with Nunchuk; the mouse is the
   pointer. Every key can be changed in the launcher (up to two keys per
   action).
-- **Gamepads**: Xbox, PlayStation, Switch Pro and other standard controllers
-  play as a Wii Remote with Nunchuk, with rumble. The right stick moves the
-  pointer. Buttons are set in **gamepad profiles**: a built-in Default plus up
-  to 16 named profiles (up to two buttons per action, sticks can be swapped),
-  chosen per gamepad and kept for the next session.
+- **Gamepads**: Xbox, PlayStation, Switch Pro, GameCube (USB adapter) and
+  other standard controllers stand in for the Wii Remote with Nunchuk the game
+  is played with, with rumble. The right stick moves the pointer. **Gamepad
+  profiles** say which controller button presses each Wii button: a built-in
+  Default that gives each controller family its own layout (Nintendo's A is
+  its right button) plus up to 16 named profiles (up to two buttons per Wii
+  button, or none; sticks can be swapped), chosen per gamepad and kept for
+  the next session.
 - **Real Wii Remotes with Nunchuk** through a **Mayflash DolphinBar** (mode 4):
   pointer, rumble and battery level, with the sensor bar above or below the
   screen and a five-target pointer calibration per remote.

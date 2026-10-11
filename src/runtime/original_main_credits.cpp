@@ -524,7 +524,7 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
         for (std::size_t pad = 0; pad < desktop.gamepad_profiles.size(); ++pad) {
             const auto& profile = launch.settings.PadProfileOf(pad);
             desktop.gamepad_profiles[pad] = {mscharged::platform::ParseGamepadBindings(profile.inputs),
-                                             profile.swap_sticks};
+                                             profile.swap_sticks, launch.settings.PadProfileIndex(pad) < 0};
         }
         mscharged::platform::InitializeNativeHardwareInput(host.window,
             {static_cast<std::uint8_t>(launch.settings.sensor_bar=="top"?1:0),3,true,launch.settings.rumble},

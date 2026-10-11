@@ -96,10 +96,12 @@ included. Choose the file in the launcher or see
 
 ## Controls
 
-Keyboard & mouse and gamepads act as a Wii Remote with a Nunchuk; gamepads and
-real Wii Remotes can be assigned to players 1–4 in the launcher. Keys and
-gamepad buttons can be changed there; gamepads use named profiles, so each
-player can keep their own layout. Defaults:
+The game is played with a Wii Remote and Nunchuk. Keyboard & mouse and
+gamepads (Xbox, PlayStation, Switch, GameCube adapter) stand in for them, and
+real Wii Remotes work too; assign them to players 1–4 in the launcher. Keys
+and gamepad buttons can be changed there; gamepads use named profiles, so each
+player can keep their own layout. Nintendo and GameCube controllers get
+defaults that follow their own button labels. Defaults:
 
 | Wii input | Keyboard / mouse | Gamepad (Xbox names) |
 | --- | --- | --- |

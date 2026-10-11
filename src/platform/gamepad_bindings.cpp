@@ -45,23 +45,91 @@ std::string FormatGamepadBinding(const GamepadBinding& binding) {
         if (!text.empty()) text += " | ";
         text += name;
     }
-    return text;
+    return text.empty() ? "none" : text;
 }
+
+namespace {
+bool IsNone(std::string_view text) {
+    while (!text.empty() && text.front() == ' ') text.remove_prefix(1);
+    while (!text.empty() && text.back() == ' ') text.remove_suffix(1);
+    return text == "none";
+}
+} // namespace
 
 GamepadBindings ParseGamepadBindings(const std::array<std::string, GamepadActionCount>& texts) {
     GamepadBindings bindings{};
     for (std::size_t n = 0; n < GamepadActionCount; ++n) {
         bindings[n] = ParseGamepadBinding(texts[n]);
-        if (bindings[n][0] == kGamepadNone) bindings[n] = ParseGamepadBinding(kGamepadActions[n].defaults);
+        if (bindings[n][0] == kGamepadNone && !IsNone(texts[n]))
+            bindings[n] = ParseGamepadBinding(kGamepadActions[n].defaults);
     }
     return bindings;
 }
 
-GamepadBindings DefaultGamepadBindings() {
-    GamepadBindings bindings{};
-    for (std::size_t n = 0; n < GamepadActionCount; ++n)
-        bindings[n] = ParseGamepadBinding(kGamepadActions[n].defaults);
-    return bindings;
+GamepadBindings DefaultGamepadBindings() { return DefaultGamepadBindings(GamepadFamily::Xbox); }
+
+GamepadBindings DefaultGamepadBindings(GamepadFamily family) {
+    return ParseGamepadBindings(DefaultGamepadInputs(family));
+}
+
+GamepadFamily GamepadFamilyOf(SDL_GamepadType type) {
+    switch (type) {
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5: return GamepadFamily::PlayStation;
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR: return GamepadFamily::Nintendo;
+    case SDL_GAMEPAD_TYPE_GAMECUBE: return GamepadFamily::GameCube;
+    default: return GamepadFamily::Xbox;
+    }
+}
+
+SDL_GamepadType GamepadFamilyType(GamepadFamily family) {
+    switch (family) {
+    case GamepadFamily::PlayStation: return SDL_GAMEPAD_TYPE_PS5;
+    case GamepadFamily::Nintendo: return SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO;
+    case GamepadFamily::GameCube: return SDL_GAMEPAD_TYPE_GAMECUBE;
+    default: return SDL_GAMEPAD_TYPE_XBOXONE;
+    }
+}
+
+const char* GamepadFamilyName(GamepadFamily family) {
+    switch (family) {
+    case GamepadFamily::PlayStation: return "PlayStation";
+    case GamepadFamily::Nintendo: return "Nintendo";
+    case GamepadFamily::GameCube: return "GameCube";
+    default: return "Xbox";
+    }
+}
+
+std::array<std::string, GamepadActionCount> DefaultGamepadInputs(GamepadFamily family) {
+    std::array<std::string, GamepadActionCount> inputs;
+    for (std::size_t n = 0; n < GamepadActionCount; ++n) inputs[n] = kGamepadActions[n].defaults;
+    // SDL names are positions: a = bottom, b = right, x = left, y = top face button.
+    if (family == GamepadFamily::Nintendo) {
+        // Nintendo prints A on the right and B at the bottom, X on top and Y on the left.
+        inputs[GamepadActionA] = "b";
+        inputs[GamepadActionB] = "a";
+        inputs[GamepadActionOne] = "x";
+        inputs[GamepadActionTwo] = "y";
+    } else if (family == GamepadFamily::GameCube) {
+        // GameCube (USB adapter): A bottom, B left, X right, Y top; L/R are
+        // the analog triggers and Z the right shoulder button. It has no
+        // buttons left for 1, - and HOME.
+        inputs[GamepadActionA] = "a";
+        inputs[GamepadActionB] = "x";
+        inputs[GamepadActionOne] = "none";
+        inputs[GamepadActionTwo] = "y";
+        inputs[GamepadActionMinus] = "none";
+        inputs[GamepadActionHome] = "none";
+        inputs[GamepadActionC] = "lefttrigger";
+        inputs[GamepadActionZ] = "rightshoulder";
+        inputs[GamepadActionShakeRemote] = "righttrigger";
+        inputs[GamepadActionShakeNunchuk] = "b";
+    }
+    return inputs;
 }
 
 bool GamepadInputHeld(SDL_Gamepad* pad, GamepadInput input) {

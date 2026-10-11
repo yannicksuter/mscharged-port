@@ -63,7 +63,9 @@ struct Settings
     };
     std::vector<PadProfile> pad_profiles;
     // controls.gamepad1_profile-gamepad4_profile: the profile each gamepad
-    // plays with; "Default" or a missing profile is the built-in one.
+    // plays with; "Default" or a missing profile is the built-in one, which
+    // follows the layout of the connected controller's family (Xbox,
+    // PlayStation, Nintendo, GameCube).
     std::array<std::string, kGamepadSlots> pad_profile_names{"Default", "Default", "Default", "Default"};
     static PadInputs DefaultPadInputs()
     {
