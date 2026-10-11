@@ -99,6 +99,9 @@ shake_nunchuk = Q
 # righttrigger, or none for no button. Actions left out keep the Default
 # (Xbox) input. swap_sticks = true
 # moves the Nunchuk stick to the right stick and the pointer to the left.
+# controller: the controllers the profile is made for, xbox (Xbox and
+# PlayStation, whose buttons sit in the same places), nintendo or gamecube;
+# the launcher offers a gamepad the profiles of its kind.
 # [gamepad_profile1]
 # name = Southpaw
 # a = a
@@ -117,6 +120,7 @@ shake_nunchuk = Q
 # shake_remote = righttrigger
 # shake_nunchuk = rightshoulder
 # swap_sticks = true
+# controller = xbox
 
 [advanced]
 # Backend graphics debug layers (slower; turn on for bug reports). WebGPU

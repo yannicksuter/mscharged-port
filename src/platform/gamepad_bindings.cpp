@@ -104,6 +104,26 @@ const char* GamepadFamilyName(GamepadFamily family) {
     }
 }
 
+const char* GamepadProfileKind(GamepadFamily family) {
+    switch (family) {
+    case GamepadFamily::Nintendo: return "nintendo";
+    case GamepadFamily::GameCube: return "gamecube";
+    default: return "xbox";
+    }
+}
+
+GamepadFamily GamepadFamilyOfKind(std::string_view kind) {
+    if (kind == "nintendo") return GamepadFamily::Nintendo;
+    if (kind == "gamecube") return GamepadFamily::GameCube;
+    return GamepadFamily::Xbox;
+}
+
+const char* GamepadKindName(std::string_view kind) {
+    if (kind == "nintendo") return "Nintendo";
+    if (kind == "gamecube") return "GameCube";
+    return "Xbox and PlayStation";
+}
+
 std::array<std::string, GamepadActionCount> DefaultGamepadInputs(GamepadFamily family) {
     std::array<std::string, GamepadActionCount> inputs;
     for (std::size_t n = 0; n < GamepadActionCount; ++n) inputs[n] = kGamepadActions[n].defaults;

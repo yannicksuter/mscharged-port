@@ -109,15 +109,16 @@ int main()
                 "Gamepads play with the built-in Default profile");
         std::ofstream(path) << "; my pads\n[controls]\ngamepad2_profile = kyle\ngamepad3_profile = Gone\n"
                                "[gamepad_profile1]\n; Kyle's layout\nname = Kyle\na = b | start\nswap_sticks = true\n"
-                               "[gamepad_profile2]\nname = Spare\nb = x\n";
+                               "[gamepad_profile2]\nname = Spare\nb = x\ncontroller = gamecube\n";
         {
             auto file = LoadConfig(path);
             const auto& loaded = file.settings;
             Require(loaded.pad_profiles.size() == 2 && loaded.pad_profiles[0].name == "Kyle"
                         && loaded.pad_profiles[0].inputs[mscharged::GamepadActionA] == "b | start"
                         && loaded.pad_profiles[0].inputs[mscharged::GamepadActionB] == "b"
-                        && loaded.pad_profiles[0].swap_sticks,
-                    "Gamepad profiles load");
+                        && loaded.pad_profiles[0].swap_sticks && loaded.pad_profiles[0].controller == "xbox"
+                        && loaded.pad_profiles[1].controller == "gamecube",
+                    "Gamepad profiles load, with their controller kind");
             Require(loaded.PadProfileIndex(1) == 0 && loaded.pad_profile_names[1] == "Kyle",
                     "A gamepad finds its profile by name, ignoring case");
             Require(loaded.PadProfileIndex(2) == -1 && loaded.pad_profile_names[2] == "Default",
@@ -131,7 +132,9 @@ int main()
             const auto saved = LoadConfig(path);
             Require(saved.settings.pad_profiles.size() == 1 && saved.settings.pad_profiles[0].name == "Spare"
                         && saved.settings.pad_profiles[0].inputs[mscharged::GamepadActionB] == "x"
-                        && !saved.settings.pad_profiles[0].swap_sticks && saved.settings.PadProfileIndex(3) == 0
+                        && !saved.settings.pad_profiles[0].swap_sticks
+                        && saved.settings.pad_profiles[0].controller == "gamecube"
+                        && saved.settings.PadProfileIndex(3) == 0
                         && saved.settings.PadProfileIndex(1) == -1,
                     "A deleted gamepad profile stays deleted");
             Require(saved.contents.find("[gamepad_profile2]") == std::string::npos
@@ -154,6 +157,8 @@ int main()
         std::ofstream(path) << "[gamepad_profile1]\nname = A\n[gamepad_profile2]\nname = a\n";
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[gamepad_profile1]\nname = default\n";
+        Reject([&] { LoadConfig(path); });
+        std::ofstream(path) << "[gamepad_profile1]\nname = Pad\ncontroller = playstation\n";
         Reject([&] { LoadConfig(path); });
         std::ofstream(path) << "[gamepad_profile17]\nname = Many\n";
         Reject([&] { LoadConfig(path); });

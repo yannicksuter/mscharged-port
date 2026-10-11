@@ -69,6 +69,7 @@ Values Encode(const Settings& s)
         for (std::size_t action = 0; action < GamepadActionCount; ++action)
             values.emplace(section + kGamepadActions[action].key, profile.inputs[action]);
         values.emplace(section + "swap_sticks", profile.swap_sticks ? "true" : "false");
+        values.emplace(section + "controller", profile.controller);
     }
     for (std::size_t slot = 0; slot < kGamepadSlots; ++slot)
         values.emplace("controls.gamepad" + std::to_string(slot + 1) + "_profile", s.pad_profile_names[slot]);
@@ -194,6 +195,7 @@ Settings Decode(const Values& values)
         for (std::size_t action = 0; action < GamepadActionCount; ++action)
             names(section + kGamepadActions[action].key, profile.inputs[action], "gamepad inputs");
         boolean((section + "swap_sticks").c_str(), profile.swap_sticks);
+        choice((section + "controller").c_str(), profile.controller, {"xbox", "nintendo", "gamecube"});
         profiles.push_back(std::move(profile));
     }
     s.pad_profiles = std::move(profiles);

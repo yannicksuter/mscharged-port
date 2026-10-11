@@ -2044,13 +2044,13 @@ private:
     }
 
     // Gamepad profiles: the built-in Default and named button layouts kept in
-    // mscharged.ini; each gamepad plays with the one chosen for it.
+    // mscharged.ini, each made for one kind of controller; each gamepad plays
+    // with the one chosen for it.
     void OpenGamepadView(std::size_t slot)
     {
         gamepad_view_ = true;
         pad_slot_ = slot;
         edit_profile_ = draft_.PadProfileIndex(slot);
-        view_family_ = int(platform::GamepadFamilyOf(PadType(int(slot))));
         renaming_ = confirm_delete_ = false;
         pad_capture_action_ = pad_capture_slot_ = -1;
     }
@@ -2079,25 +2079,38 @@ private:
         return index < 0 ? Settings::DefaultPadProfile() : draft_.pad_profiles[std::size_t(index)];
     }
 
-    // The controller the page shows: its button names and, for the built-in
-    // Default, its layout.
-    platform::GamepadFamily ViewFamily() const { return platform::GamepadFamily(view_family_); }
+    // The profile kind of gamepad `slot`'s connected controller, or "" when it
+    // is not connected.
+    std::string SlotKind(std::size_t slot) const
+    {
+        return slot < pads_.size() ? platform::GamepadProfileKind(platform::GamepadFamilyOf(PadType(int(slot))))
+                                   : std::string();
+    }
 
-    // Profile `index` as shown: the built-in Default in the shown family's layout.
+    // The page follows its gamepad's controller; without one connected it
+    // follows the profile on screen.
+    std::string PageKind() const
+    {
+        const auto kind = SlotKind(pad_slot_);
+        return !kind.empty() ? kind : ProfileAt(edit_profile_).controller;
+    }
+    platform::GamepadFamily PageFamily() const
+    {
+        return pad_slot_ < pads_.size() ? platform::GamepadFamilyOf(PadType(int(pad_slot_)))
+                                        : platform::GamepadFamilyOfKind(PageKind());
+    }
+    // Button names: exactly the connected controller's (Cross on a DualSense).
+    SDL_GamepadType PageType() const
+    {
+        return pad_slot_ < pads_.size() ? PadType(int(pad_slot_)) : platform::GamepadFamilyType(PageFamily());
+    }
+
+    // Profile `index` as shown: the built-in Default in the page controller's layout.
     Settings::PadProfile ShownProfile(int index) const
     {
         auto profile = ProfileAt(index);
-        if (index < 0) profile.inputs = platform::DefaultGamepadInputs(ViewFamily());
+        if (index < 0) profile.inputs = platform::DefaultGamepadInputs(PageFamily());
         return profile;
-    }
-
-    // Controller type for the button names of profile `index`: the first
-    // connected gamepad that plays with it, else the first connected one.
-    SDL_GamepadType ProfileType(int index) const
-    {
-        for (std::size_t slot = 0; slot < kGamepadSlots; ++slot)
-            if (slot < pads_.size() && draft_.PadProfileIndex(slot) == index) return PadType(int(slot));
-        return PadType(-1);
     }
 
     std::string ProfileUsers(int index) const
@@ -2121,15 +2134,20 @@ private:
         }
     }
 
-    // Selectables for every profile, Default first; returns the chosen index
-    // (-1 Default) or -2 when nothing was chosen.
-    int ProfileOptions(int current)
+    // Selectables for Default and the profiles of `kind` (every profile, with
+    // its kind, when `kind` is empty), plus `current`; returns the chosen
+    // index (-1 Default) or -2 when nothing was chosen.
+    int ProfileOptions(int current, const std::string& kind)
     {
         int chosen = -2;
         for (int n = -1; n < int(draft_.pad_profiles.size()); ++n)
         {
+            const auto& profile = ProfileAt(n);
+            if (n >= 0 && n != current && !kind.empty() && profile.controller != kind) continue;
             ImGui::PushID(n);
-            const std::string label = n < 0 ? std::string(kDefaultGamepadProfile) + " (built-in)" : ProfileAt(n).name;
+            std::string label = n < 0 ? std::string(kDefaultGamepadProfile) + " (built-in)" : profile.name;
+            if (n >= 0 && (kind.empty() || profile.controller != kind))
+                label += std::string("  (") + platform::GamepadKindName(profile.controller) + ")";
             if (ImGui::Selectable(label.c_str(), n == current)) chosen = n;
             ImGui::PopID();
         }
@@ -2163,7 +2181,7 @@ private:
         pad_capture_action_ = pad_capture_slot_ = -1;
         if (action < 0 || edit_profile_ < 0 || platform::GamepadInputName(input).empty()) return;
         auto& profile = draft_.pad_profiles[std::size_t(edit_profile_)];
-        const std::string name = PadInputLabel(input, platform::GamepadFamilyType(ViewFamily()));
+        const std::string name = PadInputLabel(input, PageType());
         auto bindings = platform::ParseGamepadBindings(profile.inputs);
         auto& mine = bindings[std::size_t(action)];
         if (mine[0] == input || mine[1] == input) return;
@@ -2193,14 +2211,18 @@ private:
                emptied ? NoticeKind::Warning : NoticeKind::Info);
     }
 
-    // A combo choosing the profile of gamepad `slot`.
+    // A combo choosing the profile of gamepad `slot`: Default and the
+    // profiles for its connected controller (all without one).
     void ProfileCombo(const char* id, std::size_t slot, float width)
     {
         ImGui::SetNextItemWidth(width);
         const int current = draft_.PadProfileIndex(slot);
-        if (ImGui::BeginCombo(id, ProfileAt(current).name.c_str()))
+        const auto kind = SlotKind(slot);
+        const auto& profile = ProfileAt(current);
+        const bool mismatch = current >= 0 && !kind.empty() && profile.controller != kind;
+        if (ImGui::BeginCombo(id, profile.name.c_str()))
         {
-            const int chosen = ProfileOptions(current);
+            const int chosen = ProfileOptions(current, kind);
             if (chosen > -2)
             {
                 draft_.pad_profile_names[slot] = ProfileAt(chosen).name;
@@ -2208,14 +2230,16 @@ private:
             }
             ImGui::EndCombo();
         }
-        if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen(id)) ImGui::SetTooltip("Button profile of this gamepad");
+        if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen(id))
+            ImGui::SetTooltip(mismatch ? "%s is made for %s controllers; this gamepad is another kind."
+                                       : "Button profile of this gamepad%s",
+                              mismatch ? profile.name.c_str() : "",
+                              mismatch ? platform::GamepadKindName(profile.controller) : "");
     }
 
-    // Shows profile `index`, by default with the button names of a controller playing with it.
-    void EditProfile(int index, bool keep_family = false)
+    void EditProfile(int index)
     {
         edit_profile_ = index;
-        if (!keep_family) view_family_ = int(platform::GamepadFamilyOf(ProfileType(index)));
         renaming_ = confirm_delete_ = false;
         pad_capture_action_ = pad_capture_slot_ = -1;
     }
@@ -2258,21 +2282,19 @@ private:
             }
             else if (ImGui::BeginCombo("##edit_profile", ProfileAt(edit_profile_).name.c_str()))
             {
-                const int chosen = ProfileOptions(edit_profile_);
+                const int chosen = ProfileOptions(edit_profile_, SlotKind(pad_slot_));
                 if (chosen > -2) EditProfile(chosen);
                 ImGui::EndCombo();
             }
             EndRows();
         }
-        if (BeginRows("##family_rows"))
-        {
-            Row("Controller", builtin ? "The built-in profile gives each controller its own layout. Choose which to see."
-                                      : "Shows the buttons as named on this controller.");
-            if (Segmented("##family", &view_family_, {"Xbox", "PlayStation", "Nintendo", "GameCube"},
-                          ImGui::GetContentRegionAvail().x))
-                pad_capture_action_ = pad_capture_slot_ = -1;
-            EndRows();
-        }
+        // Which controller the page follows.
+        const std::string kind_name = platform::GamepadKindName(PageKind());
+        const std::string controller = pad_slot_ < gamepad_names_.size()
+            ? gamepad_names_[pad_slot_] + ": profiles for " + kind_name + " controllers."
+            : "Gamepad " + std::to_string(pad_slot_ + 1) + " is not connected: all profiles are listed, buttons named for "
+                + kind_name + " controllers.";
+        TextColored(CurrentFonts().caption, color::muted, controller.c_str());
         const auto users = ProfileUsers(edit_profile_);
         TextColored(CurrentFonts().caption, color::muted,
                     ((builtin ? std::string("Built-in, cannot be changed; New makes an editable copy. ") : std::string())
@@ -2283,8 +2305,9 @@ private:
         {
             auto copy = ShownProfile(edit_profile_);
             copy.name = NewProfileName();
+            copy.controller = PageKind();
             profiles.push_back(copy);
-            EditProfile(int(profiles.size()) - 1, true);
+            EditProfile(int(profiles.size()) - 1);
             dirty_ = true;
             Notice(copy.name + " starts as a copy of the profile you were editing.", NoticeKind::Info);
         }
@@ -2338,7 +2361,7 @@ private:
         const bool builtin = edit_profile_ < 0;
         Settings::PadProfile scratch = ShownProfile(edit_profile_);
         auto& profile = builtin ? scratch : draft_.pad_profiles[std::size_t(edit_profile_)];
-        const auto type = platform::GamepadFamilyType(ViewFamily());
+        const auto type = PageType();
         const auto bindings = platform::ParseGamepadBindings(profile.inputs);
         bool clicked = false;
         const auto rows = [&](std::size_t first, std::size_t last) {
@@ -2435,7 +2458,7 @@ private:
         }
         rows(GamepadActionC, GamepadActionCount);
         // Defaults of the controller shown above.
-        const auto defaults = platform::DefaultGamepadInputs(ViewFamily());
+        const auto defaults = platform::DefaultGamepadInputs(PageFamily());
         const bool changed = platform::ParseGamepadBindings(profile.inputs) != platform::ParseGamepadBindings(defaults)
             || swap;
         if (SecondaryButton("##reset_pad", "Reset to defaults", Dp(180, 36), changed, Icon::Refresh))
@@ -2721,7 +2744,6 @@ private:
     // the input waiting for a gamepad press.
     bool gamepad_view_ = false;
     int edit_profile_ = -1; // -1: the built-in Default
-    int view_family_ = 0;   // platform::GamepadFamily shown
     std::size_t pad_slot_ = 0; // the gamepad the page was opened for
     bool renaming_ = false, rename_focus_ = false, confirm_delete_ = false;
     std::string rename_buffer_;

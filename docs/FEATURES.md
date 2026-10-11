@@ -28,8 +28,9 @@ the reconstructed source, unchanged.
   profiles** say which controller button presses each Wii button: a built-in
   Default that gives each controller family its own layout (Nintendo's A is
   its right button) plus up to 16 named profiles (up to two buttons per Wii
-  button, or none; sticks can be swapped), chosen per gamepad and kept for
-  the next session.
+  button, or none; sticks can be swapped). A profile belongs to one kind of
+  controller (Xbox and PlayStation share profiles), so each gamepad is offered
+  the profiles that fit it; they are kept for the next session.
 - **Real Wii Remotes with Nunchuk** through a **Mayflash DolphinBar** (mode 4):
   pointer, rumble and battery level, with the sensor bar above or below the
   screen and a five-target pointer calibration per remote.

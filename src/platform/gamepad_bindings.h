@@ -36,6 +36,12 @@ GamepadFamily GamepadFamilyOf(SDL_GamepadType type);
 // A typical SDL type of the family, for its button names.
 SDL_GamepadType GamepadFamilyType(GamepadFamily family);
 const char* GamepadFamilyName(GamepadFamily family);
+// Profiles are kept per kind: "xbox" (Xbox and PlayStation share button
+// positions), "nintendo" or "gamecube". A kind's family for names/defaults.
+const char* GamepadProfileKind(GamepadFamily family);
+GamepadFamily GamepadFamilyOfKind(std::string_view kind);
+// "Xbox and PlayStation", "Nintendo" or "GameCube".
+const char* GamepadKindName(std::string_view kind);
 // The default layout of a family as INI text per action. Every family keeps
 // the Wii buttons where that controller's own labels suggest: Nintendo's A
 // is its right face button; GameCube lacks buttons for 1, - and HOME.

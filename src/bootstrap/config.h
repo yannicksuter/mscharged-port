@@ -59,6 +59,9 @@ struct Settings
         std::string name = "Default";
         PadInputs inputs = DefaultPadInputs();
         bool swap_sticks = false;
+        // The controllers it is made for: xbox (Xbox and PlayStation, whose
+        // buttons sit in the same places), nintendo or gamecube.
+        std::string controller = "xbox";
         bool operator==(const PadProfile&) const = default;
     };
     std::vector<PadProfile> pad_profiles;
