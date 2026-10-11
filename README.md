@@ -88,19 +88,21 @@ included. Choose the file in the launcher or see
 
 ## Controls
 
-Keyboard & mouse act as a Wii Remote with a Nunchuk; gamepads and real Wii
-Remotes can be assigned to players 1–4 in the launcher. Default keys:
+Keyboard & mouse and gamepads act as a Wii Remote with a Nunchuk; gamepads and
+real Wii Remotes can be assigned to players 1–4 in the launcher. Keys and
+gamepad buttons can be changed there; gamepads use named profiles, so each
+player can keep their own layout. Defaults:
 
-| Wii input | Keyboard / mouse |
-| --- | --- |
-| Pointer | Mouse |
-| A / B | Enter or left click / Esc or right click |
-| D-pad | Arrow keys |
-| Nunchuk stick | W A S D |
-| Nunchuk C / Z | C / V |
-| 1 / 2 | Z / X |
-| + / − / HOME | Tab / - / Home |
-| Shake Remote / Nunchuk | E / Q |
+| Wii input | Keyboard / mouse | Gamepad (Xbox names) |
+| --- | --- | --- |
+| Pointer | Mouse | Right stick |
+| A / B | Enter or left click / Esc or right click | A / B |
+| D-pad | Arrow keys | D-pad |
+| Nunchuk stick | W A S D | Left stick |
+| Nunchuk C / Z | C / V | LB / LT |
+| 1 / 2 | Z / X | X / Y |
+| + / − / HOME | Tab / - / Home | Start / Back / Guide |
+| Shake Remote / Nunchuk | E / Q | RT / RB |
 
 Press **P** for a screenshot. See [Wii Remote setup](docs/RUNTIME.md#wii-remote)
 for the DolphinBar.

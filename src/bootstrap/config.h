@@ -1,11 +1,13 @@
 #pragma once
 
+#include "bootstrap/gamepad_actions.h"
 #include "bootstrap/key_actions.h"
 
 #include <array>
 #include <filesystem>
 #include <string>
 #include <set>
+#include <vector>
 
 namespace mscharged
 {
@@ -47,6 +49,33 @@ struct Settings
         for (std::size_t n = 0; n < KeyActionCount; ++n) keys[n] = kKeyActions[n].defaults;
         return keys;
     }
+    // Gamepad profiles ([gamepad_profile1], [gamepad_profile2], ...): a name
+    // and the inputs of each action ("a | start"); swap_sticks puts the
+    // Nunchuk stick on the right stick and the pointer on the left. The
+    // built-in "Default" profile is not among them.
+    using PadInputs = std::array<std::string, GamepadActionCount>;
+    struct PadProfile
+    {
+        std::string name = "Default";
+        PadInputs inputs = DefaultPadInputs();
+        bool swap_sticks = false;
+        bool operator==(const PadProfile&) const = default;
+    };
+    std::vector<PadProfile> pad_profiles;
+    // controls.gamepad1_profile-gamepad4_profile: the profile each gamepad
+    // plays with; "Default" or a missing profile is the built-in one.
+    std::array<std::string, kGamepadSlots> pad_profile_names{"Default", "Default", "Default", "Default"};
+    static PadInputs DefaultPadInputs()
+    {
+        PadInputs inputs;
+        for (std::size_t n = 0; n < GamepadActionCount; ++n) inputs[n] = kGamepadActions[n].defaults;
+        return inputs;
+    }
+    // The profile gamepad `slot` (0-3) plays with: the index of its named
+    // profile, or -1 for the built-in Default.
+    int PadProfileIndex(std::size_t slot) const;
+    const PadProfile& PadProfileOf(std::size_t slot) const;
+    static const PadProfile& DefaultPadProfile();
     int deadzone = 15;
     bool rumble = true;
     // The mouse also points for player 1 on a Wii Remote or gamepad playing alone.
@@ -69,6 +98,12 @@ struct ConfigFile
     Settings settings;
     std::set<std::string> configured_keys; // Parsed INI provenance; run overrides never enter this set.
 };
+
+// A gamepad profile name: 1-32 characters, no surrounding spaces, quotes,
+// brackets, '=', '|' or control characters, and not "Default". Names
+// compare case-insensitively.
+bool ValidPadProfileName(const std::string& name);
+bool SamePadProfileName(const std::string& a, const std::string& b);
 
 ConfigFile LoadConfig(const std::filesystem::path& path, bool allow_missing = false);
 void SaveConfig(ConfigFile& file, const Settings& settings);

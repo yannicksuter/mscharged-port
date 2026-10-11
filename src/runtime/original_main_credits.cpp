@@ -501,11 +501,17 @@ int mscharged::RunOriginalMainCredits(int argc, char** argv,
             if (launch.settings.remote_calibration[slot] != "none")
                 players.calibrations[slot] =
                     mscharged::platform::ParseWiimoteCalibration(launch.settings.remote_calibration[slot]);
+        mscharged::platform::DesktopWpadSettings desktop{true,false,true,mscharged::platform::QueryPresentedDesktopDpd,
+            nullptr,true,true,-1,mscharged::platform::ParseKeyBindings(launch.settings.keys)};
+        // Each gamepad's profile (controls.gamepadN_profile).
+        for (std::size_t pad = 0; pad < desktop.gamepad_profiles.size(); ++pad) {
+            const auto& profile = launch.settings.PadProfileOf(pad);
+            desktop.gamepad_profiles[pad] = {mscharged::platform::ParseGamepadBindings(profile.inputs),
+                                             profile.swap_sticks};
+        }
         mscharged::platform::InitializeNativeHardwareInput(host.window,
             {static_cast<std::uint8_t>(launch.settings.sensor_bar=="top"?1:0),3,true,launch.settings.rumble},
-            mscharged::platform::GetNativeSTMInput(),
-            {true,false,true,mscharged::platform::QueryPresentedDesktopDpd,nullptr,true,true,-1,
-             mscharged::platform::ParseKeyBindings(launch.settings.keys)}, players);
+            mscharged::platform::GetNativeSTMInput(), desktop, players);
 #if defined(MSCHARGED_HAS_ORIGINAL_GAME_AUDIO_INITIALIZE)
         if(sourceAudio)
             mscharged::diagnostic::InitializeOriginalGameAudioHardware(
