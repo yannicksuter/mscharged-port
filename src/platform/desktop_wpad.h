@@ -41,7 +41,7 @@ struct DesktopWpadSettings {
     // `gamepad_players` every pad takes the lowest free channel, buttons only.
     bool gamepad_players = false;
     std::array<int, 4> gamepad_channels{-1, -1, -1, -1};
-    // Buttons and sticks of the n-th gamepad ([gamepadN] in mscharged.ini).
+    // Buttons and sticks of the n-th gamepad (its profile, controls.gamepadN_profile).
     std::array<GamepadProfile, 4> gamepad_profiles{
         GamepadProfile{DefaultGamepadBindings()}, GamepadProfile{DefaultGamepadBindings()},
         GamepadProfile{DefaultGamepadBindings()}, GamepadProfile{DefaultGamepadBindings()}};

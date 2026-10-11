@@ -16,6 +16,7 @@
 #include "platform/disc.h"
 #include "platform/app_icon.h"
 #include "platform/path.h"
+#include "platform/session_log.h"
 #include "platform/gamepad_bindings.h"
 #include "platform/key_bindings.h"
 #include "platform/wiimote_hid.h"
@@ -2860,6 +2861,9 @@ int main(int argc, char** argv)
         else { std::cerr << "Unknown or incomplete argument: " << arg << ". Use --help.\n"; return 2; }
     }
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }
+    // logs/mscharged.log for player runs (not the development smoke/screenshot checks).
+    if (!options.smoke_test && options.screenshot.empty())
+        mscharged::platform::StartSessionLog(mscharged::build::version, argc, argv);
     options.config = options.launch.config;
     unsigned runtime_modes = unsigned(options.experimental_startup)
         + unsigned(options.experimental_scene) + unsigned(options.experimental_credits)
@@ -3037,5 +3041,9 @@ int main(int argc, char** argv)
 #endif
         return result;
     }
-    catch (const std::exception& e) { std::cerr << "Launcher failed: " << e.what() << '\n'; return 1; }
+    catch (const std::exception& e)
+    {
+        mscharged::platform::ReportFatalError(std::string("Launcher failed: ") + e.what());
+        return 1;
+    }
 }

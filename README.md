@@ -50,6 +50,14 @@ changes not yet released are under the
 [**Build binaries** runs of `stable`](https://github.com/yannicksuter/mscharged-port/actions/workflows/build.yml?query=branch%3Astable+is%3Asuccess)
 (*Artifacts*, signed-in users); see [GitHub builds](docs/BUILDING_GITHUB.md).
 
+**Something went wrong?** Each run writes `logs/mscharged.log` beside the
+program (the run before is kept as `mscharged.previous.log`). It records your
+system, displays, graphics settings and what happened; after a crash it also
+holds a crash report, and on Windows `mscharged-crash.dmp` is saved next to it.
+Please attach these files to an
+[issue](https://github.com/yannicksuter/mscharged-port/issues). The log shows
+the command line and folder names, which can include your user name.
+
 ## Status
 
 **Every offline feature of the original game works**: all modes, up to four
