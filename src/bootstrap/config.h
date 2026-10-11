@@ -62,7 +62,13 @@ struct Settings
         // The controllers it is made for: xbox (Xbox and PlayStation, whose
         // buttons sit in the same places), nintendo or gamecube.
         std::string controller = "xbox";
-        bool operator==(const PadProfile&) const = default;
+        // Spelled out: charged_host is C++17.
+        bool operator==(const PadProfile& other) const
+        {
+            return name == other.name && inputs == other.inputs && swap_sticks == other.swap_sticks
+                && controller == other.controller;
+        }
+        bool operator!=(const PadProfile& other) const { return !(*this == other); }
     };
     std::vector<PadProfile> pad_profiles;
     // controls.gamepad1_profile-gamepad4_profile: the profile each gamepad
